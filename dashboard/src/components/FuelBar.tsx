@@ -21,13 +21,13 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Prop
   if (compact) {
     return (
       <div className="flex items-center gap-1.5">
-        <div className="relative h-1 flex-1 rounded-full bg-zinc-800 overflow-hidden">
+        <div className="relative h-1 flex-1 rounded-full dark:bg-zinc-800 bg-zinc-200 overflow-hidden">
           <div
             className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out ${color} ${isRefuelNeeded ? 'animate-pulse' : ''}`}
             style={{ width: `${Math.max(2, percent)}%` }}
           />
         </div>
-        <span className={`font-mono text-[10px] tabular-nums ${textColor}`}>{percent}%</span>
+        <span className={`font-mono text-[10px] tabular-nums font-semibold ${textColor}`}>{percent}%</span>
       </div>
     );
   }

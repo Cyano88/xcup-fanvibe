@@ -154,7 +154,7 @@ export default function App() {
           </div>
 
           {/* Status strip */}
-          <div className="hidden md:flex items-center gap-4 text-xs font-mono dark:text-zinc-500 text-zinc-600">
+          <div className="hidden md:flex items-center gap-4 text-xs font-mono dark:text-zinc-300 text-zinc-600">
             {lastBlock > 0 && (
               <span className="flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${wsConnected || daemonOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-600 bg-zinc-400'}`} />
@@ -163,7 +163,7 @@ export default function App() {
             )}
             {refereeAddress && (
               <a href={explorerAddr(refereeAddress)} target="_blank" rel="noopener noreferrer"
-                className="dark:hover:text-zinc-200 hover:text-zinc-900 transition-colors">
+                className="dark:hover:text-white hover:text-zinc-900 transition-colors">
                 {shortAddr(refereeAddress)}
               </a>
             )}

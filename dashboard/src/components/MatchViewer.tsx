@@ -57,140 +57,156 @@ function getActionLabel(ev: MatchEvent | undefined, home: string, away: string):
   return { text: `${team} — Attacking`, isHome };
 }
 
-// smooth cubic bezier through points
-function buildTrailPath(pts: { x: number; y: number }[]): string {
-  if (pts.length < 2) return '';
-  let d = `M${pts[0].x},${pts[0].y}`;
-  for (let i = 1; i < pts.length; i++) {
-    const mx = (pts[i - 1].x + pts[i].x) / 2;
-    const my = (pts[i - 1].y + pts[i].y) / 2;
-    d += ` Q${pts[i - 1].x},${pts[i - 1].y} ${mx},${my}`;
-  }
-  const last = pts[pts.length - 1];
-  d += ` L${last.x},${last.y}`;
-  return d;
+// ── Continuous live pitch animation ──────────────────────────────────────────
+
+function getEventTarget(ev: MatchEvent | undefined, poss: number): { x: number; y: number } {
+  const r1 = Math.random(), r2 = Math.random();
+  const t = ev?.type ?? '';
+  if (t === 'goal_home' || t === 'shot_home')  return { x: 305 + r1 * 60, y: 45 + r2 * 110 };
+  if (t === 'corner_home')                      return { x: 355 + r1 * 18, y: r2 > 0.5 ? 14 + r2*14 : 172 + r2*14 };
+  if (t === 'goal_away' || t === 'shot_away')   return { x: 35 + r1 * 60,  y: 45 + r2 * 110 };
+  if (t === 'corner_away')                      return { x: 27 + r1 * 18,  y: r2 > 0.5 ? 14 + r2*14 : 172 + r2*14 };
+  if (t.startsWith('foul') || t.startsWith('yellow') || t.startsWith('red'))
+                                                return { x: 90 + r1 * 220, y: 40 + r2 * 120 };
+  if (t === 'half_time' || t === 'kickoff' || t === 'full_time') return { x: 200, y: 100 };
+  // free wander weighted by possession
+  return { x: Math.max(30, Math.min(370, 85 + (poss / 100) * 230 + (r1 - 0.5) * 110)),
+           y: Math.max(22, Math.min(178, 100 + (r2 - 0.5) * 130)) };
 }
 
-// ── Sportybet-style Pitch ─────────────────────────────────────────────────────
-
 function Pitch({ fixture, state }: { fixture: Fixture; state: MatchState }) {
-  const [ballPos, setBallPos] = useState({ x: 200, y: 100 });
-  const [trail, setTrail] = useState<{ x: number; y: number }[]>([{ x: 200, y: 100 }]);
-  const rng = useRef(0);
+  // Physics: smooth ball that lerps toward target — never stops moving
+  const smoothRef  = useRef({ x: 200, y: 100 });   // current rendered position
+  const targetRef  = useRef({ x: 200, y: 100 });   // where we're heading
+  const possRef    = useRef(state.possession);
+  const eventLenRef = useRef(state.events.length);
 
-  const lastEvent = state.events[state.events.length - 1];
-  const action = getActionLabel(lastEvent, fixture.home.code, fixture.away.code);
+  const [renderPos, setRenderPos] = useState({ x: 200, y: 100 });
+  const [trail, setTrail]         = useState<{ x: number; y: number }[]>([]);
+  const [action, setAction]       = useState<{ text: string } | null>(null);
+  const [coneHome, setConeHome]   = useState<string | null>(null);
+  const [coneAway, setConeAway]   = useState<string | null>(null);
+  const [goalFlash, setGoalFlash] = useState(false);
 
+  // Keep possession ref current
+  useEffect(() => { possRef.current = state.possession; }, [state.possession]);
+
+  // Snap target + action on new event
+  useEffect(() => {
+    if (state.events.length === eventLenRef.current) return;
+    eventLenRef.current = state.events.length;
+    const ev = state.events[state.events.length - 1];
+    if (!ev) return;
+    targetRef.current = getEventTarget(ev, possRef.current);
+    const a = getActionLabel(ev, fixture.home.code, fixture.away.code);
+    setAction(a);
+    const isGoal = ev.type === 'goal_home' || ev.type === 'goal_away';
+    if (isGoal) { setGoalFlash(true); setTimeout(() => setGoalFlash(false), 1200); }
+  }, [state.events.length, fixture.home.code, fixture.away.code]);
+
+  // Wander: new waypoint every ~1.8 s when no event is forcing a target
+  useEffect(() => {
+    const wander = setInterval(() => {
+      const lastEv = state.events[state.events.length - 1];
+      // Only update target from wander if last event was not an attack event
+      const t = lastEv?.type ?? '';
+      const isHot = t.includes('goal') || t.includes('shot') || t.includes('corner');
+      if (!isHot) {
+        targetRef.current = getEventTarget(undefined, possRef.current);
+      } else {
+        // near the event area but slightly shifted
+        const cur = targetRef.current;
+        targetRef.current = {
+          x: Math.max(22, Math.min(378, cur.x + (Math.random() - 0.5) * 55)),
+          y: Math.max(18, Math.min(182, cur.y + (Math.random() - 0.5) * 45)),
+        };
+      }
+    }, 1800);
+    return () => clearInterval(wander);
+  }, [state.events.length]);
+
+  // Physics tick: lerp smooth → target at 20 fps, update render state
+  useEffect(() => {
+    const tick = setInterval(() => {
+      const s = smoothRef.current;
+      const t = targetRef.current;
+      s.x += (t.x - s.x) * 0.10;
+      s.y += (t.y - s.y) * 0.10;
+      setRenderPos({ x: s.x, y: s.y });
+    }, 50); // 20 fps
+    return () => clearInterval(tick);
+  }, []);
+
+  // Trail: sample position every 300 ms — fades from tail (transparent) to head (bright)
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTrail(prev => [...prev.slice(-11), { x: smoothRef.current.x, y: smoothRef.current.y }]);
+    }, 300);
+    return () => clearInterval(t);
+  }, []);
+
+  // Attack cones: update every render pass based on current renderPos
   useEffect(() => {
     const ev = state.events[state.events.length - 1];
-    // deterministic jitter from event id
-    const seed = ev ? ev.id * 9301 + 49297 : rng.current++;
-    const r1 = ((seed % 233280) / 233280);
-    const r2 = (((seed * 3) % 233280) / 233280);
-
-    let tx: number, ty: number;
-    const t = ev?.type ?? '';
-
-    if (t === 'goal_home' || t === 'shot_home') {
-      tx = 310 + r1 * 55; ty = 45 + r2 * 110;
-    } else if (t === 'corner_home') {
-      tx = 350 + r1 * 20; ty = r2 > 0.5 ? 15 + r2 * 15 : 170 + r2 * 15;
-    } else if (t === 'goal_away' || t === 'shot_away') {
-      tx = 35 + r1 * 55; ty = 45 + r2 * 110;
-    } else if (t === 'corner_away') {
-      tx = 30 + r1 * 20; ty = r2 > 0.5 ? 15 + r2 * 15 : 170 + r2 * 15;
-    } else if (t.startsWith('foul') || t.startsWith('yellow') || t.startsWith('red')) {
-      tx = 80 + r1 * 240; ty = 40 + r2 * 120;
-    } else if (t === 'half_time' || t === 'kickoff' || t === 'full_time') {
-      tx = 200; ty = 100;
-    } else {
-      // general midfield drift weighted by possession
-      tx = 100 + (state.possession / 100) * 200 + (r1 - 0.5) * 80;
-      ty = 50 + r2 * 100;
-    }
-
-    const newPos = { x: Math.max(22, Math.min(378, tx)), y: Math.max(18, Math.min(182, ty)) };
-    setBallPos(newPos);
-    setTrail(prev => [...prev.slice(-8), newPos]);
-  }, [state.events.length, state.possession]);
-
-  const isGoal = lastEvent?.type === 'goal_home' || lastEvent?.type === 'goal_away';
-  const isAttackHome = lastEvent?.type === 'goal_home' || lastEvent?.type === 'shot_home';
-  const isAttackAway = lastEvent?.type === 'goal_away' || lastEvent?.type === 'shot_away';
-
-  // attack cone: tip at goal mouth, base at ball position
-  const coneHome = isAttackHome
-    ? `390,100 ${ballPos.x},${Math.max(16, ballPos.y - 52)} ${ballPos.x},${Math.min(184, ballPos.y + 52)}`
-    : null;
-  const coneAway = isAttackAway
-    ? `10,100 ${ballPos.x},${Math.max(16, ballPos.y - 52)} ${ballPos.x},${Math.min(184, ballPos.y + 52)}`
-    : null;
-
-  const trailPath = buildTrailPath(trail);
+    const bx = renderPos.x, by = renderPos.y;
+    const isAttackHome = ev?.type === 'goal_home' || ev?.type === 'shot_home';
+    const isAttackAway = ev?.type === 'goal_away' || ev?.type === 'shot_away';
+    setConeHome(isAttackHome ? `392,100 ${bx},${Math.max(16,by-55)} ${bx},${Math.min(184,by+55)}` : null);
+    setConeAway(isAttackAway ? `8,100 ${bx},${Math.max(16,by-55)} ${bx},${Math.min(184,by+55)}` : null);
+  }, [renderPos, state.events.length]);
 
   return (
     <div>
       <svg viewBox="0 0 400 200" className="w-full rounded-xl overflow-hidden" style={{ maxHeight: 210 }}>
         {/* Pitch base */}
         <rect width="400" height="200" fill="#1a5c1a" />
-        {/* Stripe pattern */}
         {[0,1,2,3,4,5,6].map(i => (
-          <rect key={i} x={i * 57} y="0" width="28" height="200" fill="#1e671e" opacity="0.6" />
+          <rect key={i} x={i * 57} y="0" width="28" height="200" fill="#1e671e" opacity="0.55" />
         ))}
 
         {/* Goal flash */}
-        {isGoal && <rect width="400" height="200" fill="rgba(52,211,153,0.14)" />}
+        {goalFlash && <rect width="400" height="200" fill="rgba(52,211,153,0.16)" />}
 
         {/* Attack cones */}
-        {coneHome && <polygon points={coneHome} fill="rgba(74,222,128,0.13)" />}
-        {coneAway && <polygon points={coneAway} fill="rgba(251,191,36,0.13)" />}
+        {coneHome && <polygon points={coneHome} fill="rgba(74,222,128,0.14)" />}
+        {coneAway && <polygon points={coneAway} fill="rgba(251,191,36,0.14)" />}
 
-        {/* Boundary */}
-        <rect x="12" y="10" width="376" height="180" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
-        {/* Centre line */}
-        <line x1="200" y1="10" x2="200" y2="190" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
-        {/* Centre circle */}
-        <circle cx="200" cy="100" r="32" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
-        <circle cx="200" cy="100" r="2" fill="rgba(255,255,255,0.55)" />
-        {/* Left penalty box */}
-        <rect x="12" y="55" width="56" height="90" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-        <rect x="12" y="73" width="22" height="54" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="1" />
-        <circle cx="68" cy="100" r="1.5" fill="rgba(255,255,255,0.45)" />
-        {/* Right penalty box */}
-        <rect x="332" y="55" width="56" height="90" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-        <rect x="366" y="73" width="22" height="54" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="1" />
-        <circle cx="332" cy="100" r="1.5" fill="rgba(255,255,255,0.45)" />
-        {/* Goals */}
-        <rect x="4" y="82" width="8" height="36" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
-        <rect x="388" y="82" width="8" height="36" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
+        {/* Pitch markings */}
+        <rect x="12" y="10" width="376" height="180" fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth="1.5" />
+        <line x1="200" y1="10" x2="200" y2="190" stroke="rgba(255,255,255,0.38)" strokeWidth="1.5" />
+        <circle cx="200" cy="100" r="32" fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth="1.5" />
+        <circle cx="200" cy="100" r="2" fill="rgba(255,255,255,0.5)" />
+        <rect x="12" y="55" width="56" height="90" fill="none" stroke="rgba(255,255,255,0.32)" strokeWidth="1.5" />
+        <rect x="12" y="73" width="22" height="54" fill="none" stroke="rgba(255,255,255,0.26)" strokeWidth="1" />
+        <rect x="332" y="55" width="56" height="90" fill="none" stroke="rgba(255,255,255,0.32)" strokeWidth="1.5" />
+        <rect x="366" y="73" width="22" height="54" fill="none" stroke="rgba(255,255,255,0.26)" strokeWidth="1" />
+        <rect x="4" y="82" width="8" height="36" fill="none" stroke="rgba(255,255,255,0.48)" strokeWidth="1.5" />
+        <rect x="388" y="82" width="8" height="36" fill="none" stroke="rgba(255,255,255,0.48)" strokeWidth="1.5" />
 
-        {/* Ball trail */}
-        {trail.length > 1 && (
-          <path
-            d={trailPath}
-            fill="none"
-            stroke="rgba(255,255,255,0.55)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
+        {/* Fading ball trail — each segment brighter toward head */}
+        {trail.length > 1 && trail.map((pt, i) => {
+          if (i === 0) return null;
+          const op = ((i) / trail.length) * 0.7;
+          const sw = 1 + (i / trail.length) * 2.5;
+          return (
+            <line key={i}
+              x1={trail[i-1].x} y1={trail[i-1].y}
+              x2={pt.x} y2={pt.y}
+              stroke="white" strokeWidth={sw} strokeOpacity={op} strokeLinecap="round"
+            />
+          );
+        })}
 
-        {/* Ball */}
-        <circle cx={ballPos.x} cy={ballPos.y} r="5.5" fill="white" opacity="0.96" />
-        <circle cx={ballPos.x} cy={ballPos.y} r="5.5" fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
+        {/* Ball — CSS transition for extra smoothness between 20fps ticks */}
+        <g style={{ transform: `translate(${renderPos.x}px, ${renderPos.y}px)`, transition: 'transform 60ms linear' }}>
+          <circle cx="0" cy="0" r="6" fill="white" opacity="0.95" />
+          <circle cx="0" cy="0" r="6" fill="none" stroke="rgba(0,0,0,0.2)" strokeWidth="1.2" />
+        </g>
 
-        {/* Action text on pitch */}
+        {/* Action text */}
         {action && (
-          <text
-            x="200" y="192"
-            textAnchor="middle"
-            fill="rgba(255,255,255,0.65)"
-            fontSize="9.5"
-            fontFamily="monospace"
-            fontWeight="600"
-            letterSpacing="0.3"
-          >
+          <text x="200" y="194" textAnchor="middle"
+            fill="rgba(255,255,255,0.62)" fontSize="9" fontFamily="monospace" fontWeight="700" letterSpacing="0.5">
             {action.text.toUpperCase()}
           </text>
         )}
