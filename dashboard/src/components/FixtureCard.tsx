@@ -146,9 +146,9 @@ export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Pro
               </span>
             ) : (
               <>
-                <span className="text-xs font-bold text-white/30 font-mono">VS</span>
-                <span className="text-[10px] text-white/50 font-mono">{timeLabel}</span>
-                <span className="text-[9px] text-white/30 font-mono">{kickoffStr}</span>
+                <span className="text-xs font-bold text-white/40 font-mono tracking-widest">VS</span>
+                <span className="text-[11px] text-white/70 font-mono font-semibold">{timeLabel}</span>
+                <span className="text-[10px] text-white/40 font-mono">{kickoffStr}</span>
               </>
             )}
           </div>
@@ -210,17 +210,17 @@ export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Pro
               onClick={() => onStake(fixture.id, 'home')}
               onMouseEnter={() => flipTo('home')}
               disabled={!isOpen}
-              className="group/btn flex flex-col items-center gap-0.5 py-2.5 px-1 rounded-xl border transition-all duration-150 active:scale-95
+              className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
                 dark:bg-emerald-500/8 bg-emerald-50 dark:border-emerald-500/20 border-emerald-200
                 dark:hover:bg-emerald-500/18 hover:bg-emerald-100 dark:hover:border-emerald-400/50 hover:border-emerald-400
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="text-[10px] dark:text-emerald-500/70 text-emerald-600 font-mono font-medium">{fixture.home.code}</span>
-              <span className="text-base font-bold dark:text-emerald-400 text-emerald-600 tabular-nums">
+              <span className="text-[11px] dark:text-emerald-400 text-emerald-700 font-mono font-semibold">{fixture.home.code}</span>
+              <span className="text-lg font-black dark:text-emerald-300 text-emerald-700 tabular-nums leading-none">
                 {homeOdds}%
               </span>
-              <span className="text-[9px] dark:text-emerald-900 text-emerald-400 font-mono">
-                {hasPool ? `${fmt.homeOKB} OKB` : 'Stake →'}
+              <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-mono font-medium">
+                {hasPool ? `${fmt.homeOKB}` : 'Stake →'}
               </span>
             </button>
 
@@ -228,17 +228,17 @@ export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Pro
             <button
               onClick={() => onStake(fixture.id, 'draw')}
               disabled={!isOpen}
-              className="group/btn flex flex-col items-center gap-0.5 py-2.5 px-1 rounded-xl border transition-all duration-150 active:scale-95
-                dark:bg-zinc-800/50 bg-zinc-50 dark:border-zinc-700/50 border-zinc-200
-                dark:hover:bg-zinc-700/60 hover:bg-zinc-100 dark:hover:border-zinc-500 hover:border-zinc-400
+              className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
+                dark:bg-zinc-800/50 bg-zinc-100 dark:border-zinc-700/50 border-zinc-200
+                dark:hover:bg-zinc-700/60 hover:bg-zinc-200 dark:hover:border-zinc-500 hover:border-zinc-400
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="text-[10px] dark:text-zinc-400 text-zinc-500 font-mono font-medium">Draw</span>
-              <span className="text-base font-bold dark:text-zinc-200 text-zinc-700 tabular-nums">
+              <span className="text-[11px] dark:text-zinc-400 text-zinc-600 font-mono font-semibold">Draw</span>
+              <span className="text-lg font-black dark:text-zinc-100 text-zinc-800 tabular-nums leading-none">
                 {drawOdds}%
               </span>
-              <span className="text-[9px] dark:text-zinc-700 text-zinc-400 font-mono">
-                {hasPool ? `${fmt.drawOKB} OKB` : 'Stake →'}
+              <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-mono font-medium">
+                {hasPool ? `${fmt.drawOKB}` : 'Stake →'}
               </span>
             </button>
 
@@ -247,17 +247,17 @@ export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Pro
               onClick={() => onStake(fixture.id, 'away')}
               onMouseEnter={() => flipTo('away')}
               disabled={!isOpen}
-              className="group/btn flex flex-col items-center gap-0.5 py-2.5 px-1 rounded-xl border transition-all duration-150 active:scale-95
+              className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
                 dark:bg-amber-500/8 bg-amber-50 dark:border-amber-500/20 border-amber-200
                 dark:hover:bg-amber-500/18 hover:bg-amber-100 dark:hover:border-amber-400/50 hover:border-amber-400
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="text-[10px] dark:text-amber-500/70 text-amber-600 font-mono font-medium">{fixture.away.code}</span>
-              <span className="text-base font-bold dark:text-amber-400 text-amber-600 tabular-nums">
+              <span className="text-[11px] dark:text-amber-400 text-amber-700 font-mono font-semibold">{fixture.away.code}</span>
+              <span className="text-lg font-black dark:text-amber-300 text-amber-700 tabular-nums leading-none">
                 {awayOdds}%
               </span>
-              <span className="text-[9px] dark:text-amber-900 text-amber-500 font-mono">
-                {hasPool ? `${fmt.awayOKB} OKB` : 'Stake →'}
+              <span className="text-[10px] dark:text-amber-600 text-amber-500 font-mono font-medium">
+                {hasPool ? `${fmt.awayOKB}` : 'Stake →'}
               </span>
             </button>
           </div>
@@ -266,15 +266,15 @@ export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Pro
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pb-3 dark:bg-zinc-950 bg-white">
-        <div className="flex items-center gap-1.5 text-[10px] dark:text-zinc-700 text-zinc-400 font-mono">
-          <TrendingUp size={9} />
+        <div className="flex items-center gap-1.5 text-[11px] dark:text-zinc-500 text-zinc-500 font-mono font-medium">
+          <TrendingUp size={10} />
           <span>
             {hasPool
               ? `${fmt.totalOKB} OKB · ${p.count} stake${p.count !== 1 ? 's' : ''}`
-              : 'Pre-match odds · No stakes yet'}
+              : 'No stakes yet'}
           </span>
         </div>
-        <span className="text-[10px] dark:text-zinc-800 text-zinc-300 font-mono truncate max-w-[120px]">
+        <span className="text-[11px] dark:text-zinc-500 text-zinc-500 font-mono truncate max-w-[120px]">
           {fixture.venue.split('·')[0].trim()}
         </span>
       </div>

@@ -40,6 +40,7 @@ export default function App() {
   const [groupFilter, setGroupFilter]         = useState<string>('all');
   const [matchStates, setMatchStates]         = useState<Record<string, MatchState>>({});
   const [watchingFixtureId, setWatchingId]    = useState<string | null>(null);
+  const [viewMode, setViewMode]               = useState<'simulated' | 'realtime'>('simulated');
 
   const wsRef             = useRef<WebSocket | null>(null);
   const reconnectRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,17 +183,56 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
+        {/* ── Mode toggle ───────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
+            <button
+              onClick={() => setViewMode('simulated')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+                ${viewMode === 'simulated'
+                  ? 'bg-emerald-500 text-black shadow-sm'
+                  : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${viewMode === 'simulated' ? 'bg-black animate-pulse' : 'dark:bg-zinc-600 bg-zinc-400'}`} />
+              ⚡ Simulated
+            </button>
+            <button
+              onClick={() => setViewMode('realtime')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+                ${viewMode === 'realtime'
+                  ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
+                  : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
+            >
+              🌍 World Cup 2026
+            </button>
+          </div>
+
+          <div className="text-xs font-mono dark:text-zinc-500 text-zinc-400 flex items-center gap-1.5">
+            {viewMode === 'simulated' ? (
+              <>
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                Simulated matches · stake &amp; watch live now
+              </>
+            ) : (
+              <>
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
+                Real WC · staking open · first kick-off Jun 11 2026
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Recent settlements strip */}
         {settlements.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-mono uppercase">Settled</span>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-mono font-semibold uppercase tracking-wider">Settled</span>
             {[...settlements].reverse().slice(0, 5).map((s) => {
               const fix = fixtures.find(f => f.id === s.fixtureId);
               return (
                 <a key={`${s.fixtureId}-${s.blockNumber}`} href={s.explorerUrl} target="_blank" rel="noopener noreferrer"
-                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-zinc-800 border-zinc-300 dark:hover:border-zinc-700 hover:border-zinc-400 dark:text-zinc-300 text-zinc-600 text-xs transition-colors">
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border dark:border-zinc-800 border-zinc-300 dark:hover:border-zinc-700 hover:border-zinc-400 dark:text-zinc-200 text-zinc-700 text-xs font-medium transition-colors">
                   <span>{fix ? `${fix.home.flag} vs ${fix.away.flag}` : s.fixtureId}</span>
-                  <span className="text-emerald-500 font-mono font-medium capitalize">{s.outcome}</span>
+                  <span className="text-emerald-500 font-mono font-semibold capitalize">{s.outcome}</span>
                 </a>
               );
             })}
@@ -205,21 +245,43 @@ export default function App() {
             <button
               key={g}
               onClick={() => setGroupFilter(g)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-medium transition-all duration-150
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-150
                 ${groupFilter === g
-                  ? 'dark:bg-white dark:text-black bg-zinc-900 text-white'
-                  : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-300 dark:hover:border-zinc-700 hover:border-zinc-500 dark:hover:text-zinc-300 hover:text-zinc-700'}`}
+                  ? 'dark:bg-zinc-100 dark:text-zinc-900 bg-zinc-900 text-white'
+                  : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-700'}`}
             >
-              {g === 'all' ? 'All' : `Group ${g}`}
+              {g === 'all' ? 'All' : `Grp ${g}`}
             </button>
           ))}
         </div>
 
+        {/* ── Realtime mode notice ──────────────────────────────────────── */}
+        {viewMode === 'realtime' && (
+          <div className="dark:bg-blue-500/8 bg-blue-50 border dark:border-blue-500/20 border-blue-200 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-2xl">🌍</span>
+            <div>
+              <div className="text-sm font-bold dark:text-blue-300 text-blue-700 mb-1">World Cup 2026 — Realtime Mode</div>
+              <div className="text-xs dark:text-zinc-400 text-zinc-600 leading-relaxed">
+                These are the real FIFA World Cup 2026 Group Stage fixtures. Staking is open now —
+                matches settle automatically when the tournament starts. First kick-off is
+                <span className="font-semibold dark:text-zinc-200 text-zinc-800"> June 11, 2026</span>.
+                Switch to ⚡ Simulated to watch live matches running now.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Fixtures grid ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {visibleFixtures.map(fixture => (
-            <FixtureCard key={fixture.id} fixture={fixture} pool={pools[fixture.id]}
-              matchState={matchStates[fixture.id]} onStake={handleStake} onWatch={handleWatch} />
+            <FixtureCard
+              key={fixture.id}
+              fixture={fixture}
+              pool={pools[fixture.id]}
+              matchState={viewMode === 'simulated' ? matchStates[fixture.id] : undefined}
+              onStake={handleStake}
+              onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
+            />
           ))}
         </div>
 

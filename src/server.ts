@@ -98,6 +98,47 @@ app.post('/metabolism/refresh', async (_req, res) => {
   res.json(engine.getState().metabolism);
 });
 
+// ── Comments ──────────────────────────────────────────────────────────────────
+
+interface Comment {
+  id: number;
+  fixtureId: string;
+  name: string;
+  text: string;
+  ts: string;
+}
+
+const commentsStore = new Map<string, Comment[]>();
+
+app.get('/comments/:fixtureId', (req, res) => {
+  res.json(commentsStore.get(req.params.fixtureId) ?? []);
+});
+
+app.post('/comments/:fixtureId', (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1).max(32).trim(),
+    text: z.string().min(1).max(300).trim(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid' });
+
+  const fixtureId = req.params.fixtureId;
+  const comment: Comment = {
+    id: Date.now(),
+    fixtureId,
+    name: parsed.data.name,
+    text: parsed.data.text,
+    ts: new Date().toISOString(),
+  };
+
+  const list = commentsStore.get(fixtureId) ?? [];
+  list.push(comment);
+  commentsStore.set(fixtureId, list.slice(-150));
+
+  broadcast('comment', comment);
+  res.json(comment);
+});
+
 // ── Server start ──────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);

@@ -6,3 +6,5 @@ dashboard/dist/
 dashboard/.vercel/
 *.log
 .DS_Store
+
+.vercel
