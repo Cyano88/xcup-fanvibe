@@ -31,6 +31,8 @@ import type {
   MetabolicState,
   Outcome,
   SettlementResult,
+  ChampionStake,
+  ChampionPool,
   LogPrefix,
   LogLevel,
 } from '../types.js';
@@ -40,6 +42,15 @@ const METABOLISM_INTERVAL_MS = 60_000;
 const OUTCOME_MAP: Record<number, Outcome> = { 0: 'home', 1: 'draw', 2: 'away' };
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
 
+// ── Champion prediction market ─────────────────────────────────────────────────
+export const CHAMP_FIXTURE_ID = 'champion-2026';
+export const CHAMP_TEAMS = [
+  'BRA','ECU','FRA','TUR','ARG','KOR','ENG','NGA',
+  'ESP','DEN','POR','CMR','GER','MEX','NED','AUS',
+  'BEL','JPN','ITA','COL','CRO','CAN','MAR','USA',
+  'URU','EGY','SRB','SUI','ALG','KSA','CIV','SEN',
+];
+
 // ── Calldata codec ─────────────────────────────────────────────────────────────
 export function encodeStake(fixtureId: string, outcome: Outcome): `0x${string}` {
   return encodeAbiParameters(
@@ -48,16 +59,36 @@ export function encodeStake(fixtureId: string, outcome: Outcome): `0x${string}` 
   );
 }
 
-function decodeStakeTx(data: `0x${string}`): { fixtureId: string; outcome: Outcome } {
+export function encodeChampionStake(teamCode: string): `0x${string}` {
+  const idx = CHAMP_TEAMS.indexOf(teamCode);
+  if (idx === -1) throw new Error(`Unknown champion team: ${teamCode}`);
+  return encodeAbiParameters(
+    [{ type: 'bytes32' }, { type: 'uint8' }],
+    [toHex(CHAMP_FIXTURE_ID, { size: 32 }), idx],
+  );
+}
+
+type DecodedTx =
+  | { kind: 'match';    fixtureId: string; outcome: Outcome }
+  | { kind: 'champion'; teamCode: string };
+
+function decodeStakeTx(data: `0x${string}`): DecodedTx {
   if (!data || data.length < 66) throw new Error('insufficient calldata');
-  const [fixtureBytes32, outcomeNum] = decodeAbiParameters(
+  const [fixtureBytes32, secondParam] = decodeAbiParameters(
     [{ type: 'bytes32' }, { type: 'uint8' }],
     data,
   );
   const raw = Buffer.from(fixtureBytes32.slice(2), 'hex').toString('utf8').replace(/\0+$/, '');
-  const outcome = OUTCOME_MAP[Number(outcomeNum)];
-  if (!outcome) throw new Error(`invalid outcome index ${outcomeNum}`);
-  return { fixtureId: raw, outcome };
+
+  if (raw === CHAMP_FIXTURE_ID) {
+    const teamCode = CHAMP_TEAMS[Number(secondParam)];
+    if (!teamCode) throw new Error(`invalid champion team index ${secondParam}`);
+    return { kind: 'champion', teamCode };
+  }
+
+  const outcome = OUTCOME_MAP[Number(secondParam)];
+  if (!outcome) throw new Error(`invalid outcome index ${secondParam}`);
+  return { kind: 'match', fixtureId: raw, outcome };
 }
 
 // ── RefereeEngine ──────────────────────────────────────────────────────────────
@@ -70,6 +101,10 @@ export class RefereeEngine {
   private stakes = new Map<string, Stake>();
   private pools = new Map<string, Pool>();
   private settlements: SettlementResult[] = [];
+  private champStakes: ChampionStake[] = [];
+  private champPool = new Map<string, bigint>(CHAMP_TEAMS.map(t => [t, 0n]));
+  private champSettled = false;
+  private champWinner?: string;
   private simulator: MatchSimulator;
 
   private logs: DaemonLog[] = [];
@@ -218,19 +253,42 @@ export class RefereeEngine {
 
   private processStakeTx(tx: Transaction, timestamp: number): void {
     if (this.stakes.has(tx.hash)) return;
+    if (this.champStakes.some(s => s.txHash === tx.hash)) return;
 
     try {
-      const { fixtureId, outcome } = decodeStakeTx(tx.input ?? '0x');
+      const decoded = decodeStakeTx(tx.input ?? '0x');
+      const gross   = tx.value;
+      const fee     = (gross * PROTOCOL_FEE_BPS) / 10_000n;
+      const net     = gross - fee;
+
+      if (decoded.kind === 'champion') {
+        if (this.champSettled) {
+          this.log('STAKE', 'warn', `Rejected champion stake — market already settled (tx ${tx.hash.slice(0, 10)}...)`);
+          return;
+        }
+        const { teamCode } = decoded;
+        this.champPool.set(teamCode, (this.champPool.get(teamCode) ?? 0n) + net);
+        this.champStakes.push({
+          txHash: tx.hash,
+          staker: tx.from,
+          teamCode,
+          amountWei: gross.toString(),
+          blockNumber: Number(tx.blockNumber ?? 0n),
+          timestamp,
+        });
+        this.log('STAKE', 'success', `+${parseFloat(formatEther(gross)).toFixed(4)} OKB · Champion → ${teamCode}`, tx.hash);
+        this.onUpdate?.();
+        return;
+      }
+
+      // ── Match stake ────────────────────────────────────────────────────────
+      const { fixtureId, outcome } = decoded;
       const fixture = this.fixtures.find((f) => f.id === fixtureId);
 
       if (!fixture || fixture.status !== 'open') {
         this.log('STAKE', 'warn', `Rejected stake — fixture "${fixtureId}" not open (tx ${tx.hash.slice(0, 10)}...)`);
         return;
       }
-
-      const gross = tx.value;
-      const fee = (gross * PROTOCOL_FEE_BPS) / 10_000n;
-      const net = gross - fee;
 
       const pool = this.pools.get(fixtureId)!;
       pool[outcome] = (BigInt(pool[outcome]) + net).toString();
@@ -258,6 +316,61 @@ export class RefereeEngine {
     } catch {
       // Not a stake transaction — plain OKB transfer or unrelated calldata
     }
+  }
+
+  // ── Champion settlement ──────────────────────────────────────────────────────
+
+  async oracleChampion(teamCode: string, signature: string, nonce: number): Promise<void> {
+    const message = `X-Cup-Champion:${teamCode}:${nonce}`;
+    const recovered = await recoverMessageAddress({ message, signature: signature as `0x${string}` });
+    const adminAddr = (process.env.ADMIN_ADDRESS ?? '').toLowerCase();
+    if (recovered.toLowerCase() !== adminAddr) {
+      throw new Error(`Invalid oracle signature — recovered ${recovered}, expected ${adminAddr}`);
+    }
+    this.log('ORACLE', 'warn', `Champion override: ${teamCode} (nonce ${nonce})`);
+    await this.settleChampion(teamCode);
+  }
+
+  private async settleChampion(winner: string): Promise<void> {
+    if (this.champSettled) throw new Error('Champion market already settled');
+    if (!CHAMP_TEAMS.includes(winner)) throw new Error(`Unknown team: ${winner}`);
+
+    this.champSettled = true;
+    this.champWinner  = winner;
+
+    const totalPool = Array.from(this.champPool.values()).reduce((s, v) => s + v, 0n);
+    const winPool   = this.champPool.get(winner) ?? 0n;
+    const winners   = this.champStakes.filter(s => s.teamCode === winner);
+
+    this.log('ORACLE', 'info', `Champion: ${winner} · total pool ${formatEther(totalPool)} OKB · ${winners.length} winner(s)`);
+
+    if (winPool === 0n && this.champStakes.length > 0) {
+      for (const s of this.champStakes) {
+        const gross  = BigInt(s.amountWei);
+        const refund = gross - (gross * PROTOCOL_FEE_BPS) / 10_000n;
+        try {
+          const txHash = await this.walletClient.sendTransaction({ account: this.account, to: s.staker as Address, value: refund, chain: xLayerMainnet });
+          this.log('ORACLE', 'success', `Champion refund ${formatEther(refund)} OKB → ${s.staker.slice(0, 10)}...`, txHash);
+        } catch (err: unknown) {
+          this.log('ORACLE', 'error', `Champion refund failed → ${s.staker.slice(0, 10)}...: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    } else {
+      for (const s of winners) {
+        const stake  = BigInt(s.amountWei);
+        const net    = stake - (stake * PROTOCOL_FEE_BPS) / 10_000n;
+        const payout = winPool > 0n ? (net * totalPool) / winPool : 0n;
+        if (payout === 0n) continue;
+        try {
+          const txHash = await this.walletClient.sendTransaction({ account: this.account, to: s.staker as Address, value: payout, chain: xLayerMainnet });
+          this.log('ORACLE', 'success', `Champion payout ${formatEther(payout)} OKB → ${s.staker.slice(0, 10)}...`, txHash);
+        } catch (err: unknown) {
+          this.log('ORACLE', 'error', `Champion payout failed → ${s.staker.slice(0, 10)}...: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+
+    this.onUpdate?.();
   }
 
   // ── Oracle Override ──────────────────────────────────────────────────────────
@@ -434,6 +547,18 @@ export class RefereeEngine {
   // ── State snapshot ───────────────────────────────────────────────────────────
 
   getState(): DaemonState {
+    const byTeam: Record<string, string> = {};
+    this.champPool.forEach((v, k) => { byTeam[k] = v.toString(); });
+    const totalWei = Array.from(this.champPool.values()).reduce((s, v) => s + v, 0n).toString();
+
+    const championPool: ChampionPool = {
+      byTeam,
+      totalWei,
+      count: this.champStakes.length,
+      settled: this.champSettled,
+      winner: this.champWinner,
+    };
+
     return {
       refereeAddress:  this.account.address,
       metabolism:      this.metabolicState,
@@ -445,6 +570,7 @@ export class RefereeEngine {
       settlements:     this.settlements.slice(-20),
       matchStates:     this.simulator.getStates(),
       simulationMode:  this.fixtures.some(f => f.mode === 'simulated'),
+      championPool,
     };
   }
 }

@@ -12,6 +12,7 @@ import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, 
 import { STATIC_FIXTURES, REALTIME_FIXTURES } from './types';
 import { Leaderboard } from './components/Leaderboard';
 import { BracketView } from './components/BracketView';
+import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
 import { xLayerMainnet, explorerAddr } from './lib/chain';
 import { shortAddr } from './lib/encode';
@@ -82,11 +83,16 @@ export default function App() {
   const [matchStates, setMatchStates]         = useState<Record<string, MatchState>>({});
   const [watchingFixtureId, setWatchingId]    = useState<string | null>(null);
   const [viewMode, setViewMode]               = useState<'simulated' | 'realtime'>('simulated');
+  const [eliminatedTeams, setEliminatedTeams] = useState<Set<string>>(new Set());
+  const [champion, setChampion]               = useState<Team | null>(null);
+  const [restartIn, setRestartIn]             = useState(0);
+  const [tournamentGen, setTournamentGen]     = useState(0);
 
-  const wsRef                = useRef<WebSocket | null>(null);
-  const reconnectRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const simCleanupRef        = useRef<Map<string, () => void>>(new Map());
-  const bracketProcessedRef  = useRef<Set<string>>(new Set());
+  const wsRef                  = useRef<WebSocket | null>(null);
+  const reconnectRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const simCleanupRef          = useRef<Map<string, () => void>>(new Map());
+  const bracketProcessedRef    = useRef<Set<string>>(new Set());
+  const championTriggeredRef   = useRef(false);
 
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
 
@@ -198,6 +204,7 @@ export default function App() {
           : ms.awayScore > ms.homeScore ? fx.away
           : Math.random() > 0.5 ? fx.home : fx.away;
         const loser: Team = winner.code === fx.home.code ? fx.away : fx.home;
+        setEliminatedTeams(prev => new Set([...prev, loser.code]));
         return prev.map(f => {
           if (f.id === entry.winner.matchId) {
             const updated = { ...f, [entry.winner.slot]: winner };
@@ -216,6 +223,44 @@ export default function App() {
       });
     });
   }, [matchStates, daemonOnline, viewMode]);
+
+  // ── Tournament restart ───────────────────────────────────────────────────────
+  const doRestart = useCallback(() => {
+    simCleanupRef.current.forEach(c => c());
+    simCleanupRef.current.clear();
+    bracketProcessedRef.current.clear();
+    championTriggeredRef.current = false;
+    setMatchStates({});
+    setFixtures(STATIC_FIXTURES);
+    setEliminatedTeams(new Set());
+    setChampion(null);
+    setRestartIn(0);
+    setTournamentGen(g => g + 1);
+  }, []);
+
+  // Detect final finish → show champion overlay
+  useEffect(() => {
+    if (daemonOnline || viewMode !== 'simulated') return;
+    const ms = matchStates['f-1'];
+    if (ms?.status !== 'finished') return;
+    if (championTriggeredRef.current) return;
+    championTriggeredRef.current = true;
+    const fx = fixtures.find(f => f.id === 'f-1');
+    if (!fx) return;
+    const winner = ms.homeScore >= ms.awayScore ? fx.home : fx.away;
+    setChampion(winner);
+    setRestartIn(10);
+  }, [matchStates, daemonOnline, viewMode, fixtures]);
+
+  // Countdown → auto-restart
+  useEffect(() => {
+    if (!champion) return;
+    if (restartIn > 0) {
+      const t = setTimeout(() => setRestartIn(n => n - 1), 1000);
+      return () => clearTimeout(t);
+    }
+    doRestart();
+  }, [champion, restartIn, doRestart]);
 
   const handleStake    = useCallback((fixtureId: string, outcome: Outcome) => setStakeTarget({ fixtureId, outcome }), []);
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
@@ -436,6 +481,17 @@ export default function App() {
           </div>
         )}
 
+        {/* ── Champion prediction market ───────────────────────────────── */}
+        {viewMode === 'simulated' && (
+          <ChampionPick
+            key={tournamentGen}
+            fixtures={fixtures}
+            matchStates={matchStates}
+            eliminatedTeams={eliminatedTeams}
+            refereeAddress={refereeAddress}
+          />
+        )}
+
         {/* ── Bracket view OR fixture grid ──────────────────────────────── */}
         {viewMode === 'simulated' && roundFilter === 'bracket' ? (
           <BracketView
@@ -531,6 +587,48 @@ export default function App() {
           matchState={matchStates[watchingFixture.id]}
           onClose={() => setWatchingId(null)}
         />
+      )}
+
+      {/* ── Champion overlay ─────────────────────────────────────────────── */}
+      {champion && viewMode === 'simulated' && !daemonOnline && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 backdrop-blur-md"
+          style={{ animation: 'overlayIn 0.4s ease both' }}
+        >
+          <div className="text-center px-8 py-10 max-w-xs">
+            <div
+              className="text-8xl mb-5 select-none"
+              style={{ animation: 'flagBounce 0.7s cubic-bezier(0.34,1.56,0.64,1) both' }}
+            >
+              {champion.flag}
+            </div>
+            <div className="text-3xl font-black text-white tracking-tight mb-1">
+              {champion.name}
+            </div>
+            <div className="text-base font-bold text-yellow-400 mb-5 tracking-widest uppercase">
+              🏆 World Cup 2026 Champions
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full h-1 dark:bg-zinc-800 bg-zinc-700 rounded-full overflow-hidden mb-3">
+              <div
+                className="h-full bg-emerald-400 rounded-full transition-all duration-1000 ease-linear"
+                style={{ width: `${(restartIn / 10) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs font-mono dark:text-zinc-400 text-zinc-400 mb-5">
+              New tournament in <span className="font-bold text-white tabular-nums">{restartIn}s</span>
+            </p>
+
+            <button
+              onClick={doRestart}
+              className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-bold text-sm
+                hover:bg-emerald-400 active:scale-95 transition-all"
+            >
+              Start Next Tournament →
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

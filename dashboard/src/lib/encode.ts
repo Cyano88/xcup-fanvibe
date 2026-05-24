@@ -3,6 +3,27 @@ import type { Outcome } from '../types';
 
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
 
+// Champion prediction market — must match backend CHAMP_TEAMS order exactly
+export const CHAMP_FIXTURE_ID = 'champion-2026';
+export const CHAMP_TEAMS = [
+  'BRA','ECU','FRA','TUR','ARG','KOR','ENG','NGA',
+  'ESP','DEN','POR','CMR','GER','MEX','NED','AUS',
+  'BEL','JPN','ITA','COL','CRO','CAN','MAR','USA',
+  'URU','EGY','SRB','SUI','ALG','KSA','CIV','SEN',
+] as const;
+
+export const CHAMP_TEAM_INDEX: Record<string, number> =
+  Object.fromEntries(CHAMP_TEAMS.map((t, i) => [t, i]));
+
+export function encodeChampionStake(teamCode: string): `0x${string}` {
+  const idx = CHAMP_TEAM_INDEX[teamCode];
+  if (idx === undefined) throw new Error(`Unknown champion team: ${teamCode}`);
+  return encodeAbiParameters(
+    [{ type: 'bytes32' }, { type: 'uint8' }],
+    [toHex(CHAMP_FIXTURE_ID, { size: 32 }), idx],
+  );
+}
+
 export function encodeStakeCalldata(fixtureId: string, outcome: Outcome): `0x${string}` {
   return encodeAbiParameters(
     [{ type: 'bytes32' }, { type: 'uint8' }],

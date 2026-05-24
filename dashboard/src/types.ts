@@ -102,6 +102,14 @@ export interface SettlementResult {
   explorerUrl: string;
 }
 
+export interface ChampionPool {
+  byTeam: Record<string, string>; // teamCode → net wei staked
+  totalWei: string;
+  count: number;
+  settled: boolean;
+  winner?: string;
+}
+
 export interface DaemonState {
   refereeAddress: string;
   metabolism: MetabolicState;
@@ -113,6 +121,7 @@ export interface DaemonState {
   settlements: SettlementResult[];
   matchStates: Record<string, MatchState>;
   simulationMode: boolean;
+  championPool?: ChampionPool;
 }
 
 // ── Static fallback fixtures (shown when daemon is offline) ──────────────────

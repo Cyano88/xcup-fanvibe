@@ -112,6 +112,23 @@ export interface DaemonLog {
   txHash?: string;
 }
 
+export interface ChampionStake {
+  txHash: string;
+  staker: string;
+  teamCode: string;
+  amountWei: string;
+  blockNumber: number;
+  timestamp: number;
+}
+
+export interface ChampionPool {
+  byTeam: Record<string, string>; // teamCode → net wei staked
+  totalWei: string;
+  count: number;
+  settled: boolean;
+  winner?: string;
+}
+
 export interface DaemonState {
   refereeAddress: string;
   metabolism: MetabolicState;
@@ -123,4 +140,5 @@ export interface DaemonState {
   settlements: SettlementResult[];
   matchStates: Record<string, MatchState>;
   simulationMode: boolean;
+  championPool: ChampionPool;
 }

@@ -4,7 +4,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
-import { RefereeEngine, encodeStake } from './engine/referee.js';
+import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome } from './types.js';
 
 // ── App bootstrap ─────────────────────────────────────────────────────────────
@@ -82,6 +82,35 @@ app.post('/oracle/override', async (req, res) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(400).json({ success: false, error: message });
+  }
+});
+
+app.get('/encode-champion-stake', (req, res) => {
+  const schema = z.object({ teamCode: z.string().min(2).max(4) });
+  const parsed = schema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  if (!CHAMP_TEAMS.includes(parsed.data.teamCode)) {
+    return res.status(400).json({ error: `Unknown team: ${parsed.data.teamCode}` });
+  }
+  res.json({ calldata: encodeChampionStake(parsed.data.teamCode) });
+});
+
+const ChampionOracleSchema = z.object({
+  teamCode: z.string().min(2).max(4),
+  signature: z.string().regex(/^0x[0-9a-fA-F]+$/),
+  nonce: z.number().int().min(0),
+});
+
+app.post('/oracle/champion', async (req, res) => {
+  const parsed = ChampionOracleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { teamCode, signature, nonce } = parsed.data;
+  try {
+    await engine.oracleChampion(teamCode, signature, nonce);
+    broadcast('state', engine.getState());
+    res.json({ success: true, winner: teamCode });
+  } catch (err: unknown) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : String(err) });
   }
 });
 
