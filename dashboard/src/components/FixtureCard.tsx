@@ -12,9 +12,54 @@ interface Props {
 }
 
 const FLAG_URL = (iso: string) =>
-  `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
+  iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
+
+const ROUND_LABEL: Record<string, string> = {
+  R32: 'Round of 32',
+  R16: 'Round of 16',
+  QF:  'Quarter-Final',
+  SF:  'Semi-Final',
+  '3PL': '3rd Place',
+  F:   'Final',
+};
+
+function TBDCard({ fixture }: { fixture: Fixture }) {
+  return (
+    <div className="rounded-2xl overflow-hidden border dark:border-zinc-800/40 border-zinc-200/60 dark:bg-zinc-950 bg-white opacity-55">
+      <div className="h-44 relative dark:bg-zinc-900 bg-zinc-100 overflow-hidden">
+        <div
+          className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/6 dark:via-white/4 to-transparent"
+          style={{ animation: 'shimmer 2.4s ease-in-out infinite' }}
+        />
+        <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 pt-3.5">
+          <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">
+            {fixture.round ? (ROUND_LABEL[fixture.round] ?? fixture.round) : 'Upcoming'}
+          </span>
+          <span className="text-[10px] font-mono font-bold text-zinc-600 dark:text-zinc-500 bg-zinc-200/60 dark:bg-zinc-800/60 border border-zinc-300/50 dark:border-zinc-700/40 px-2 py-0.5 rounded-full">
+            UPCOMING
+          </span>
+        </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none">
+          <span className="text-4xl opacity-15">🏆</span>
+          <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-600">Awaiting qualifier results</span>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t dark:from-zinc-900 from-zinc-100 to-transparent" />
+      </div>
+      <div className="p-3 dark:bg-zinc-950 bg-white">
+        <div className="h-11 rounded-xl dark:bg-zinc-900/80 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 animate-pulse" />
+      </div>
+      <div className="px-4 pb-3 dark:bg-zinc-950 bg-white">
+        <div className="h-2.5 w-2/5 rounded dark:bg-zinc-900 bg-zinc-100 animate-pulse" />
+      </div>
+    </div>
+  );
+}
 
 export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Props) {
+  if (fixture.home.code === 'TBD' && fixture.away.code === 'TBD') {
+    return <TBDCard fixture={fixture} />;
+  }
+
   const [showHome, setShowHome]   = useState(true);
   const [hovered, setHovered]     = useState(false);
   const [tick, setTick]           = useState(0);
@@ -84,7 +129,9 @@ export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Pro
         {/* Top bar */}
         <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 pt-3.5">
           <span className="text-[11px] font-mono text-white/60 uppercase tracking-widest">
-            Group {fixture.group} · MD{fixture.matchday}
+            {fixture.round
+              ? `${ROUND_LABEL[fixture.round] ?? fixture.round} · Match ${fixture.matchday}`
+              : `Group ${fixture.group} · MD${fixture.matchday}`}
           </span>
           {isSettled ? (
             <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/25 border border-purple-400/40 px-2 py-0.5 rounded-full backdrop-blur-sm">
@@ -274,8 +321,10 @@ export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Pro
               : 'No stakes yet'}
           </span>
         </div>
-        <span className="text-[11px] dark:text-zinc-500 text-zinc-500 font-mono truncate max-w-[120px]">
-          {fixture.venue.split('·')[0].trim()}
+        <span className="text-[11px] dark:text-zinc-500 text-zinc-500 font-mono truncate max-w-[160px]">
+          {fixture.stadium
+            ? `${fixture.stadium.city.split(',')[0]} · ${fixture.stadium.capacity.toLocaleString()}`
+            : fixture.venue.split('·')[0].trim()}
         </span>
       </div>
     </div>

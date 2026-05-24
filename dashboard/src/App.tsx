@@ -8,8 +8,11 @@ import { StakeModal } from './components/StakeModal';
 import { SettlementToast } from './components/SettlementToast';
 import { FuelBar } from './components/FuelBar';
 import { MatchViewer } from './components/MatchViewer';
-import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState } from './types';
-import { STATIC_FIXTURES } from './types';
+import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team } from './types';
+import { STATIC_FIXTURES, REALTIME_FIXTURES } from './types';
+import { Leaderboard } from './components/Leaderboard';
+import { BracketView } from './components/BracketView';
+import { simulateMatch } from './lib/clientSim';
 import { xLayerMainnet, explorerAddr } from './lib/chain';
 import { shortAddr } from './lib/encode';
 
@@ -18,6 +21,43 @@ const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP  ?? 'http://localhost:300
 const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
 
 const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
+
+// ── Bracket progression map ───────────────────────────────────────────────────
+const BRACKET: Record<string, {
+  winner: { matchId: string; slot: 'home' | 'away' };
+  loser?: { matchId: string; slot: 'home' | 'away' };
+}> = {
+  'r32-1':  { winner: { matchId: 'r16-1', slot: 'home' } },
+  'r32-2':  { winner: { matchId: 'r16-1', slot: 'away' } },
+  'r32-3':  { winner: { matchId: 'r16-2', slot: 'home' } },
+  'r32-4':  { winner: { matchId: 'r16-2', slot: 'away' } },
+  'r32-5':  { winner: { matchId: 'r16-3', slot: 'home' } },
+  'r32-6':  { winner: { matchId: 'r16-3', slot: 'away' } },
+  'r32-7':  { winner: { matchId: 'r16-4', slot: 'home' } },
+  'r32-8':  { winner: { matchId: 'r16-4', slot: 'away' } },
+  'r32-9':  { winner: { matchId: 'r16-5', slot: 'home' } },
+  'r32-10': { winner: { matchId: 'r16-5', slot: 'away' } },
+  'r32-11': { winner: { matchId: 'r16-6', slot: 'home' } },
+  'r32-12': { winner: { matchId: 'r16-6', slot: 'away' } },
+  'r32-13': { winner: { matchId: 'r16-7', slot: 'home' } },
+  'r32-14': { winner: { matchId: 'r16-7', slot: 'away' } },
+  'r32-15': { winner: { matchId: 'r16-8', slot: 'home' } },
+  'r32-16': { winner: { matchId: 'r16-8', slot: 'away' } },
+  'r16-1':  { winner: { matchId: 'qf-1', slot: 'home' } },
+  'r16-2':  { winner: { matchId: 'qf-1', slot: 'away' } },
+  'r16-3':  { winner: { matchId: 'qf-2', slot: 'home' } },
+  'r16-4':  { winner: { matchId: 'qf-2', slot: 'away' } },
+  'r16-5':  { winner: { matchId: 'qf-3', slot: 'home' } },
+  'r16-6':  { winner: { matchId: 'qf-3', slot: 'away' } },
+  'r16-7':  { winner: { matchId: 'qf-4', slot: 'home' } },
+  'r16-8':  { winner: { matchId: 'qf-4', slot: 'away' } },
+  'qf-1':   { winner: { matchId: 'sf-1', slot: 'home' } },
+  'qf-2':   { winner: { matchId: 'sf-1', slot: 'away' } },
+  'qf-3':   { winner: { matchId: 'sf-2', slot: 'home' } },
+  'qf-4':   { winner: { matchId: 'sf-2', slot: 'away' } },
+  'sf-1':   { winner: { matchId: 'f-1',   slot: 'home' }, loser: { matchId: '3pl-1', slot: 'home' } },
+  'sf-2':   { winner: { matchId: 'f-1',   slot: 'away' }, loser: { matchId: '3pl-1', slot: 'away' } },
+};
 
 function defaultMetabolism(): MetabolicState {
   return { okbBalance: '0', okbBalanceFormatted: '0.000000', healthPercent: 0, isRefuelNeeded: false, checkedAt: Date.now() };
@@ -37,13 +77,16 @@ export default function App() {
   const [pendingToasts, setPendingToasts]     = useState<SettlementResult[]>([]);
   const [stakeTarget, setStakeTarget]         = useState<{ fixtureId: string; outcome: Outcome } | null>(null);
   const [logOpen, setLogOpen]                 = useState(false);
-  const [groupFilter, setGroupFilter]         = useState<string>('all');
+  const [roundFilter, setRoundFilter]          = useState<string>('all');
+  const [groupFilter, setGroupFilter]          = useState<string>('all');
   const [matchStates, setMatchStates]         = useState<Record<string, MatchState>>({});
   const [watchingFixtureId, setWatchingId]    = useState<string | null>(null);
   const [viewMode, setViewMode]               = useState<'simulated' | 'realtime'>('simulated');
 
-  const wsRef             = useRef<WebSocket | null>(null);
-  const reconnectRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wsRef                = useRef<WebSocket | null>(null);
+  const reconnectRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const simCleanupRef        = useRef<Map<string, () => void>>(new Map());
+  const bracketProcessedRef  = useRef<Set<string>>(new Set());
 
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
 
@@ -123,14 +166,68 @@ export default function App() {
     return () => clearInterval(t);
   }, [daemonOnline, refereeAddress]);
 
+  // ── Client-side simulation (runs when daemon is offline) ─────────────────────
+
+  // Start / restart simulations for all open non-TBD fixtures
+  useEffect(() => {
+    if (daemonOnline || viewMode !== 'simulated') return;
+    fixtures.forEach(fx => {
+      if (fx.status !== 'open' && fx.status !== 'locked') return;
+      if (fx.home.code === 'TBD' || fx.away.code === 'TBD') return;
+      if (simCleanupRef.current.has(fx.id)) return;
+      const cleanup = simulateMatch(fx, (state) => {
+        setMatchStates(prev => ({ ...prev, [fx.id]: state }));
+      });
+      simCleanupRef.current.set(fx.id, cleanup);
+    });
+  }, [daemonOnline, viewMode, fixtures]);
+
+  // Advance bracket when a match finishes
+  useEffect(() => {
+    if (daemonOnline || viewMode !== 'simulated') return;
+    Object.entries(matchStates).forEach(([id, ms]) => {
+      if (ms.status !== 'finished') return;
+      if (bracketProcessedRef.current.has(id)) return;
+      bracketProcessedRef.current.add(id);
+      const entry = BRACKET[id];
+      if (!entry) return;
+      setFixtures(prev => {
+        const fx = prev.find(f => f.id === id);
+        if (!fx) return prev;
+        const winner: Team = ms.homeScore > ms.awayScore ? fx.home
+          : ms.awayScore > ms.homeScore ? fx.away
+          : Math.random() > 0.5 ? fx.home : fx.away;
+        const loser: Team = winner.code === fx.home.code ? fx.away : fx.home;
+        return prev.map(f => {
+          if (f.id === entry.winner.matchId) {
+            const updated = { ...f, [entry.winner.slot]: winner };
+            const other: Team = entry.winner.slot === 'home' ? updated.away : updated.home;
+            if (other.code !== 'TBD') updated.status = 'open';
+            return updated;
+          }
+          if (entry.loser && f.id === entry.loser.matchId) {
+            const updated = { ...f, [entry.loser.slot]: loser };
+            const other: Team = entry.loser.slot === 'home' ? updated.away : updated.home;
+            if (other.code !== 'TBD') updated.status = 'open';
+            return updated;
+          }
+          return f;
+        });
+      });
+    });
+  }, [matchStates, daemonOnline, viewMode]);
+
   const handleStake    = useCallback((fixtureId: string, outcome: Outcome) => setStakeTarget({ fixtureId, outcome }), []);
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
   const handleWatch    = useCallback((fixtureId: string) => setWatchingId(fixtureId), []);
   const activeFixture  = stakeTarget ? fixtures.find(f => f.id === stakeTarget.fixtureId) ?? null : null;
   const watchingFixture = watchingFixtureId ? fixtures.find(f => f.id === watchingFixtureId) ?? null : null;
 
-  const groups = ['all', ...Array.from(new Set(fixtures.map(f => f.group))).sort()];
-  const visibleFixtures = groupFilter === 'all' ? fixtures : fixtures.filter(f => f.group === groupFilter);
+  const simFixtures    = viewMode === 'simulated' ? fixtures : REALTIME_FIXTURES;
+  const rtGroups       = ['all', ...Array.from(new Set(REALTIME_FIXTURES.map(f => f.group))).sort()];
+  const visibleFixtures = viewMode === 'simulated'
+    ? (roundFilter === 'all' ? simFixtures : simFixtures.filter(f => f.round === roundFilter))
+    : (groupFilter === 'all' ? REALTIME_FIXTURES : REALTIME_FIXTURES.filter(f => f.group === groupFilter));
 
   const healthColor = metabolism.isRefuelNeeded
     ? 'dark:text-red-400 text-red-600'
@@ -245,21 +342,83 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Group filter pills ────────────────────────────────────────── */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-          {groups.map(g => (
-            <button
-              key={g}
-              onClick={() => setGroupFilter(g)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-150
-                ${groupFilter === g
-                  ? 'dark:bg-zinc-100 dark:text-zinc-900 bg-zinc-900 text-white'
-                  : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-700'}`}
-            >
-              {g === 'all' ? 'All' : `Grp ${g}`}
-            </button>
-          ))}
-        </div>
+        {/* ── Round / group filter tabs ─────────────────────────────────── */}
+        {viewMode === 'simulated' ? (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+            {[
+              { id: 'all',     label: 'All' },
+              { id: 'R32',     label: 'R32' },
+              { id: 'R16',     label: 'R16' },
+              { id: 'QF',      label: 'QF' },
+              { id: 'SF',      label: 'SF' },
+              { id: '3PL',     label: '3rd Place' },
+              { id: 'F',       label: 'Final' },
+              { id: 'bracket', label: '🏆 Bracket' },
+            ].map(t => (
+              <button key={t.id} onClick={() => setRoundFilter(t.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-150
+                  ${roundFilter === t.id
+                    ? 'dark:bg-zinc-100 dark:text-zinc-900 bg-zinc-900 text-white'
+                    : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-700'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+            {rtGroups.map(g => (
+              <button key={g} onClick={() => setGroupFilter(g)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-150
+                  ${groupFilter === g
+                    ? 'dark:bg-blue-500 dark:text-white bg-blue-600 text-white'
+                    : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-700'}`}>
+                {g === 'all' ? 'All Groups' : `Group ${g}`}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Simulation running indicator ──────────────────────────────── */}
+        {viewMode === 'simulated' && !daemonOnline && Object.keys(matchStates).length > 0 && (() => {
+          const liveEntries  = Object.entries(matchStates).filter(([, ms]) => ms.status === 'live');
+          const finishedCount = Object.values(matchStates).filter(ms => ms.status === 'finished').length;
+          return (
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-0.5 scrollbar-none">
+              <div className="shrink-0 flex items-center gap-1.5 text-xs font-mono font-semibold">
+                {liveEntries.length > 0 ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="dark:text-emerald-400 text-emerald-600">{liveEntries.length} LIVE</span>
+                  </>
+                ) : (
+                  <span className="dark:text-zinc-500 text-zinc-400">Simulation complete</span>
+                )}
+                {finishedCount > 0 && (
+                  <span className="dark:text-zinc-600 text-zinc-400">· {finishedCount} done</span>
+                )}
+              </div>
+              {liveEntries.map(([id, ms]) => {
+                const fx = fixtures.find(f => f.id === id);
+                if (!fx) return null;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setWatchingId(id)}
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-emerald-500/30 border-emerald-200
+                      dark:bg-emerald-500/8 bg-emerald-50 dark:hover:border-emerald-400/50 hover:border-emerald-300
+                      transition-all active:scale-95 text-[11px] font-mono font-semibold"
+                  >
+                    <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span className="dark:text-zinc-200 text-zinc-700">{fx.home.flag} {ms.homeScore}</span>
+                    <span className="dark:text-zinc-600 text-zinc-400">–</span>
+                    <span className="dark:text-zinc-200 text-zinc-700">{ms.awayScore} {fx.away.flag}</span>
+                    <span className="dark:text-zinc-500 text-zinc-400">{ms.minute}&apos;</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* ── Realtime mode notice ──────────────────────────────────────── */}
         {viewMode === 'realtime' && (
@@ -277,19 +436,32 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Fixtures grid ─────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleFixtures.map(fixture => (
-            <FixtureCard
-              key={fixture.id}
-              fixture={fixture}
-              pool={pools[fixture.id]}
-              matchState={viewMode === 'simulated' ? matchStates[fixture.id] : undefined}
-              onStake={handleStake}
-              onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
-            />
-          ))}
-        </div>
+        {/* ── Bracket view OR fixture grid ──────────────────────────────── */}
+        {viewMode === 'simulated' && roundFilter === 'bracket' ? (
+          <BracketView
+            fixtures={fixtures}
+            matchStates={matchStates}
+            onWatch={handleWatch}
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {visibleFixtures.map(fixture => (
+              <FixtureCard
+                key={fixture.id}
+                fixture={fixture}
+                pool={pools[fixture.id]}
+                matchState={viewMode === 'simulated' ? matchStates[fixture.id] : undefined}
+                onStake={handleStake}
+                onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* ── Top Scorers leaderboard (simulated mode only, once matches start) ── */}
+        {viewMode === 'simulated' && Object.keys(matchStates).length > 0 && (
+          <Leaderboard matchStates={matchStates} fixtures={fixtures} />
+        )}
 
         {/* ── Log toggle ────────────────────────────────────────────────── */}
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">

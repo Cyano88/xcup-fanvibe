@@ -97,6 +97,9 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
   const [trail, setTrail]         = useState<{ lx: number; ly: number }[]>([]);
   const [phase, setPhase]         = useState<PitchPhase>('neutral');
   const [actionText, setActionText] = useState<{ text: string; isHome: boolean } | null>(null);
+  const [bannerEv, setBannerEv] = useState<{ text: string; isHome: boolean; lx: number; ly: number; key: number } | null>(null);
+  const bannerTimeoutRef = useRef<number | null>(null);
+  const bannerKeyRef = useRef(0);
 
   useEffect(() => { possRef.current = state.possession; }, [state.possession]);
   useEffect(() => { freezeRef.current = freeze; }, [freeze]);
@@ -122,7 +125,13 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
     phaseRef.current = p;
     setPhase(p);
     targetRef.current = wanderTarget(p, possRef.current);
-    setActionText(getActionLabel(ev, fixture.home.code, fixture.away.code));
+    const label = getActionLabel(ev, fixture.home.code, fixture.away.code);
+    setActionText(label);
+    if (label && ev.lx !== undefined && ev.ly !== undefined) {
+      if (bannerTimeoutRef.current !== null) clearTimeout(bannerTimeoutRef.current);
+      setBannerEv({ text: label.text, isHome: label.isHome, lx: ev.lx, ly: ev.ly, key: ++bannerKeyRef.current });
+      bannerTimeoutRef.current = setTimeout(() => setBannerEv(null), 2800) as unknown as number;
+    }
   }, [state.events.length, fixture.home.code, fixture.away.code]);
 
   // Wander: new waypoint every 1.8 s, stays near current zone
@@ -226,6 +235,22 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
           <circle cx="0" cy="0" r="6.5" fill="none" stroke="rgba(0,0,0,0.22)" strokeWidth="1.2" />
           <circle cx="-1.8" cy="-1.8" r="1.8" fill="rgba(0,0,0,0.12)" />
         </g>
+
+        {/* Floating event banner at event pitch coordinates */}
+        {bannerEv && !freeze && (() => {
+          const bpos = toSVG(bannerEv.lx, bannerEv.ly);
+          const bx = Math.max(58, Math.min(342, bpos.x));
+          const by = Math.max(22, Math.min(175, bpos.y - 16));
+          return (
+            <g key={bannerEv.key} style={{ animation: 'bannerFade 2.8s ease-out forwards' }}>
+              <rect x={bx - 52} y={by - 12} width="104" height="15" rx="3.5" fill="rgba(0,0,0,0.78)" />
+              <text x={bx} y={by - 1} textAnchor="middle" fill="white"
+                fontSize="7" fontFamily="monospace" fontWeight="700">
+                {bannerEv.text.toUpperCase()}
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Action callout */}
         {actionText && !freeze && (
@@ -456,6 +481,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
 type Tab = 'stats' | 'commentary' | 'chat';
 
 interface GoalBanner { flag: string; name: string; isHome: boolean; }
+interface Ticker { id: number; text: string; isGoal: boolean; isHome: boolean; }
 
 export function MatchViewer({ fixture, matchState, onClose }: Props) {
   const isLive     = matchState.status === 'live';
@@ -463,10 +489,12 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
   const progress   = Math.min(100, (matchState.minute / 90) * 100);
   const [tab, setTab] = useState<Tab>('stats');
 
-  // Goal celebrations
+  // Goal celebrations + incident ticker
   const [goalOverlay, setGoalOverlay] = useState<GoalBanner | null>(null);
   const [scorePop, setScorePop]       = useState<'home' | 'away' | null>(null);
-  const goalLenRef = useRef(matchState.events.length);
+  const [tickers, setTickers]         = useState<Ticker[]>([]);
+  const tickerIdRef = useRef(0);
+  const goalLenRef  = useRef(matchState.events.length);
 
   useEffect(() => {
     if (matchState.events.length === goalLenRef.current) return;
@@ -482,7 +510,24 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
       setScorePop('away');
       setTimeout(() => setScorePop(null), 900);
     }
-  }, [matchState.events.length, fixture.home.flag, fixture.home.name, fixture.away.flag, fixture.away.name]);
+
+    // Incident ticker: goals + cards
+    const isGoalEv = ev.type === 'goal_home' || ev.type === 'goal_away';
+    const isCardEv = ev.type.startsWith('yellow') || ev.type.startsWith('red');
+    if (isGoalEv || isCardEv) {
+      const tid = ++tickerIdRef.current;
+      const isHome = ev.team === 'home';
+      const teamFlag = isHome ? fixture.home.flag : fixture.away.flag;
+      const teamCode = isHome ? fixture.home.code : fixture.away.code;
+      const player = ev.player ?? teamCode;
+      const assist = isGoalEv && ev.player2 ? ` (${ev.player2})` : '';
+      const text = isGoalEv
+        ? `${teamFlag} GOAL! ${player}${assist}`
+        : `${ev.type.startsWith('red') ? '🟥' : '🟨'} ${player} (${teamCode})`;
+      setTickers(prev => [...prev.slice(-3), { id: tid, text, isGoal: isGoalEv, isHome }]);
+      setTimeout(() => setTickers(prev => prev.filter(t => t.id !== tid)), 5000);
+    }
+  }, [matchState.events.length, fixture.home.flag, fixture.home.name, fixture.away.flag, fixture.away.name, fixture.home.code, fixture.away.code]);
 
   const outcome = isFinished
     ? matchState.homeScore > matchState.awayScore ? 'home'
@@ -558,6 +603,17 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
           </div>
         </div>
 
+        {/* Stadium info */}
+        {fixture.stadium && (
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-5 pb-2 text-[11px] font-mono">
+            <span className="dark:text-zinc-300 text-zinc-700 font-semibold">{fixture.stadium.name}</span>
+            <span className="dark:text-zinc-700 text-zinc-300">·</span>
+            <span className="dark:text-zinc-500 text-zinc-500">{fixture.stadium.city}, {fixture.stadium.country}</span>
+            <span className="dark:text-zinc-700 text-zinc-300">·</span>
+            <span className="dark:text-zinc-500 text-zinc-500">{fixture.stadium.capacity.toLocaleString()} cap.</span>
+          </div>
+        )}
+
         {/* Result banner */}
         {isFinished && outcome && (
           <div className={`mx-5 mb-3 py-2 px-4 rounded-xl text-center text-sm font-bold
@@ -609,6 +665,26 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
           {tab === 'commentary' && <CommentaryFeed state={matchState} />}
           {tab === 'chat'       && <MatchChat fixtureId={fixture.id} />}
         </div>
+
+        {/* Incident ticker — fixed to viewport right edge, clear of any modal overflow clipping */}
+        {tickers.length > 0 && (
+          <div className="fixed top-20 right-4 z-[60] flex flex-col gap-1.5 pointer-events-none max-w-[220px]">
+            {tickers.map(t => (
+              <div
+                key={t.id}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-mono font-bold shadow-xl whitespace-nowrap
+                  ${t.isGoal
+                    ? t.isHome
+                      ? 'bg-emerald-500 text-black'
+                      : 'bg-amber-500 text-black'
+                    : 'bg-zinc-900 text-zinc-100 border border-zinc-700'}`}
+                style={{ animation: 'incidentSlide 5s ease-out forwards' }}
+              >
+                {t.text}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* GOAL! freeze overlay — 4.5 s SportyBet-style hard lock */}
         {goalOverlay && (

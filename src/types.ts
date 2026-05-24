@@ -1,5 +1,6 @@
 export type Outcome = 'home' | 'draw' | 'away';
 export type FixtureStatus = 'upcoming' | 'open' | 'locked' | 'settled';
+export type TournamentRound = 'R32' | 'R16' | 'QF' | 'SF' | '3PL' | 'F';
 export type LogPrefix = 'RPC' | 'ORACLE' | 'METABOLISM' | 'STAKE' | 'SYSTEM';
 export type LogLevel = 'info' | 'warn' | 'error' | 'success';
 
@@ -8,16 +9,26 @@ export interface Team {
   code: string;
   flag: string;
   iso: string;
+  players?: string[];
+}
+
+export interface Stadium {
+  name: string;
+  city: string;
+  country: string;
+  capacity: number;
 }
 
 export interface Fixture {
   id: string;
   matchday: number;
   group: string;
+  round?: TournamentRound;
   home: Team;
   away: Team;
   kickoff: string;
   venue: string;
+  stadium?: Stadium;
   status: FixtureStatus;
   result?: Outcome;
   baseOdds: { home: number; draw: number; away: number };
@@ -28,9 +39,13 @@ export interface Fixture {
 export interface MatchEvent {
   id: number;
   minute: number;
-  type: 'kickoff' | 'goal' | 'shot' | 'yellow_card' | 'red_card' | 'corner' | 'foul' | 'half_time' | 'full_time' | 'var' | string;
+  type: string;
   team: 'home' | 'away' | 'neutral';
   commentary: string;
+  player?: string;
+  player2?: string;
+  lx?: number;
+  ly?: number;
 }
 
 export interface MatchState {
@@ -41,7 +56,7 @@ export interface MatchState {
   awayScore: number;
   events: MatchEvent[];
   simulatedKickoff: string;
-  possession: number; // home possession %
+  possession: number;
 }
 
 export interface Stake {
