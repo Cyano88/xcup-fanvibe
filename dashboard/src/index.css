@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-black;
+  }
+
+  ::selection {
+    @apply bg-emerald-500/20 text-emerald-300;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border transition-colors duration-200;
+    @apply bg-zinc-900 border-zinc-800;
+    @apply dark:bg-zinc-900 dark:border-zinc-800;
+  }
+
+  .card-light {
+    @apply bg-white border-zinc-200 shadow-sm;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium;
+    @apply transition-all duration-150 active:scale-95;
+    @apply bg-emerald-500 text-black hover:bg-emerald-400;
+    @apply dark:bg-emerald-500 dark:text-black dark:hover:bg-emerald-400;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium;
+    @apply transition-all duration-150 active:scale-95;
+    @apply text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800;
+    @apply dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800;
+  }
+
+  .badge-live {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/20;
+  }
+
+  .badge-warn {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply bg-amber-500/10 text-amber-400 border border-amber-500/20;
+  }
+
+  .badge-crit {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply bg-red-500/10 text-red-400 border border-red-500/20;
+  }
+
+  .dot-live {
+    @apply w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse;
+  }
+
+  .dot-warn {
+    @apply w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse;
+  }
+
+  .dot-crit {
+    @apply w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse;
+  }
+
+  .mono {
+    @apply font-mono text-xs tracking-tight;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-700 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-500;
+}

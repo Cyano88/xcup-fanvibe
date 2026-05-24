@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.vercel/
+*.log
+.DS_Store
