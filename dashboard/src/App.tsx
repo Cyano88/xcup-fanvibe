@@ -36,6 +36,7 @@ export default function App() {
   const [pendingToasts, setPendingToasts]     = useState<SettlementResult[]>([]);
   const [stakeTarget, setStakeTarget]         = useState<{ fixtureId: string; outcome: Outcome } | null>(null);
   const [logOpen, setLogOpen]                 = useState(false);
+  const [groupFilter, setGroupFilter]         = useState<string>('all');
 
   const wsRef             = useRef<WebSocket | null>(null);
   const reconnectRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,6 +121,9 @@ export default function App() {
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
   const activeFixture  = stakeTarget ? fixtures.find(f => f.id === stakeTarget.fixtureId) ?? null : null;
 
+  const groups = ['all', ...Array.from(new Set(fixtures.map(f => f.group))).sort()];
+  const visibleFixtures = groupFilter === 'all' ? fixtures : fixtures.filter(f => f.group === groupFilter);
+
   const healthColor = metabolism.isRefuelNeeded ? 'text-red-400' : metabolism.healthPercent < 40 ? 'text-amber-400' : 'text-emerald-400';
 
   return (
@@ -188,9 +192,25 @@ export default function App() {
           </div>
         )}
 
+        {/* ── Group filter pills ────────────────────────────────────────── */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+          {groups.map(g => (
+            <button
+              key={g}
+              onClick={() => setGroupFilter(g)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-medium transition-all duration-150
+                ${groupFilter === g
+                  ? 'bg-white text-black'
+                  : 'text-zinc-500 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300'}`}
+            >
+              {g === 'all' ? 'All' : `Group ${g}`}
+            </button>
+          ))}
+        </div>
+
         {/* ── Fixtures grid ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {fixtures.map(fixture => (
+          {visibleFixtures.map(fixture => (
             <FixtureCard key={fixture.id} fixture={fixture} pool={pools[fixture.id]} onStake={handleStake} />
           ))}
         </div>
