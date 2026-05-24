@@ -57,119 +57,143 @@ function getActionLabel(ev: MatchEvent | undefined, home: string, away: string):
   return { text: `${team} — Attacking`, isHome };
 }
 
-// ── Continuous live pitch animation ──────────────────────────────────────────
+// ── Pitch simulation engine ───────────────────────────────────────────────────
+// Logical coordinate space: X ∈ [-100, 100] (left goal = -100, right = 100)
+//                           Y ∈ [-50, 50]
+// SVG viewport: 0 0 400 200 — mapping: svgX = (lx+100)*2, svgY = (ly+50)*2
 
-function getEventTarget(ev: MatchEvent | undefined, poss: number): { x: number; y: number } {
-  const r1 = Math.random(), r2 = Math.random();
-  const t = ev?.type ?? '';
-  if (t === 'goal_home' || t === 'shot_home')  return { x: 305 + r1 * 60, y: 45 + r2 * 110 };
-  if (t === 'corner_home')                      return { x: 355 + r1 * 18, y: r2 > 0.5 ? 14 + r2*14 : 172 + r2*14 };
-  if (t === 'goal_away' || t === 'shot_away')   return { x: 35 + r1 * 60,  y: 45 + r2 * 110 };
-  if (t === 'corner_away')                      return { x: 27 + r1 * 18,  y: r2 > 0.5 ? 14 + r2*14 : 172 + r2*14 };
-  if (t.startsWith('foul') || t.startsWith('yellow') || t.startsWith('red'))
-                                                return { x: 90 + r1 * 220, y: 40 + r2 * 120 };
-  if (t === 'half_time' || t === 'kickoff' || t === 'full_time') return { x: 200, y: 100 };
-  // free wander weighted by possession
-  return { x: Math.max(30, Math.min(370, 85 + (poss / 100) * 230 + (r1 - 0.5) * 110)),
-           y: Math.max(22, Math.min(178, 100 + (r2 - 0.5) * 130)) };
+const toSVG = (lx: number, ly: number) => ({ x: (lx + 100) * 2, y: (ly + 50) * 2 });
+
+type PitchPhase = 'neutral' | 'danger_home' | 'danger_away' | 'corner_home' | 'corner_away';
+
+function eventToPhase(ev: MatchEvent): PitchPhase {
+  if (ev.type === 'shot_home' || ev.type === 'goal_home') return 'danger_home';
+  if (ev.type === 'shot_away' || ev.type === 'goal_away') return 'danger_away';
+  if (ev.type === 'corner_home') return 'corner_home';
+  if (ev.type === 'corner_away') return 'corner_away';
+  return 'neutral';
 }
 
-function Pitch({ fixture, state }: { fixture: Fixture; state: MatchState }) {
-  // Physics: smooth ball that lerps toward target — never stops moving
-  const smoothRef  = useRef({ x: 200, y: 100 });   // current rendered position
-  const targetRef  = useRef({ x: 200, y: 100 });   // where we're heading
-  const possRef    = useRef(state.possession);
-  const eventLenRef = useRef(state.events.length);
+function wanderTarget(phase: PitchPhase, poss: number): { lx: number; ly: number } {
+  const r1 = Math.random(), r2 = Math.random();
+  if (phase === 'danger_home') return { lx: 68 + r1 * 24,   ly: (r2 - 0.5) * 52 };
+  if (phase === 'danger_away') return { lx: -68 - r1 * 24,  ly: (r2 - 0.5) * 52 };
+  if (phase === 'corner_home') return { lx: 97,              ly: r2 > 0.5 ? -46 : 46 };
+  if (phase === 'corner_away') return { lx: -97,             ly: r2 > 0.5 ? -46 : 46 };
+  // possession-biased midfield wander
+  const bias = ((poss - 50) / 100) * 38;
+  return { lx: bias + (r1 - 0.5) * 55, ly: (r2 - 0.5) * 75 };
+}
 
-  const [renderPos, setRenderPos] = useState({ x: 200, y: 100 });
-  const [trail, setTrail]         = useState<{ x: number; y: number }[]>([]);
-  const [action, setAction]       = useState<{ text: string } | null>(null);
-  const [coneHome, setConeHome]   = useState<string | null>(null);
-  const [coneAway, setConeAway]   = useState<string | null>(null);
-  const [goalFlash, setGoalFlash] = useState(false);
+function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState; freeze: boolean }) {
+  const smoothRef    = useRef({ lx: 0, ly: 0 });
+  const targetRef    = useRef({ lx: 0, ly: 0 });
+  const possRef      = useRef(state.possession);
+  const phaseRef     = useRef<PitchPhase>('neutral');
+  const eventLenRef  = useRef(state.events.length);
+  const freezeRef    = useRef(freeze);
 
-  // Keep possession ref current
+  const [renderPos, setRenderPos] = useState({ lx: 0, ly: 0 });
+  const [trail, setTrail]         = useState<{ lx: number; ly: number }[]>([]);
+  const [phase, setPhase]         = useState<PitchPhase>('neutral');
+  const [actionText, setActionText] = useState<{ text: string; isHome: boolean } | null>(null);
+
   useEffect(() => { possRef.current = state.possession; }, [state.possession]);
+  useEffect(() => { freezeRef.current = freeze; }, [freeze]);
 
-  // Snap target + action on new event
+  // On goal freeze end: snap ball back to kickoff center
+  useEffect(() => {
+    if (!freeze) {
+      smoothRef.current = { lx: 0, ly: 0 };
+      targetRef.current = { lx: 0, ly: 0 };
+      phaseRef.current  = 'neutral';
+      setPhase('neutral');
+      setTrail([]);
+    }
+  }, [freeze]);
+
+  // New event → update phase + target + action label
   useEffect(() => {
     if (state.events.length === eventLenRef.current) return;
     eventLenRef.current = state.events.length;
     const ev = state.events[state.events.length - 1];
     if (!ev) return;
-    targetRef.current = getEventTarget(ev, possRef.current);
-    const a = getActionLabel(ev, fixture.home.code, fixture.away.code);
-    setAction(a);
-    const isGoal = ev.type === 'goal_home' || ev.type === 'goal_away';
-    if (isGoal) { setGoalFlash(true); setTimeout(() => setGoalFlash(false), 1200); }
+    const p = eventToPhase(ev);
+    phaseRef.current = p;
+    setPhase(p);
+    targetRef.current = wanderTarget(p, possRef.current);
+    setActionText(getActionLabel(ev, fixture.home.code, fixture.away.code));
   }, [state.events.length, fixture.home.code, fixture.away.code]);
 
-  // Wander: new waypoint every ~1.8 s when no event is forcing a target
+  // Wander: new waypoint every 1.8 s, stays near current zone
   useEffect(() => {
-    const wander = setInterval(() => {
-      const lastEv = state.events[state.events.length - 1];
-      // Only update target from wander if last event was not an attack event
-      const t = lastEv?.type ?? '';
-      const isHot = t.includes('goal') || t.includes('shot') || t.includes('corner');
-      if (!isHot) {
-        targetRef.current = getEventTarget(undefined, possRef.current);
-      } else {
-        // near the event area but slightly shifted
-        const cur = targetRef.current;
-        targetRef.current = {
-          x: Math.max(22, Math.min(378, cur.x + (Math.random() - 0.5) * 55)),
-          y: Math.max(18, Math.min(182, cur.y + (Math.random() - 0.5) * 45)),
-        };
-      }
+    const id = setInterval(() => {
+      if (freezeRef.current) return;
+      targetRef.current = wanderTarget(phaseRef.current, possRef.current);
     }, 1800);
-    return () => clearInterval(wander);
-  }, [state.events.length]);
-
-  // Physics tick: lerp smooth → target at 20 fps, update render state
-  useEffect(() => {
-    const tick = setInterval(() => {
-      const s = smoothRef.current;
-      const t = targetRef.current;
-      s.x += (t.x - s.x) * 0.10;
-      s.y += (t.y - s.y) * 0.10;
-      setRenderPos({ x: s.x, y: s.y });
-    }, 50); // 20 fps
-    return () => clearInterval(tick);
+    return () => clearInterval(id);
   }, []);
 
-  // Trail: sample position every 300 ms — fades from tail (transparent) to head (bright)
+  // Physics: lerp at 20 fps
   useEffect(() => {
-    const t = setInterval(() => {
-      setTrail(prev => [...prev.slice(-11), { x: smoothRef.current.x, y: smoothRef.current.y }]);
+    const id = setInterval(() => {
+      if (freezeRef.current) return;
+      const s = smoothRef.current, t = targetRef.current;
+      s.lx += (t.lx - s.lx) * 0.10;
+      s.ly += (t.ly - s.ly) * 0.10;
+      setRenderPos({ lx: s.lx, ly: s.ly });
+    }, 50);
+    return () => clearInterval(id);
+  }, []);
+
+  // Trail: sample every 300 ms
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (freezeRef.current) return;
+      setTrail(prev => [...prev.slice(-11), { lx: smoothRef.current.lx, ly: smoothRef.current.ly }]);
     }, 300);
-    return () => clearInterval(t);
+    return () => clearInterval(id);
   }, []);
 
-  // Attack cones: update every render pass based on current renderPos
-  useEffect(() => {
-    const ev = state.events[state.events.length - 1];
-    const bx = renderPos.x, by = renderPos.y;
-    const isAttackHome = ev?.type === 'goal_home' || ev?.type === 'shot_home';
-    const isAttackAway = ev?.type === 'goal_away' || ev?.type === 'shot_away';
-    setConeHome(isAttackHome ? `392,100 ${bx},${Math.max(16,by-55)} ${bx},${Math.min(184,by+55)}` : null);
-    setConeAway(isAttackAway ? `8,100 ${bx},${Math.max(16,by-55)} ${bx},${Math.min(184,by+55)}` : null);
-  }, [renderPos, state.events.length]);
+  const bp = toSVG(renderPos.lx, renderPos.ly);
+  const radarSpread = 44;
 
   return (
     <div>
       <svg viewBox="0 0 400 200" className="w-full rounded-xl overflow-hidden" style={{ maxHeight: 210 }}>
-        {/* Pitch base */}
+        {/* Pitch — alternating stripe turf */}
         <rect width="400" height="200" fill="#1a5c1a" />
         {[0,1,2,3,4,5,6].map(i => (
           <rect key={i} x={i * 57} y="0" width="28" height="200" fill="#1e671e" opacity="0.55" />
         ))}
 
-        {/* Goal flash */}
-        {goalFlash && <rect width="400" height="200" fill="rgba(52,211,153,0.16)" />}
-
-        {/* Attack cones */}
-        {coneHome && <polygon points={coneHome} fill="rgba(74,222,128,0.14)" />}
-        {coneAway && <polygon points={coneAway} fill="rgba(251,191,36,0.14)" />}
+        {/* Radar beams: directional arrow from goal mouth toward ball in danger zone */}
+        {phase === 'danger_home' && (
+          <>
+            <polygon
+              points={`396,100 ${bp.x},${Math.max(16, bp.y - radarSpread)} ${bp.x},${Math.min(184, bp.y + radarSpread)}`}
+              fill="rgba(239,68,68,0.11)" stroke="rgba(239,68,68,0.32)" strokeWidth="0.7"
+              style={{ animation: 'radarPulse 0.85s ease-in-out infinite' }}
+            />
+            <line x1="396" y1="100" x2={bp.x} y2={bp.y}
+              stroke="rgba(239,68,68,0.5)" strokeWidth="1" strokeDasharray="4 3"
+              style={{ animation: 'radarPulse 0.85s ease-in-out infinite 0.42s' }}
+            />
+          </>
+        )}
+        {phase === 'danger_away' && (
+          <>
+            <polygon
+              points={`4,100 ${bp.x},${Math.max(16, bp.y - radarSpread)} ${bp.x},${Math.min(184, bp.y + radarSpread)}`}
+              fill="rgba(251,191,36,0.11)" stroke="rgba(251,191,36,0.32)" strokeWidth="0.7"
+              style={{ animation: 'radarPulse 0.85s ease-in-out infinite' }}
+            />
+            <line x1="4" y1="100" x2={bp.x} y2={bp.y}
+              stroke="rgba(251,191,36,0.5)" strokeWidth="1" strokeDasharray="4 3"
+              style={{ animation: 'radarPulse 0.85s ease-in-out infinite 0.42s' }}
+            />
+          </>
+        )}
 
         {/* Pitch markings */}
         <rect x="12" y="10" width="376" height="180" fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth="1.5" />
@@ -183,44 +207,44 @@ function Pitch({ fixture, state }: { fixture: Fixture; state: MatchState }) {
         <rect x="4" y="82" width="8" height="36" fill="none" stroke="rgba(255,255,255,0.48)" strokeWidth="1.5" />
         <rect x="388" y="82" width="8" height="36" fill="none" stroke="rgba(255,255,255,0.48)" strokeWidth="1.5" />
 
-        {/* Fading ball trail — each segment brighter toward head */}
+        {/* Comet trail: fading line segments, thicker + brighter toward head */}
         {trail.length > 1 && trail.map((pt, i) => {
           if (i === 0) return null;
-          const op = ((i) / trail.length) * 0.7;
-          const sw = 1 + (i / trail.length) * 2.5;
+          const a = toSVG(trail[i-1].lx, trail[i-1].ly);
+          const b = toSVG(pt.lx, pt.ly);
+          const op = (i / trail.length) * 0.72;
+          const sw = 1 + (i / trail.length) * 2.8;
           return (
-            <line key={i}
-              x1={trail[i-1].x} y1={trail[i-1].y}
-              x2={pt.x} y2={pt.y}
-              stroke="white" strokeWidth={sw} strokeOpacity={op} strokeLinecap="round"
-            />
+            <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              stroke="white" strokeWidth={sw} strokeOpacity={op} strokeLinecap="round" />
           );
         })}
 
-        {/* Ball — CSS transition for extra smoothness between 20fps ticks */}
-        <g style={{ transform: `translate(${renderPos.x}px, ${renderPos.y}px)`, transition: 'transform 60ms linear' }}>
-          <circle cx="0" cy="0" r="6" fill="white" opacity="0.95" />
-          <circle cx="0" cy="0" r="6" fill="none" stroke="rgba(0,0,0,0.2)" strokeWidth="1.2" />
+        {/* Ball — 60 ms CSS transition bridges 20 fps setState gaps */}
+        <g style={{ transform: `translate(${bp.x}px,${bp.y}px)`, transition: 'transform 60ms linear' }}>
+          <circle cx="0" cy="0" r="6.5" fill="white" opacity="0.96" />
+          <circle cx="0" cy="0" r="6.5" fill="none" stroke="rgba(0,0,0,0.22)" strokeWidth="1.2" />
+          <circle cx="-1.8" cy="-1.8" r="1.8" fill="rgba(0,0,0,0.12)" />
         </g>
 
-        {/* Action text */}
-        {action && (
+        {/* Action callout */}
+        {actionText && !freeze && (
           <text x="200" y="194" textAnchor="middle"
-            fill="rgba(255,255,255,0.62)" fontSize="9" fontFamily="monospace" fontWeight="700" letterSpacing="0.5">
-            {action.text.toUpperCase()}
+            fill="rgba(255,255,255,0.65)" fontSize="9" fontFamily="monospace" fontWeight="700" letterSpacing="0.8">
+            {actionText.text.toUpperCase()}
           </text>
         )}
 
         {/* Team labels */}
-        <text x="40" y="8" textAnchor="middle" fill="rgba(74,222,128,0.8)" fontSize="9" fontFamily="monospace" fontWeight="bold">
+        <text x="40" y="8" textAnchor="middle" fill="rgba(74,222,128,0.85)" fontSize="9" fontFamily="monospace" fontWeight="bold">
           {fixture.home.code}
         </text>
-        <text x="360" y="8" textAnchor="middle" fill="rgba(251,191,36,0.8)" fontSize="9" fontFamily="monospace" fontWeight="bold">
+        <text x="360" y="8" textAnchor="middle" fill="rgba(251,191,36,0.85)" fontSize="9" fontFamily="monospace" fontWeight="bold">
           {fixture.away.code}
         </text>
       </svg>
 
-      {/* Possession bar — Sportybet style */}
+      {/* Possession bar */}
       <div className="mt-2.5 flex items-center gap-0 overflow-hidden rounded-full dark:bg-zinc-800 bg-zinc-200 h-2">
         <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${state.possession}%` }} />
         <div className="h-full bg-amber-500 flex-1 transition-all duration-1000" />
@@ -440,8 +464,8 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('stats');
 
   // Goal celebrations
-  const [goalBanner, setGoalBanner] = useState<GoalBanner | null>(null);
-  const [scorePop, setScorePop]     = useState<'home' | 'away' | null>(null);
+  const [goalOverlay, setGoalOverlay] = useState<GoalBanner | null>(null);
+  const [scorePop, setScorePop]       = useState<'home' | 'away' | null>(null);
   const goalLenRef = useRef(matchState.events.length);
 
   useEffect(() => {
@@ -450,11 +474,11 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
     const ev = matchState.events[matchState.events.length - 1];
     if (!ev) return;
     if (ev.type === 'goal_home') {
-      setGoalBanner({ flag: fixture.home.flag, name: fixture.home.name, isHome: true });
+      setGoalOverlay({ flag: fixture.home.flag, name: fixture.home.name, isHome: true });
       setScorePop('home');
       setTimeout(() => setScorePop(null), 900);
     } else if (ev.type === 'goal_away') {
-      setGoalBanner({ flag: fixture.away.flag, name: fixture.away.name, isHome: false });
+      setGoalOverlay({ flag: fixture.away.flag, name: fixture.away.name, isHome: false });
       setScorePop('away');
       setTimeout(() => setScorePop(null), 900);
     }
@@ -563,7 +587,7 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
 
         {/* Pitch */}
         <div className="px-5 mb-3">
-          <Pitch fixture={fixture} state={matchState} />
+          <Pitch fixture={fixture} state={matchState} freeze={!!goalOverlay} />
         </div>
 
         {/* Tab bar */}
@@ -586,26 +610,63 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
           {tab === 'chat'       && <MatchChat fixtureId={fixture.id} />}
         </div>
 
-        {/* Goal banner overlay */}
-        {goalBanner && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
-            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
-            <div
-              className="flex flex-col items-center gap-3 text-center"
-              style={{ animation: 'goalBanner 2s ease-out forwards' }}
-              onAnimationEnd={() => setGoalBanner(null)}
-            >
-              <span style={{ fontSize: 88, lineHeight: 1, filter: 'drop-shadow(0 4px 24px rgba(0,0,0,0.5))' }}>
-                {goalBanner.flag}
+        {/* GOAL! freeze overlay — 4.5 s SportyBet-style hard lock */}
+        {goalOverlay && (
+          <div
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center overflow-hidden"
+            style={{ animation: 'goalOverlay 4.5s ease-out forwards' }}
+            onAnimationEnd={() => setGoalOverlay(null)}
+          >
+            {/* Radial crimson/gold burst background */}
+            <div className="absolute inset-0" style={{
+              background: goalOverlay.isHome
+                ? 'radial-gradient(ellipse at 50% 44%, #7f1d1d 0%, #450a0a 52%, #150202 100%)'
+                : 'radial-gradient(ellipse at 50% 44%, #78350f 0%, #3c1a03 52%, #0f0500 100%)',
+            }} />
+
+            {/* Concentric pulsing rings */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              {[290, 195, 115].map((sz, i) => (
+                <div key={sz} className="absolute rounded-full" style={{
+                  width: sz, height: sz,
+                  border: `1px solid ${goalOverlay.isHome
+                    ? `rgba(239,68,68,${0.18 + i * 0.1})`
+                    : `rgba(251,191,36,${0.18 + i * 0.1})`}`,
+                  animation: `radarPulse 1s ease-in-out infinite ${i * 0.28}s`,
+                }} />
+              ))}
+            </div>
+
+            {/* Content: flag → GOAL! → team name */}
+            <div className="relative z-10 flex flex-col items-center gap-3 text-center px-4"
+              style={{ perspective: '900px' }}>
+              <span style={{
+                fontSize: 76, lineHeight: 1,
+                filter: 'drop-shadow(0 6px 28px rgba(0,0,0,0.55))',
+                animation: 'goalFlagPop 0.55s cubic-bezier(0.34,1.56,0.64,1) 0.08s both',
+              }}>
+                {goalOverlay.flag}
               </span>
+
               <span
-                className="text-6xl font-black tracking-widest"
-                style={{ color: goalBanner.isHome ? '#34d399' : '#fbbf24',
-                         textShadow: goalBanner.isHome
-                           ? '0 0 40px rgba(52,211,153,0.8)'
-                           : '0 0 40px rgba(251,191,36,0.8)' }}
+                className="font-black tracking-widest select-none"
+                style={{
+                  fontSize: 'clamp(58px, 15vw, 80px)',
+                  color: goalOverlay.isHome ? '#fca5a5' : '#fde68a',
+                  textShadow: goalOverlay.isHome
+                    ? '0 0 48px rgba(239,68,68,1), 0 0 90px rgba(239,68,68,0.5), 0 3px 0 rgba(0,0,0,0.45)'
+                    : '0 0 48px rgba(251,191,36,1), 0 0 90px rgba(251,191,36,0.5), 0 3px 0 rgba(0,0,0,0.45)',
+                  animation: 'goalText3d 0.75s cubic-bezier(0.34,1.56,0.64,1) 0.14s both',
+                }}
               >GOAL!</span>
-              <span className="text-lg font-semibold text-white/90 tracking-wide">{goalBanner.name}</span>
+
+              <span
+                className="text-sm font-semibold tracking-widest uppercase"
+                style={{
+                  color: 'rgba(255,255,255,0.82)',
+                  animation: 'goalFlagPop 0.4s ease-out 0.52s both',
+                }}
+              >{goalOverlay.name}</span>
             </div>
           </div>
         )}

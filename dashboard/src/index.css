@@ -79,12 +79,34 @@
   }
 }
 
-@keyframes goalBanner {
-  0%   { opacity: 0; transform: scale(0.65); }
-  12%  { opacity: 1; transform: scale(1.06); }
-  22%  { transform: scale(1); }
-  68%  { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.12); }
+/* Goal overlay: instant appear, 4.5 s hold, fade out */
+@keyframes goalOverlay {
+  0%   { opacity: 0; }
+  3%   { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* GOAL! text flips in perspective from top like a scoreboard */
+@keyframes goalText3d {
+  0%   { transform: perspective(900px) rotateX(80deg) scale(0.2); opacity: 0; }
+  42%  { transform: perspective(900px) rotateX(-14deg) scale(1.28); opacity: 1; }
+  62%  { transform: perspective(900px) rotateX(7deg) scale(0.96); }
+  80%  { transform: perspective(900px) rotateX(-3deg) scale(1.03); }
+  100% { transform: perspective(900px) rotateX(0deg) scale(1); opacity: 1; }
+}
+
+/* Flag / subtitle pop in */
+@keyframes goalFlagPop {
+  0%   { transform: scale(0) translateY(18px); opacity: 0; }
+  68%  { transform: scale(1.14) translateY(-3px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Pulsing radar ring on dangerous attacks + overlay rings */
+@keyframes radarPulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50%       { opacity: 1; transform: scale(1.07); }
 }
 
 @keyframes scorePop {
