@@ -7,6 +7,7 @@ export interface Team {
   name: string;
   code: string;
   flag: string;
+  iso: string;
 }
 
 export interface Fixture {
@@ -19,6 +20,7 @@ export interface Fixture {
   venue: string;
   status: FixtureStatus;
   result?: Outcome;
+  baseOdds: { home: number; draw: number; away: number };
 }
 
 export interface Stake {

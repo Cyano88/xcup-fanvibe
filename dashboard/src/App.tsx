@@ -127,10 +127,10 @@ export default function App() {
   const healthColor = metabolism.isRefuelNeeded ? 'text-red-400' : metabolism.healthPercent < 40 ? 'text-amber-400' : 'text-emerald-400';
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 font-sans">
+    <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-zinc-900 bg-black/98 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b dark:border-zinc-900 border-zinc-200 dark:bg-black/98 bg-white/95 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between gap-4">
 
           {/* Brand */}
