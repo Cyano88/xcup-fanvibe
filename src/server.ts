@@ -85,6 +85,14 @@ app.post('/oracle/override', async (req, res) => {
   }
 });
 
+app.post('/stake/report', async (req, res) => {
+  const schema = z.object({ txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid txHash' });
+  await engine.reportStakeTx(parsed.data.txHash as `0x${string}`);
+  res.json({ ok: true });
+});
+
 app.post('/metabolism/refresh', async (_req, res) => {
   await engine.refreshMetabolism();
   res.json(engine.getState().metabolism);

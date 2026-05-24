@@ -2,9 +2,10 @@ interface Props {
   percent: number;
   okbFormatted: string;
   isRefuelNeeded: boolean;
+  compact?: boolean;
 }
 
-export function FuelBar({ percent, okbFormatted, isRefuelNeeded }: Props) {
+export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Props) {
   const color = isRefuelNeeded
     ? 'bg-red-500'
     : percent < 40
@@ -17,17 +18,30 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded }: Props) {
     ? 'text-amber-400'
     : 'text-emerald-400';
 
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <div className="relative h-1 flex-1 rounded-full bg-zinc-800 overflow-hidden">
+          <div
+            className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out ${color} ${isRefuelNeeded ? 'animate-pulse' : ''}`}
+            style={{ width: `${Math.max(2, percent)}%` }}
+          />
+        </div>
+        <span className={`font-mono text-[10px] tabular-nums ${textColor}`}>{percent}%</span>
+      </div>
+    );
+  }
+
   const label = isRefuelNeeded ? 'CRITICAL' : percent < 40 ? 'DEGRADED' : 'NOMINAL';
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-zinc-500 dark:text-zinc-500">Gas Vitality</span>
+        <span className="text-zinc-500">Gas Vitality</span>
         <span className={`font-mono font-semibold ${textColor}`}>{label}</span>
       </div>
 
-      {/* Track */}
-      <div className="relative h-2 rounded-full bg-zinc-800 dark:bg-zinc-800 overflow-hidden">
+      <div className="relative h-2 rounded-full bg-zinc-800 overflow-hidden">
         <div
           className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out ${color}`}
           style={{ width: `${Math.max(2, percent)}%` }}

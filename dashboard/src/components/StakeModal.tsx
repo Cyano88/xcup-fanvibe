@@ -96,6 +96,13 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
 
       setTxHash(hash);
       setStep('confirmed');
+
+      // Report TX to daemon for immediate indexing (don't block UI)
+      fetch(`${import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001'}/stake/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txHash: hash }),
+      }).catch(() => {});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg.includes('User rejected') ? 'Transaction rejected by wallet.' : msg);

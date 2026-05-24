@@ -150,15 +150,41 @@ export class RefereeEngine {
   private startHttpPoller(): void {
     setInterval(async () => {
       try {
-        const block = await this.httpClient.getBlock({ includeTransactions: true });
-        if (Number(block.number) > this.lastBlock) {
-          this.lastBlock = Number(block.number);
+        const latest = await this.httpClient.getBlockNumber();
+        const latestNum = Number(latest);
+
+        if (this.lastBlock === 0) {
+          this.lastBlock = latestNum - 1;
+        }
+
+        // Scan every missed block since last poll (cap at 20 to avoid overload)
+        const from = this.lastBlock + 1;
+        const to   = Math.min(latestNum, from + 20);
+
+        for (let n = from; n <= to; n++) {
+          const block = await this.httpClient.getBlock({ blockNumber: BigInt(n), includeTransactions: true });
           this.scanBlock(block as Block & { transactions: Transaction[] });
         }
+
+        this.lastBlock = to;
+        this.onUpdate?.();
       } catch {
-        this.log('RPC', 'warn', 'Block poll failed');
+        this.log('RPC', 'warn', 'Block range poll failed');
       }
     }, 12_000);
+  }
+
+  // Direct TX lookup — called when frontend reports a confirmed stake hash
+  async reportStakeTx(txHash: `0x${string}`): Promise<void> {
+    try {
+      const tx = await this.httpClient.getTransaction({ hash: txHash });
+      if (!tx) return;
+      const block = await this.httpClient.getBlock({ blockNumber: tx.blockNumber!, includeTransactions: false });
+      this.processStakeTx(tx as unknown as Transaction, Number(block.timestamp));
+      this.onUpdate?.();
+    } catch {
+      this.log('RPC', 'warn', `Failed to look up reported TX ${txHash}`);
+    }
   }
 
   private scanBlock(block: Block & { transactions: Transaction[] }): void {
