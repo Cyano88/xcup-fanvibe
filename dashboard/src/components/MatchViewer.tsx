@@ -431,11 +431,34 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
 
 type Tab = 'stats' | 'commentary' | 'chat';
 
+interface GoalBanner { flag: string; name: string; isHome: boolean; }
+
 export function MatchViewer({ fixture, matchState, onClose }: Props) {
   const isLive     = matchState.status === 'live';
   const isFinished = matchState.status === 'finished';
   const progress   = Math.min(100, (matchState.minute / 90) * 100);
   const [tab, setTab] = useState<Tab>('stats');
+
+  // Goal celebrations
+  const [goalBanner, setGoalBanner] = useState<GoalBanner | null>(null);
+  const [scorePop, setScorePop]     = useState<'home' | 'away' | null>(null);
+  const goalLenRef = useRef(matchState.events.length);
+
+  useEffect(() => {
+    if (matchState.events.length === goalLenRef.current) return;
+    goalLenRef.current = matchState.events.length;
+    const ev = matchState.events[matchState.events.length - 1];
+    if (!ev) return;
+    if (ev.type === 'goal_home') {
+      setGoalBanner({ flag: fixture.home.flag, name: fixture.home.name, isHome: true });
+      setScorePop('home');
+      setTimeout(() => setScorePop(null), 900);
+    } else if (ev.type === 'goal_away') {
+      setGoalBanner({ flag: fixture.away.flag, name: fixture.away.name, isHome: false });
+      setScorePop('away');
+      setTimeout(() => setScorePop(null), 900);
+    }
+  }, [matchState.events.length, fixture.home.flag, fixture.home.name, fixture.away.flag, fixture.away.name]);
 
   const outcome = isFinished
     ? matchState.homeScore > matchState.awayScore ? 'home'
@@ -491,9 +514,19 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
             <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.home.name}</div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-5xl font-black dark:text-white text-zinc-900 tabular-nums leading-none">{matchState.homeScore}</span>
+            <span
+              className="text-5xl font-black tabular-nums leading-none inline-block transition-colors duration-300"
+              style={scorePop === 'home'
+                ? { animation: 'scorePop 0.9s ease-out forwards', color: '#34d399', filter: 'drop-shadow(0 0 14px rgba(52,211,153,0.7))' }
+                : { color: undefined }}
+            >{matchState.homeScore}</span>
             <span className="text-xl font-thin dark:text-zinc-600 text-zinc-300">–</span>
-            <span className="text-5xl font-black dark:text-white text-zinc-900 tabular-nums leading-none">{matchState.awayScore}</span>
+            <span
+              className="text-5xl font-black tabular-nums leading-none inline-block transition-colors duration-300"
+              style={scorePop === 'away'
+                ? { animation: 'scorePop 0.9s ease-out forwards', color: '#fbbf24', filter: 'drop-shadow(0 0 14px rgba(251,191,36,0.7))' }
+                : { color: undefined }}
+            >{matchState.awayScore}</span>
           </div>
           <div className="text-center min-w-[68px]">
             <div className="text-3xl mb-1">{fixture.away.flag}</div>
@@ -552,6 +585,30 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
           {tab === 'commentary' && <CommentaryFeed state={matchState} />}
           {tab === 'chat'       && <MatchChat fixtureId={fixture.id} />}
         </div>
+
+        {/* Goal banner overlay */}
+        {goalBanner && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+            <div
+              className="flex flex-col items-center gap-3 text-center"
+              style={{ animation: 'goalBanner 2s ease-out forwards' }}
+              onAnimationEnd={() => setGoalBanner(null)}
+            >
+              <span style={{ fontSize: 88, lineHeight: 1, filter: 'drop-shadow(0 4px 24px rgba(0,0,0,0.5))' }}>
+                {goalBanner.flag}
+              </span>
+              <span
+                className="text-6xl font-black tracking-widest"
+                style={{ color: goalBanner.isHome ? '#34d399' : '#fbbf24',
+                         textShadow: goalBanner.isHome
+                           ? '0 0 40px rgba(52,211,153,0.8)'
+                           : '0 0 40px rgba(251,191,36,0.8)' }}
+              >GOAL!</span>
+              <span className="text-lg font-semibold text-white/90 tracking-wide">{goalBanner.name}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

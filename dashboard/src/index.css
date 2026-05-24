@@ -79,6 +79,21 @@
   }
 }
 
+@keyframes goalBanner {
+  0%   { opacity: 0; transform: scale(0.65); }
+  12%  { opacity: 1; transform: scale(1.06); }
+  22%  { transform: scale(1); }
+  68%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+
+@keyframes scorePop {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.55); }
+  60%  { transform: scale(1.45); }
+  100% { transform: scale(1); }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
