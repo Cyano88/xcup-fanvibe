@@ -114,11 +114,16 @@ export class RefereeEngine {
 
   // ── WebSocket block listener ─────────────────────────────────────────────────
 
+  private httpPollerStarted = false;
+
   private startWebSocketListener(): void {
+    // Always start HTTP poller as baseline — WS upgrades it if available
+    this.startHttpPoller();
+
     try {
       const wsClient = createPublicClient({
         chain: xLayerMainnet,
-        transport: webSocket('wss://rpc.xlayer.tech', { reconnect: { attempts: 10, delay: 3000 } }),
+        transport: webSocket('wss://rpc.xlayer.tech', { reconnect: { attempts: 5, delay: 3000 } }),
       });
 
       wsClient.watchBlocks({
@@ -131,7 +136,7 @@ export class RefereeEngine {
         },
         onError: () => {
           this.wsConnected = false;
-          this.log('RPC', 'warn', 'WebSocket disconnected — reconnecting...');
+          this.log('RPC', 'warn', 'WebSocket disconnected — HTTP poller active as fallback');
         },
       });
 
@@ -139,7 +144,6 @@ export class RefereeEngine {
     } catch {
       this.wsConnected = false;
       this.log('RPC', 'warn', 'WebSocket unavailable — running in HTTP poll mode');
-      this.startHttpPoller();
     }
   }
 
@@ -360,6 +364,11 @@ export class RefereeEngine {
     this.logs.push(entry);
     if (this.logs.length > 500) this.logs.shift();
     this.onLog?.(entry);
+
+    // Mirror to console for terminal visibility
+    const tag = `[${prefix}]`.padEnd(13);
+    const tx  = txHash ? ` → ${txHash.slice(0, 14)}...` : '';
+    console.log(`${entry.ts.slice(11, 19)} ${tag} ${message}${tx}`);
   }
 
   // ── State snapshot ───────────────────────────────────────────────────────────
