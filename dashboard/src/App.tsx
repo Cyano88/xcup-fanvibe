@@ -7,7 +7,8 @@ import { LogStream } from './components/LogStream';
 import { StakeModal } from './components/StakeModal';
 import { SettlementToast } from './components/SettlementToast';
 import { FuelBar } from './components/FuelBar';
-import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState } from './types';
+import { MatchViewer } from './components/MatchViewer';
+import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState } from './types';
 import { STATIC_FIXTURES } from './types';
 import { xLayerMainnet, explorerAddr } from './lib/chain';
 import { shortAddr } from './lib/encode';
@@ -37,6 +38,8 @@ export default function App() {
   const [stakeTarget, setStakeTarget]         = useState<{ fixtureId: string; outcome: Outcome } | null>(null);
   const [logOpen, setLogOpen]                 = useState(false);
   const [groupFilter, setGroupFilter]         = useState<string>('all');
+  const [matchStates, setMatchStates]         = useState<Record<string, MatchState>>({});
+  const [watchingFixtureId, setWatchingId]    = useState<string | null>(null);
 
   const wsRef             = useRef<WebSocket | null>(null);
   const reconnectRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,6 +66,7 @@ export default function App() {
           setLastBlock(s.lastBlock);
           setWsConnected(s.wsConnected);
           setSettlements(s.settlements);
+          setMatchStates(s.matchStates ?? {});
         } else if (msg.type === 'log') {
           setLogs(prev => [...prev.slice(-199), msg.data as DaemonLog]);
         } else if (msg.type === 'settlement') {
@@ -92,6 +96,7 @@ export default function App() {
         setLastBlock(s.lastBlock);
         setWsConnected(s.wsConnected);
         setSettlements(s.settlements);
+        setMatchStates(s.matchStates ?? {});
       })
       .catch(() => {});
 
@@ -119,7 +124,9 @@ export default function App() {
 
   const handleStake    = useCallback((fixtureId: string, outcome: Outcome) => setStakeTarget({ fixtureId, outcome }), []);
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
+  const handleWatch    = useCallback((fixtureId: string) => setWatchingId(fixtureId), []);
   const activeFixture  = stakeTarget ? fixtures.find(f => f.id === stakeTarget.fixtureId) ?? null : null;
+  const watchingFixture = watchingFixtureId ? fixtures.find(f => f.id === watchingFixtureId) ?? null : null;
 
   const groups = ['all', ...Array.from(new Set(fixtures.map(f => f.group))).sort()];
   const visibleFixtures = groupFilter === 'all' ? fixtures : fixtures.filter(f => f.group === groupFilter);
@@ -211,7 +218,8 @@ export default function App() {
         {/* ── Fixtures grid ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {visibleFixtures.map(fixture => (
-            <FixtureCard key={fixture.id} fixture={fixture} pool={pools[fixture.id]} onStake={handleStake} />
+            <FixtureCard key={fixture.id} fixture={fixture} pool={pools[fixture.id]}
+              matchState={matchStates[fixture.id]} onStake={handleStake} onWatch={handleWatch} />
           ))}
         </div>
 
@@ -245,6 +253,14 @@ export default function App() {
       {pendingToasts.map(s => (
         <SettlementToast key={`${s.fixtureId}-${s.blockNumber}`} settlement={s} onDismiss={() => dismissToast(s)} />
       ))}
+
+      {watchingFixture && matchStates[watchingFixture.id] && (
+        <MatchViewer
+          fixture={watchingFixture}
+          matchState={matchStates[watchingFixture.id]}
+          onClose={() => setWatchingId(null)}
+        />
+      )}
     </div>
   );
 }

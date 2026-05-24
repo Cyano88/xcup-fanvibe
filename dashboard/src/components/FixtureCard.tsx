@@ -1,18 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Lock, TrendingUp } from 'lucide-react';
-import type { Fixture, Pool, Outcome } from '../types';
+import { Lock, TrendingUp, Zap } from 'lucide-react';
+import type { Fixture, Pool, Outcome, MatchState } from '../types';
 import { formatPool, countdown } from '../lib/encode';
 
 interface Props {
   fixture: Fixture;
   pool?: Pool;
+  matchState?: MatchState;
   onStake: (fixtureId: string, outcome: Outcome) => void;
+  onWatch: (fixtureId: string) => void;
 }
 
 const FLAG_URL = (iso: string) =>
   `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
-export function FixtureCard({ fixture, pool, onStake }: Props) {
+export function FixtureCard({ fixture, pool, matchState, onStake, onWatch }: Props) {
   const [showHome, setShowHome]   = useState(true);
   const [hovered, setHovered]     = useState(false);
   const [tick, setTick]           = useState(0);
@@ -116,13 +118,31 @@ export function FixtureCard({ fixture, pool, onStake }: Props) {
             </span>
           </button>
 
-          {/* Centre — time / result */}
+          {/* Centre — live score / time / result */}
           <div className="flex flex-col items-center gap-0.5 pb-1">
-            {isSettled && fixture.result ? (
+            {matchState?.status === 'live' ? (
+              <>
+                <div className="flex items-center gap-2 text-white font-black text-2xl tabular-nums drop-shadow-lg">
+                  <span>{matchState.homeScore}</span>
+                  <span className="text-white/40 text-lg">–</span>
+                  <span>{matchState.awayScore}</span>
+                </div>
+                <span className="text-[10px] text-emerald-300 font-mono font-bold flex items-center gap-1">
+                  <Zap size={9} className="animate-pulse" />{matchState.minute}'
+                </span>
+              </>
+            ) : matchState?.status === 'finished' ? (
+              <>
+                <div className="flex items-center gap-2 text-white font-black text-2xl tabular-nums drop-shadow-lg">
+                  <span>{matchState.homeScore}</span>
+                  <span className="text-white/40 text-lg">–</span>
+                  <span>{matchState.awayScore}</span>
+                </div>
+                <span className="text-[10px] text-purple-300 font-mono font-bold">FT</span>
+              </>
+            ) : isSettled && fixture.result ? (
               <span className="text-sm font-bold text-purple-300 font-mono uppercase tracking-widest">
-                {fixture.result === 'draw'
-                  ? 'DRAW'
-                  : fixture.result === 'home' ? fixture.home.code : fixture.away.code}
+                {fixture.result === 'draw' ? 'DRAW' : fixture.result === 'home' ? fixture.home.code : fixture.away.code}
               </span>
             ) : (
               <>
@@ -164,11 +184,23 @@ export function FixtureCard({ fixture, pool, onStake }: Props) {
       {/* ── Outcome buttons ──────────────────────────────────────────── */}
       <div className="p-3 dark:bg-zinc-950 bg-white">
         {isLocked ? (
-          <div className="flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
-            <Lock size={11} />
-            <span className="font-mono">Staking {isSettled ? 'closed' : 'locked'}</span>
-            {isSettled && fixture.result && (
-              <span className="text-purple-400 font-semibold capitalize ml-1">· {fixture.result}</span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
+              <Lock size={11} />
+              <span className="font-mono">Staking {isSettled ? 'closed' : 'locked'}</span>
+              {isSettled && fixture.result && (
+                <span className="text-purple-400 font-semibold capitalize ml-1">· {fixture.result}</span>
+              )}
+            </div>
+            {(matchState?.status === 'live' || matchState?.status === 'finished') && (
+              <button
+                onClick={() => onWatch(fixture.id)}
+                className="flex items-center gap-1.5 px-3 py-3 rounded-xl text-xs font-mono font-bold transition-all
+                  bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 hover:border-emerald-400/50 active:scale-95"
+              >
+                <Zap size={11} />
+                {matchState.status === 'live' ? 'Watch' : 'Replay'}
+              </button>
             )}
           </div>
         ) : (

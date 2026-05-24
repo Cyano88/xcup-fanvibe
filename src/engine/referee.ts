@@ -5,7 +5,6 @@ import {
   webSocket,
   formatEther,
   parseEther,
-  hashMessage,
   recoverMessageAddress,
   encodeAbiParameters,
   decodeAbiParameters,
@@ -21,12 +20,14 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { xLayerMainnet, explorerTx } from '../chain.js';
 import { FIXTURES } from './fixtures.js';
 import { checkAndRefuel } from './metabolism.js';
+import { MatchSimulator } from './simulation.js';
 import type {
   Fixture,
   Stake,
   Pool,
   DaemonLog,
   DaemonState,
+  MatchState,
   MetabolicState,
   Outcome,
   SettlementResult,
@@ -69,6 +70,7 @@ export class RefereeEngine {
   private stakes = new Map<string, Stake>();
   private pools = new Map<string, Pool>();
   private settlements: SettlementResult[] = [];
+  private simulator: MatchSimulator;
 
   private logs: DaemonLog[] = [];
   private logId = 0;
@@ -100,6 +102,12 @@ export class RefereeEngine {
     for (const f of this.fixtures) {
       this.pools.set(f.id, { fixtureId: f.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 });
     }
+
+    this.simulator = new MatchSimulator(
+      (_fixtureId, _state) => this.onUpdate?.(),
+      async (fixtureId, outcome) => { await this.settleFixture(fixtureId, outcome); },
+      this.log.bind(this),
+    );
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -109,6 +117,17 @@ export class RefereeEngine {
     await this.refreshMetabolism();
     this.startWebSocketListener();
     this.startMetabolismLoop();
+
+    // Simulation mode: schedule compressed matches
+    const simulated = this.fixtures.filter(f => f.mode === 'simulated');
+    if (simulated.length > 0) {
+      const delayMins    = parseInt(process.env.SIM_FIRST_KICKOFF_DELAY ?? '30');
+      const intervalMins = parseInt(process.env.SIM_MATCH_INTERVAL_MINS ?? '60');
+      const firstKickoff = Date.now() + delayMins * 60_000;
+      this.simulator.schedule(simulated, firstKickoff, intervalMins * 60_000);
+      this.log('SYSTEM', 'success', `Simulation scheduled — ${simulated.length} matches, first kickoff in ${delayMins} min, ${intervalMins} min intervals`);
+    }
+
     this.log('SYSTEM', 'success', `Engine live on X Layer Mainnet (chain 196). Watching ${this.fixtures.length} fixtures.`);
   }
 
@@ -275,40 +294,55 @@ export class RefereeEngine {
     const totalPool = BigInt(pool.home) + BigInt(pool.draw) + BigInt(pool.away);
     const winPool = BigInt(pool[outcome]);
 
-    const winners = Array.from(this.stakes.values()).filter(
-      (s) => s.fixtureId === fixtureId && s.outcome === outcome,
-    );
+    const allFixtureStakes = Array.from(this.stakes.values()).filter(s => s.fixtureId === fixtureId);
+    const winners = allFixtureStakes.filter(s => s.outcome === outcome);
 
     this.log('ORACLE', 'info', `Settling ${fixtureId}: pool ${formatEther(totalPool)} OKB · ${winners.length} winner(s)`);
 
     const payouts: SettlementResult['payouts'] = [];
 
-    for (const winner of winners) {
-      const stake = BigInt(winner.amountWei);
-      const fee = (stake * PROTOCOL_FEE_BPS) / 10_000n;
-      const net = stake - fee;
-      const payout = winPool > 0n ? (net * totalPool) / winPool : 0n;
-
-      if (payout === 0n) continue;
-
-      try {
-        const txHash = await this.walletClient.sendTransaction({
-          account: this.account,
-          to: winner.staker as Address,
-          value: payout,
-          chain: xLayerMainnet,
-        });
-
-        payouts.push({ address: winner.staker, amountWei: payout.toString(), txHash });
-        this.log(
-          'ORACLE',
-          'success',
-          `Payout ${formatEther(payout)} OKB → ${winner.staker.slice(0, 10)}...${winner.staker.slice(-4)}`,
-          txHash,
-        );
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        this.log('ORACLE', 'error', `Payout failed → ${winner.staker.slice(0, 10)}...: ${msg}`);
+    // ── No-winner edge case: refund all stakers (principal minus fee) ──────
+    if (winPool === 0n && allFixtureStakes.length > 0) {
+      this.log('ORACLE', 'warn', `No stakes on winning outcome (${outcome}) — refunding ${allFixtureStakes.length} stakers`);
+      for (const staker of allFixtureStakes) {
+        const gross = BigInt(staker.amountWei);
+        const fee   = (gross * PROTOCOL_FEE_BPS) / 10_000n;
+        const refund = gross - fee;
+        try {
+          const txHash = await this.walletClient.sendTransaction({
+            account: this.account,
+            to: staker.staker as Address,
+            value: refund,
+            chain: xLayerMainnet,
+          });
+          payouts.push({ address: staker.staker, amountWei: refund.toString(), txHash });
+          this.log('ORACLE', 'success', `Refund ${formatEther(refund)} OKB → ${staker.staker.slice(0, 10)}...`, txHash);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.log('ORACLE', 'error', `Refund failed → ${staker.staker.slice(0, 10)}...: ${msg}`);
+        }
+      }
+    } else {
+      // ── Normal payout to winners ──────────────────────────────────────────
+      for (const winner of winners) {
+        const stake  = BigInt(winner.amountWei);
+        const fee    = (stake * PROTOCOL_FEE_BPS) / 10_000n;
+        const net    = stake - fee;
+        const payout = winPool > 0n ? (net * totalPool) / winPool : 0n;
+        if (payout === 0n) continue;
+        try {
+          const txHash = await this.walletClient.sendTransaction({
+            account: this.account,
+            to: winner.staker as Address,
+            value: payout,
+            chain: xLayerMainnet,
+          });
+          payouts.push({ address: winner.staker, amountWei: payout.toString(), txHash });
+          this.log('ORACLE', 'success', `Payout ${formatEther(payout)} OKB → ${winner.staker.slice(0, 10)}...${winner.staker.slice(-4)}`, txHash);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.log('ORACLE', 'error', `Payout failed → ${winner.staker.slice(0, 10)}...: ${msg}`);
+        }
       }
     }
 
@@ -401,14 +435,16 @@ export class RefereeEngine {
 
   getState(): DaemonState {
     return {
-      refereeAddress: this.account.address,
-      metabolism: this.metabolicState,
-      fixtures: this.fixtures,
-      pools: Object.fromEntries(this.pools),
-      recentLogs: this.logs.slice(-120),
-      lastBlock: this.lastBlock,
-      wsConnected: this.wsConnected,
-      settlements: this.settlements.slice(-20),
+      refereeAddress:  this.account.address,
+      metabolism:      this.metabolicState,
+      fixtures:        this.fixtures,
+      pools:           Object.fromEntries(this.pools),
+      recentLogs:      this.logs.slice(-120),
+      lastBlock:       this.lastBlock,
+      wsConnected:     this.wsConnected,
+      settlements:     this.settlements.slice(-20),
+      matchStates:     this.simulator.getStates(),
+      simulationMode:  this.fixtures.some(f => f.mode === 'simulated'),
     };
   }
 }

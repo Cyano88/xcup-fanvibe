@@ -21,6 +21,27 @@ export interface Fixture {
   status: FixtureStatus;
   result?: Outcome;
   baseOdds: { home: number; draw: number; away: number };
+  simulatedKickoff?: string;
+  mode: 'realtime' | 'simulated';
+}
+
+export interface MatchEvent {
+  id: number;
+  minute: number;
+  type: 'kickoff' | 'goal' | 'shot' | 'yellow_card' | 'red_card' | 'corner' | 'foul' | 'half_time' | 'full_time' | 'var' | string;
+  team: 'home' | 'away' | 'neutral';
+  commentary: string;
+}
+
+export interface MatchState {
+  fixtureId: string;
+  status: 'scheduled' | 'live' | 'finished';
+  minute: number;
+  homeScore: number;
+  awayScore: number;
+  events: MatchEvent[];
+  simulatedKickoff: string;
+  possession: number; // home possession %
 }
 
 export interface Stake {
@@ -85,4 +106,6 @@ export interface DaemonState {
   lastBlock: number;
   wsConnected: boolean;
   settlements: SettlementResult[];
+  matchStates: Record<string, MatchState>;
+  simulationMode: boolean;
 }

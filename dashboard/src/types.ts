@@ -7,7 +7,7 @@ export interface Team {
   name: string;
   code: string;
   flag: string;
-  iso: string; // ISO 3166-1 alpha-2 lowercase — for flagcdn.com
+  iso: string;
 }
 
 export interface Fixture {
@@ -20,7 +20,28 @@ export interface Fixture {
   venue: string;
   status: FixtureStatus;
   result?: Outcome;
-  baseOdds: { home: number; draw: number; away: number }; // pre-match % sum=100
+  baseOdds: { home: number; draw: number; away: number };
+  simulatedKickoff?: string;
+  mode: 'realtime' | 'simulated';
+}
+
+export interface MatchEvent {
+  id: number;
+  minute: number;
+  type: string;
+  team: 'home' | 'away' | 'neutral';
+  commentary: string;
+}
+
+export interface MatchState {
+  fixtureId: string;
+  status: 'scheduled' | 'live' | 'finished';
+  minute: number;
+  homeScore: number;
+  awayScore: number;
+  events: MatchEvent[];
+  simulatedKickoff: string;
+  possession: number;
 }
 
 export interface Pool {
@@ -75,90 +96,91 @@ export interface DaemonState {
   lastBlock: number;
   wsConnected: boolean;
   settlements: SettlementResult[];
+  matchStates: Record<string, MatchState>;
+  simulationMode: boolean;
 }
 
-// Real FIFA World Cup 2026 Group Stage — Matchday 1 (confirmed draw, Dec 2024)
-// Odds from Bet365 / Kalshi markets, normalized to sum 100
+// Real FIFA World Cup 2026 Group Stage — Matchday 1
 export const STATIC_FIXTURES: Fixture[] = [
   {
-    id: 'grp-a-1', matchday: 1, group: 'A',
+    id: 'grp-a-1', matchday: 1, group: 'A', mode: 'simulated',
     home: { name: 'Mexico',       code: 'MEX', flag: '🇲🇽', iso: 'mx' },
     away: { name: 'South Africa', code: 'RSA', flag: '🇿🇦', iso: 'za' },
     kickoff: '2026-06-11T19:00:00Z', venue: 'Estadio Azteca · Mexico City', status: 'open',
     baseOdds: { home: 59, draw: 24, away: 17 },
   },
   {
-    id: 'grp-b-1', matchday: 1, group: 'B',
-    home: { name: 'Canada',            code: 'CAN', flag: '🇨🇦', iso: 'ca' },
+    id: 'grp-b-1', matchday: 1, group: 'B', mode: 'simulated',
+    home: { name: 'Canada',             code: 'CAN', flag: '🇨🇦', iso: 'ca' },
     away: { name: 'Bosnia-Herzegovina', code: 'BIH', flag: '🇧🇦', iso: 'ba' },
     kickoff: '2026-06-12T19:00:00Z', venue: 'BMO Field · Toronto', status: 'open',
     baseOdds: { home: 48, draw: 27, away: 25 },
   },
   {
-    id: 'grp-c-1', matchday: 1, group: 'C',
+    id: 'grp-c-1', matchday: 1, group: 'C', mode: 'simulated',
     home: { name: 'Brazil',  code: 'BRA', flag: '🇧🇷', iso: 'br' },
     away: { name: 'Morocco', code: 'MAR', flag: '🇲🇦', iso: 'ma' },
     kickoff: '2026-06-13T21:00:00Z', venue: 'MetLife Stadium · New Jersey', status: 'open',
     baseOdds: { home: 55, draw: 26, away: 19 },
   },
   {
-    id: 'grp-d-1', matchday: 1, group: 'D',
+    id: 'grp-d-1', matchday: 1, group: 'D', mode: 'simulated',
     home: { name: 'USA',      code: 'USA', flag: '🇺🇸', iso: 'us' },
     away: { name: 'Paraguay', code: 'PAR', flag: '🇵🇾', iso: 'py' },
     kickoff: '2026-06-12T23:00:00Z', venue: 'SoFi Stadium · Los Angeles', status: 'open',
     baseOdds: { home: 51, draw: 27, away: 22 },
   },
   {
-    id: 'grp-e-1', matchday: 1, group: 'E',
+    id: 'grp-e-1', matchday: 1, group: 'E', mode: 'simulated',
     home: { name: 'Germany',     code: 'GER', flag: '🇩🇪', iso: 'de' },
     away: { name: 'Ivory Coast', code: 'CIV', flag: '🇨🇮', iso: 'ci' },
     kickoff: '2026-06-13T17:00:00Z', venue: 'AT&T Stadium · Dallas', status: 'open',
     baseOdds: { home: 60, draw: 23, away: 17 },
   },
   {
-    id: 'grp-f-1', matchday: 1, group: 'F',
+    id: 'grp-f-1', matchday: 1, group: 'F', mode: 'simulated',
     home: { name: 'Netherlands', code: 'NED', flag: '🇳🇱', iso: 'nl' },
     away: { name: 'Japan',       code: 'JPN', flag: '🇯🇵', iso: 'jp' },
     kickoff: '2026-06-14T17:00:00Z', venue: 'Rose Bowl · Los Angeles', status: 'open',
     baseOdds: { home: 49, draw: 28, away: 23 },
   },
   {
-    id: 'grp-g-1', matchday: 1, group: 'G',
+    id: 'grp-g-1', matchday: 1, group: 'G', mode: 'simulated',
     home: { name: 'Belgium', code: 'BEL', flag: '🇧🇪', iso: 'be' },
     away: { name: 'Egypt',   code: 'EGY', flag: '🇪🇬', iso: 'eg' },
     kickoff: '2026-06-14T20:00:00Z', venue: 'Lumen Field · Seattle', status: 'open',
     baseOdds: { home: 66, draw: 21, away: 13 },
   },
   {
-    id: 'grp-h-1', matchday: 1, group: 'H',
+    id: 'grp-h-1', matchday: 1, group: 'H', mode: 'simulated',
     home: { name: 'Spain',   code: 'ESP', flag: '🇪🇸', iso: 'es' },
     away: { name: 'Uruguay', code: 'URU', flag: '🇺🇾', iso: 'uy' },
     kickoff: '2026-06-15T17:00:00Z', venue: 'Hard Rock Stadium · Miami', status: 'open',
     baseOdds: { home: 48, draw: 28, away: 24 },
   },
   {
-    id: 'grp-i-1', matchday: 1, group: 'I',
+    id: 'grp-i-1', matchday: 1, group: 'I', mode: 'simulated',
     home: { name: 'France',  code: 'FRA', flag: '🇫🇷', iso: 'fr' },
     away: { name: 'Senegal', code: 'SEN', flag: '🇸🇳', iso: 'sn' },
     kickoff: '2026-06-15T20:00:00Z', venue: 'Arrowhead Stadium · Kansas City', status: 'open',
     baseOdds: { home: 56, draw: 25, away: 19 },
   },
   {
-    id: 'grp-j-1', matchday: 1, group: 'J',
+    id: 'grp-j-1', matchday: 1, group: 'J', mode: 'simulated',
     home: { name: 'Argentina', code: 'ARG', flag: '🇦🇷', iso: 'ar' },
     away: { name: 'Algeria',   code: 'ALG', flag: '🇩🇿', iso: 'dz' },
     kickoff: '2026-06-16T17:00:00Z', venue: 'Allegiant Stadium · Las Vegas', status: 'open',
     baseOdds: { home: 67, draw: 20, away: 13 },
   },
   {
-    id: 'grp-k-1', matchday: 1, group: 'K',
+    id: 'grp-k-1', matchday: 1, group: 'K', mode: 'simulated',
     home: { name: 'Portugal', code: 'POR', flag: '🇵🇹', iso: 'pt' },
     away: { name: 'Colombia', code: 'COL', flag: '🇨🇴', iso: 'co' },
     kickoff: '2026-06-17T17:00:00Z', venue: 'NRG Stadium · Houston', status: 'open',
     baseOdds: { home: 47, draw: 28, away: 25 },
   },
   {
-    id: 'grp-l-1', matchday: 1, group: 'L',
+    id: 'grp-l-1', matchday: 1, group: 'L', mode: 'simulated',
     home: { name: 'England', code: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', iso: 'gb-eng' },
     away: { name: 'Croatia', code: 'CRO', flag: '🇭🇷', iso: 'hr' },
     kickoff: '2026-06-18T17:00:00Z', venue: 'Gillette Stadium · Boston', status: 'open',
