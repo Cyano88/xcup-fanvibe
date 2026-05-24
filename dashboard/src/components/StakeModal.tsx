@@ -143,7 +143,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
                         outcome === o ? OUTCOME_COLOR[o] : 'border-zinc-700 text-zinc-500 hover:border-zinc-600'
                       }`}
                     >
-                      <div>{o === 'home' ? fixture.home.flag : o === 'away' ? fixture.away.flag : '🤝'}</div>
+                      <div>{o === 'home' ? fixture.home.flag : o === 'away' ? fixture.away.flag : '—'}</div>
                       <div className="mt-0.5">{OUTCOME_LABEL[o]}</div>
                     </button>
                   ))}

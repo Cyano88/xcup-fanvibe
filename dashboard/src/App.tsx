@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Zap, Globe, BookOpen } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
@@ -132,7 +132,11 @@ export default function App() {
   const groups = ['all', ...Array.from(new Set(fixtures.map(f => f.group))).sort()];
   const visibleFixtures = groupFilter === 'all' ? fixtures : fixtures.filter(f => f.group === groupFilter);
 
-  const healthColor = metabolism.isRefuelNeeded ? 'text-red-400' : metabolism.healthPercent < 40 ? 'text-amber-400' : 'text-emerald-400';
+  const healthColor = metabolism.isRefuelNeeded
+    ? 'dark:text-red-400 text-red-600'
+    : metabolism.healthPercent < 40
+    ? 'dark:text-amber-400 text-amber-600'
+    : 'dark:text-emerald-400 text-emerald-600';
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
@@ -143,23 +147,23 @@ export default function App() {
 
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <span className="text-base font-bold tracking-tight dark:text-white text-zinc-900">⚽ X Cup FanVibe</span>
+            <span className="text-base font-bold tracking-tight dark:text-white text-zinc-900">X Cup FanVibe</span>
             <span className="hidden sm:flex badge-live text-[10px]">
               <span className="dot-live" /> X Layer · 196
             </span>
           </div>
 
           {/* Status strip */}
-          <div className="hidden md:flex items-center gap-4 text-xs font-mono text-zinc-500">
+          <div className="hidden md:flex items-center gap-4 text-xs font-mono dark:text-zinc-500 text-zinc-600">
             {lastBlock > 0 && (
               <span className="flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${wsConnected || daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${wsConnected || daemonOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-600 bg-zinc-400'}`} />
                 #{lastBlock.toLocaleString()}
               </span>
             )}
             {refereeAddress && (
               <a href={explorerAddr(refereeAddress)} target="_blank" rel="noopener noreferrer"
-                className="hover:text-zinc-300 transition-colors">
+                className="dark:hover:text-zinc-200 hover:text-zinc-900 transition-colors">
                 {shortAddr(refereeAddress)}
               </a>
             )}
@@ -172,8 +176,9 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`hidden sm:flex items-center gap-1.5 text-xs font-mono ${daemonOnline ? 'text-emerald-400' : 'text-zinc-600'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-700'}`} />
+            <span className={`hidden sm:flex items-center gap-1.5 text-xs font-mono font-semibold
+              ${daemonOnline ? 'dark:text-emerald-400 text-emerald-600' : 'dark:text-zinc-600 text-zinc-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
               {daemonOnline ? 'LIVE' : 'OFFLINE'}
             </span>
             <ThemeSwitcher dark={dark} onToggle={() => setDark(d => !d)} />
@@ -193,8 +198,8 @@ export default function App() {
                   ? 'bg-emerald-500 text-black shadow-sm'
                   : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${viewMode === 'simulated' ? 'bg-black animate-pulse' : 'dark:bg-zinc-600 bg-zinc-400'}`} />
-              ⚡ Simulated
+              <Zap size={13} className={viewMode === 'simulated' ? 'text-black' : ''} />
+              Simulated
             </button>
             <button
               onClick={() => setViewMode('realtime')}
@@ -203,7 +208,8 @@ export default function App() {
                   ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
                   : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
             >
-              🌍 World Cup 2026
+              <Globe size={13} />
+              World Cup 2026
             </button>
           </div>
 
@@ -258,14 +264,14 @@ export default function App() {
         {/* ── Realtime mode notice ──────────────────────────────────────── */}
         {viewMode === 'realtime' && (
           <div className="dark:bg-blue-500/8 bg-blue-50 border dark:border-blue-500/20 border-blue-200 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-2xl">🌍</span>
+            <Globe size={18} className="dark:text-blue-400 text-blue-600 shrink-0 mt-0.5" />
             <div>
               <div className="text-sm font-bold dark:text-blue-300 text-blue-700 mb-1">World Cup 2026 — Realtime Mode</div>
               <div className="text-xs dark:text-zinc-400 text-zinc-600 leading-relaxed">
-                These are the real FIFA World Cup 2026 Group Stage fixtures. Staking is open now —
-                matches settle automatically when the tournament starts. First kick-off is
+                Real FIFA World Cup 2026 Group Stage fixtures. Staking is open now — matches settle
+                automatically when the tournament starts. First kick-off is
                 <span className="font-semibold dark:text-zinc-200 text-zinc-800"> June 11, 2026</span>.
-                Switch to ⚡ Simulated to watch live matches running now.
+                Switch to Simulated to watch live matches running now.
               </div>
             </div>
           </div>
@@ -301,9 +307,40 @@ export default function App() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between text-xs dark:text-zinc-600 text-zinc-400 font-mono pb-2">
-          <span>X Cup FanVibe · OKX Build X Hackathon 2026</span>
-          <span>O2 Autonomous Metabolism · Chain 196</span>
+        <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 space-y-3">
+          {/* Support row */}
+          <div className="flex items-center gap-6">
+            <span className="text-[11px] font-mono font-semibold dark:text-zinc-600 text-zinc-400 uppercase tracking-widest">Support</span>
+            <a
+              href="https://x.com/xcupfanvibe"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                dark:text-zinc-500 text-zinc-500 dark:hover:text-zinc-100 hover:text-zinc-900
+                dark:hover:bg-zinc-900 hover:bg-zinc-100 border border-transparent
+                dark:hover:border-zinc-800 hover:border-zinc-200 transition-all duration-150"
+            >
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="currentColor" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.846L1.254 2.25H8.08l4.26 5.636zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+              <span>X</span>
+            </a>
+            <a
+              href="#docs"
+              className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                dark:text-zinc-500 text-zinc-500 dark:hover:text-zinc-100 hover:text-zinc-900
+                dark:hover:bg-zinc-900 hover:bg-zinc-100 border border-transparent
+                dark:hover:border-zinc-800 hover:border-zinc-200 transition-all duration-150"
+            >
+              <BookOpen size={13} className="shrink-0" />
+              <span>Docs</span>
+            </a>
+          </div>
+
+          {/* Built on row */}
+          <div className="text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
+            Built on OKX XLayer · O2 Autonomous Metabolism
+          </div>
         </div>
       </main>
 

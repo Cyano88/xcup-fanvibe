@@ -360,9 +360,9 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
             ${outcome === 'home' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
               outcome === 'away' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
               'dark:bg-zinc-700/40 bg-zinc-100 dark:text-zinc-300 text-zinc-600 border dark:border-zinc-600/30 border-zinc-200'}`}>
-            {outcome === 'draw' ? '🤝 Draw — stakers refunded' :
-             outcome === 'home' ? `🏆 ${fixture.home.name} win — payouts sent` :
-             `🏆 ${fixture.away.name} win — payouts sent`}
+            {outcome === 'draw' ? 'Draw — stakers refunded' :
+             outcome === 'home' ? `${fixture.home.name} win — payouts sent` :
+             `${fixture.away.name} win — payouts sent`}
           </div>
         )}
 
@@ -401,7 +401,7 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
                   ? 'dark:text-zinc-100 text-zinc-900 border-emerald-500'
                   : 'dark:text-zinc-500 text-zinc-400 border-transparent dark:hover:text-zinc-300 hover:text-zinc-600'}`}
             >
-              {t === 'chat' ? '💬 Chat' : '📋 Commentary'}
+              {t === 'chat' ? 'Chat' : 'Commentary'}
             </button>
           ))}
         </div>
