@@ -142,7 +142,7 @@ export default function App() {
 
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <span className="text-base font-bold tracking-tight text-white">⚽ X Cup FanVibe</span>
+            <span className="text-base font-bold tracking-tight dark:text-white text-zinc-900">⚽ X Cup FanVibe</span>
             <span className="hidden sm:flex badge-live text-[10px]">
               <span className="dot-live" /> X Layer · 196
             </span>
@@ -185,14 +185,14 @@ export default function App() {
         {/* Recent settlements strip */}
         {settlements.length > 0 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs text-zinc-700 shrink-0 font-mono uppercase">Settled</span>
+            <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-mono uppercase">Settled</span>
             {[...settlements].reverse().slice(0, 5).map((s) => {
               const fix = fixtures.find(f => f.id === s.fixtureId);
               return (
                 <a key={`${s.fixtureId}-${s.blockNumber}`} href={s.explorerUrl} target="_blank" rel="noopener noreferrer"
-                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-zinc-800 hover:border-zinc-700 text-xs transition-colors">
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-zinc-800 border-zinc-300 dark:hover:border-zinc-700 hover:border-zinc-400 dark:text-zinc-300 text-zinc-600 text-xs transition-colors">
                   <span>{fix ? `${fix.home.flag} vs ${fix.away.flag}` : s.fixtureId}</span>
-                  <span className="text-emerald-400 font-mono font-medium capitalize">{s.outcome}</span>
+                  <span className="text-emerald-500 font-mono font-medium capitalize">{s.outcome}</span>
                 </a>
               );
             })}
@@ -207,8 +207,8 @@ export default function App() {
               onClick={() => setGroupFilter(g)}
               className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-medium transition-all duration-150
                 ${groupFilter === g
-                  ? 'bg-white text-black'
-                  : 'text-zinc-500 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300'}`}
+                  ? 'dark:bg-white dark:text-black bg-zinc-900 text-white'
+                  : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-300 dark:hover:border-zinc-700 hover:border-zinc-500 dark:hover:text-zinc-300 hover:text-zinc-700'}`}
             >
               {g === 'all' ? 'All' : `Group ${g}`}
             </button>
@@ -224,13 +224,13 @@ export default function App() {
         </div>
 
         {/* ── Log toggle ────────────────────────────────────────────────── */}
-        <div className="border border-zinc-900 rounded-xl overflow-hidden">
+        <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setLogOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-xs font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 text-xs font-mono dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
               Daemon Log · {logs.length} entries
             </span>
             {logOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -239,7 +239,7 @@ export default function App() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between text-xs text-zinc-800 font-mono pb-2">
+        <div className="flex items-center justify-between text-xs dark:text-zinc-600 text-zinc-400 font-mono pb-2">
           <span>X Cup FanVibe · OKX Build X Hackathon 2026</span>
           <span>O2 Autonomous Metabolism · Chain 196</span>
         </div>

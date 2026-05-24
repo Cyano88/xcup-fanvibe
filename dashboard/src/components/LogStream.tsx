@@ -17,10 +17,10 @@ const PREFIX_STYLE: Record<LogPrefix, string> = {
 };
 
 const LEVEL_TEXT: Record<LogLevel, string> = {
-  info:    'text-zinc-300',
-  warn:    'text-amber-300',
-  error:   'text-red-400',
-  success: 'text-emerald-300',
+  info:    'dark:text-zinc-300 text-zinc-600',
+  warn:    'dark:text-amber-300 text-amber-600',
+  error:   'dark:text-red-400 text-red-500',
+  success: 'dark:text-emerald-300 text-emerald-600',
 };
 
 function formatTs(ts: string): string {
@@ -40,27 +40,27 @@ export function LogStream({ logs, daemonOnline }: Props) {
 
   return (
     <div className="card flex flex-col" style={{ minHeight: '260px', maxHeight: '340px' }}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+      <div className="flex items-center justify-between px-4 py-3 border-b dark:border-zinc-800 border-zinc-200">
         <div className="flex items-center gap-2">
-          <Terminal size={13} className="text-zinc-500" />
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Daemon Log</span>
+          <Terminal size={13} className="dark:text-zinc-500 text-zinc-400" />
+          <span className="text-xs font-semibold dark:text-zinc-400 text-zinc-600 uppercase tracking-widest">Daemon Log</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-          <span className="text-xs font-mono text-zinc-600">{logs.length} entries</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400'}`} />
+          <span className="text-xs font-mono dark:text-zinc-600 text-zinc-400">{logs.length} entries</span>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {logs.length === 0 && (
-          <div className="flex items-center justify-center h-20 text-xs text-zinc-700">
+          <div className="flex items-center justify-center h-20 text-xs dark:text-zinc-700 text-zinc-400">
             {daemonOnline ? 'Waiting for daemon events…' : 'Connect daemon to see live logs'}
           </div>
         )}
 
         {logs.map((log) => (
           <div key={log.id} className="flex items-start gap-2 text-xs animate-fade-in group">
-            <span className="font-mono text-zinc-700 shrink-0 mt-px">{formatTs(log.ts)}</span>
+            <span className="font-mono dark:text-zinc-700 text-zinc-400 shrink-0 mt-px">{formatTs(log.ts)}</span>
             <span className={`shrink-0 mt-px px-1.5 py-px rounded text-[10px] font-bold font-mono ${PREFIX_STYLE[log.prefix]}`}>
               {log.prefix}
             </span>
@@ -71,7 +71,7 @@ export function LogStream({ logs, daemonOnline }: Props) {
                   href={explorerTx(log.txHash)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ml-2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  className="ml-2 dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
                   title={log.txHash}
                 >
                   [{log.txHash.slice(0, 8)}…] ↗

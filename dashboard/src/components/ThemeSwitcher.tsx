@@ -10,10 +10,9 @@ export function ThemeSwitcher({ dark, onToggle }: Props) {
     <button
       onClick={onToggle}
       aria-label="Toggle theme"
-      className="relative w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200
-        text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800
-        dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800
-        light:text-zinc-500 light:hover:text-zinc-800 light:hover:bg-zinc-100"
+      className="relative w-9 h-9 flex items-center justify-center rounded-lg border transition-all duration-200
+        dark:border-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800 dark:hover:border-zinc-600
+        border-zinc-300 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 hover:border-zinc-400"
     >
       <span
         className="absolute transition-all duration-300"
