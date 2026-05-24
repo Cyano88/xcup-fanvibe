@@ -473,6 +473,17 @@ export class RefereeEngine {
     };
 
     this.settlements.push(result);
+
+    // Auto-settle champion market when the Final (f-1) completes
+    if (fixtureId === 'f-1' && !this.champSettled) {
+      const champTeam = outcome === 'away' ? fixture.away : fixture.home;
+      if (champTeam && CHAMP_TEAMS.includes(champTeam.code)) {
+        this.settleChampion(champTeam.code).catch((err: unknown) => {
+          this.log('ORACLE', 'error', `Champion auto-settle failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      }
+    }
+
     this.onUpdate?.();
 
     await this.refreshMetabolism();

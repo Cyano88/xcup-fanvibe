@@ -43,7 +43,7 @@ export function LogStream({ logs, daemonOnline }: Props) {
       <div className="flex items-center justify-between px-4 py-3 border-b dark:border-zinc-800 border-zinc-200">
         <div className="flex items-center gap-2">
           <Terminal size={13} className="dark:text-zinc-500 text-zinc-400" />
-          <span className="text-xs font-semibold dark:text-zinc-400 text-zinc-600 uppercase tracking-widest">Daemon Log</span>
+          <span className="text-xs font-semibold dark:text-zinc-400 text-zinc-600 uppercase tracking-widest">Activity Feed</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400'}`} />
@@ -54,7 +54,7 @@ export function LogStream({ logs, daemonOnline }: Props) {
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {logs.length === 0 && (
           <div className="flex items-center justify-center h-20 text-xs dark:text-zinc-700 text-zinc-400">
-            {daemonOnline ? 'Waiting for daemon events…' : 'Connect daemon to see live logs'}
+            {daemonOnline ? 'Waiting for engine events…' : 'Connect market engine to see live activity'}
           </div>
         )}
 

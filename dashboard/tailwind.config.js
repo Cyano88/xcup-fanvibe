@@ -7,6 +7,7 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        serif: ['"DM Serif Display"', 'Georgia', 'serif'],
       },
       colors: {
         emerald: { DEFAULT: '#10b981', 400: '#34d399', 500: '#10b981' },

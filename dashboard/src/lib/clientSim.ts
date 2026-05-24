@@ -3,10 +3,15 @@ import type { Fixture, MatchState, MatchEvent } from '../types';
 // ── Strength + squad data (mirrors backend, lives here for offline demo) ──────
 
 export const STRENGTH: Record<string, number> = {
+  // Core simulated-bracket teams
   ARG:95, FRA:93, BRA:92, ENG:88, ESP:87, GER:86, POR:85, NED:83,
   BEL:82, ITA:80, CRO:77, URU:77, MAR:75, SEN:74, JPN:73, DEN:73,
   COL:72, MEX:72, SUI:71, CAN:71, USA:70, SRB:70, TUR:69, CIV:69,
   NGA:68, AUS:67, KOR:67, ECU:66, ALG:65, EGY:64, CMR:64, KSA:61,
+  // Official FIFA WC 2026 teams (realtime groups)
+  SWE:76, NOR:74, AUT:68, CZE:66, SCO:65, GHA:60, PAR:60, TUN:60,
+  IRN:61, RSA:57, COD:56, BIH:58, IRQ:52, QAT:52, CPV:48, PAN:48,
+  JOR:48, UZB:50, NZL:45, HAI:42, CUW:35,
 };
 
 const PLAYERS: Record<string, string[]> = {
@@ -68,13 +73,13 @@ function goalEvent(minute: number, team: 'home' | 'away', fx: Fixture, hs: numbe
 }
 
 /**
- * Simulate a single match at `tickMs` per game-minute (200ms default → ~18s per match).
+ * Simulate a single match at `tickMs` per game-minute (6667ms default → ~10 min per match).
  * Returns a cleanup function.
  */
 export function simulateMatch(
   fixture: Fixture,
   onUpdate: (state: MatchState) => void,
-  tickMs = 200,
+  tickMs = 6667,
 ): () => void {
   const hStr = STRENGTH[fixture.home.code] ?? 70;
   const aStr = STRENGTH[fixture.away.code] ?? 70;

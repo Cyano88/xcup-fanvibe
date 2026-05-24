@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { ChevronDown, ChevronUp, Zap, Globe, BookOpen } from 'lucide-react';
+import { ChevronDown, ChevronUp, Zap, Globe, Info } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
@@ -8,9 +8,9 @@ import { StakeModal } from './components/StakeModal';
 import { SettlementToast } from './components/SettlementToast';
 import { FuelBar } from './components/FuelBar';
 import { MatchViewer } from './components/MatchViewer';
+import { GroupTable } from './components/GroupTable';
 import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team } from './types';
 import { STATIC_FIXTURES, REALTIME_FIXTURES } from './types';
-import { Leaderboard } from './components/Leaderboard';
 import { BracketView } from './components/BracketView';
 import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
@@ -60,33 +60,48 @@ const BRACKET: Record<string, {
   'sf-2':   { winner: { matchId: 'f-1',   slot: 'away' }, loser: { matchId: '3pl-1', slot: 'away' } },
 };
 
+type SeasonPhase = 'preseason' | 'playing' | 'champion' | 'interseason';
+
 function defaultMetabolism(): MetabolicState {
   return { okbBalance: '0', okbBalanceFormatted: '0.000000', healthPercent: 0, isRefuelNeeded: false, checkedAt: Date.now() };
 }
 
+function fmtDuration(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export default function App() {
   const [dark, setDark] = useState(true);
-  const [daemonOnline, setDaemonOnline]       = useState(false);
-  const [refereeAddress, setRefereeAddress]   = useState(REFEREE_ADDR);
-  const [metabolism, setMetabolism]           = useState<MetabolicState>(defaultMetabolism);
-  const [fixtures, setFixtures]               = useState<Fixture[]>(STATIC_FIXTURES);
-  const [pools, setPools]                     = useState<Record<string, Pool>>({});
-  const [logs, setLogs]                       = useState<DaemonLog[]>([]);
-  const [lastBlock, setLastBlock]             = useState(0);
-  const [wsConnected, setWsConnected]         = useState(false);
-  const [settlements, setSettlements]         = useState<SettlementResult[]>([]);
-  const [pendingToasts, setPendingToasts]     = useState<SettlementResult[]>([]);
-  const [stakeTarget, setStakeTarget]         = useState<{ fixtureId: string; outcome: Outcome } | null>(null);
-  const [logOpen, setLogOpen]                 = useState(false);
-  const [roundFilter, setRoundFilter]          = useState<string>('all');
-  const [groupFilter, setGroupFilter]          = useState<string>('all');
-  const [matchStates, setMatchStates]         = useState<Record<string, MatchState>>({});
-  const [watchingFixtureId, setWatchingId]    = useState<string | null>(null);
-  const [viewMode, setViewMode]               = useState<'simulated' | 'realtime'>('simulated');
-  const [eliminatedTeams, setEliminatedTeams] = useState<Set<string>>(new Set());
-  const [champion, setChampion]               = useState<Team | null>(null);
-  const [restartIn, setRestartIn]             = useState(0);
-  const [tournamentGen, setTournamentGen]     = useState(0);
+  const [engineOnline, setEngineOnline]         = useState(false);
+  const [refereeAddress, setRefereeAddress]     = useState(REFEREE_ADDR);
+  const [metabolism, setMetabolism]             = useState<MetabolicState>(defaultMetabolism);
+  const [fixtures, setFixtures]                 = useState<Fixture[]>(STATIC_FIXTURES);
+  const [pools, setPools]                       = useState<Record<string, Pool>>({});
+  const [logs, setLogs]                         = useState<DaemonLog[]>([]);
+  const [lastBlock, setLastBlock]               = useState(0);
+  const [wsConnected, setWsConnected]           = useState(false);
+  const [settlements, setSettlements]           = useState<SettlementResult[]>([]);
+  const [pendingToasts, setPendingToasts]       = useState<SettlementResult[]>([]);
+  const [stakeTarget, setStakeTarget]           = useState<{ fixtureId: string; outcome: Outcome } | null>(null);
+  const [logOpen, setLogOpen]                   = useState(false);
+  const [howOpen, setHowOpen]                   = useState(false);
+  const [roundFilter, setRoundFilter]           = useState<string>('all');
+  const [groupFilter, setGroupFilter]           = useState<string>('all');
+  const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>({});
+  const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
+  const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
+  const [eliminatedTeams, setEliminatedTeams]   = useState<Set<string>>(new Set());
+  const [champion, setChampion]                 = useState<Team | null>(null);
+  const [tournamentGen, setTournamentGen]       = useState(0);
+
+  // Season / phase system
+  const [seasonNumber, setSeasonNumber]         = useState<number>(() => {
+    try { return Math.max(1, parseInt(localStorage.getItem('xcup_season') ?? '1') || 1); } catch { return 1; }
+  });
+  const [phase, setPhase]                       = useState<SeasonPhase>('preseason');
+  const [phaseTimer, setPhaseTimer]             = useState(5 * 60); // 5-min pre-season
 
   const wsRef                  = useRef<WebSocket | null>(null);
   const reconnectRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,12 +111,17 @@ export default function App() {
 
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
 
+  // Persist season number
+  useEffect(() => {
+    try { localStorage.setItem('xcup_season', String(seasonNumber)); } catch { /* private browsing */ }
+  }, [seasonNumber]);
+
   const connectWS = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     const ws = new WebSocket(BACKEND_WS);
     wsRef.current = ws;
 
-    ws.onopen = () => { setDaemonOnline(true); if (reconnectRef.current) clearTimeout(reconnectRef.current); };
+    ws.onopen = () => { setEngineOnline(true); if (reconnectRef.current) clearTimeout(reconnectRef.current); };
 
     ws.onmessage = (e: MessageEvent<string>) => {
       try {
@@ -128,7 +148,7 @@ export default function App() {
       } catch { /* malformed */ }
     };
 
-    ws.onclose = () => { setDaemonOnline(false); reconnectRef.current = setTimeout(connectWS, 5000); };
+    ws.onclose = () => { setEngineOnline(false); reconnectRef.current = setTimeout(connectWS, 5000); };
     ws.onerror = () => ws.close();
   }, []);
 
@@ -137,7 +157,7 @@ export default function App() {
     fetch(`${BACKEND_HTTP}/state`)
       .then(r => r.json())
       .then((s: DaemonState) => {
-        setDaemonOnline(true);
+        setEngineOnline(true);
         setRefereeAddress(s.refereeAddress || REFEREE_ADDR);
         setMetabolism(s.metabolism);
         setFixtures(s.fixtures.length ? s.fixtures : STATIC_FIXTURES);
@@ -153,9 +173,9 @@ export default function App() {
     return () => { wsRef.current?.close(); if (reconnectRef.current) clearTimeout(reconnectRef.current); };
   }, [connectWS]);
 
-  // Direct RPC balance when daemon offline
+  // Direct RPC balance when engine offline
   useEffect(() => {
-    if (daemonOnline || !refereeAddress) return;
+    if (engineOnline || !refereeAddress) return;
     const fetchBal = async () => {
       try {
         const bal = await rpcClient.getBalance({ address: refereeAddress as `0x${string}` });
@@ -170,13 +190,46 @@ export default function App() {
     fetchBal();
     const t = setInterval(fetchBal, 15_000);
     return () => clearInterval(t);
-  }, [daemonOnline, refereeAddress]);
+  }, [engineOnline, refereeAddress]);
 
-  // ── Client-side simulation (runs when daemon is offline) ─────────────────────
+  // ── Tournament restart ───────────────────────────────────────────────────────
+  const doRestart = useCallback(() => {
+    simCleanupRef.current.forEach(c => c());
+    simCleanupRef.current.clear();
+    bracketProcessedRef.current.clear();
+    championTriggeredRef.current = false;
+    setMatchStates({});
+    setFixtures(STATIC_FIXTURES);
+    setEliminatedTeams(new Set());
+    setChampion(null);
+    setTournamentGen(g => g + 1);
+  }, []);
 
-  // Start / restart simulations for all open non-TBD fixtures
+  // ── Phase / season timer ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (daemonOnline || viewMode !== 'simulated') return;
+    if (phase === 'playing') return;
+    if (phaseTimer <= 0) {
+      if (phase === 'champion') {
+        setChampion(null);
+        setPhase('interseason');
+        setPhaseTimer(20 * 60);
+      } else if (phase === 'interseason') {
+        setSeasonNumber(n => n + 1);
+        doRestart();
+        setPhase('preseason');
+        setPhaseTimer(5 * 60);
+      } else if (phase === 'preseason') {
+        setPhase('playing');
+      }
+      return;
+    }
+    const t = setTimeout(() => setPhaseTimer(n => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, phaseTimer, doRestart]);
+
+  // ── Client-side simulation ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (engineOnline || viewMode !== 'simulated' || phase !== 'playing') return;
     fixtures.forEach(fx => {
       if (fx.status !== 'open' && fx.status !== 'locked') return;
       if (fx.home.code === 'TBD' || fx.away.code === 'TBD') return;
@@ -186,11 +239,11 @@ export default function App() {
       });
       simCleanupRef.current.set(fx.id, cleanup);
     });
-  }, [daemonOnline, viewMode, fixtures]);
+  }, [engineOnline, viewMode, phase, fixtures]);
 
   // Advance bracket when a match finishes
   useEffect(() => {
-    if (daemonOnline || viewMode !== 'simulated') return;
+    if (engineOnline || viewMode !== 'simulated') return;
     Object.entries(matchStates).forEach(([id, ms]) => {
       if (ms.status !== 'finished') return;
       if (bracketProcessedRef.current.has(id)) return;
@@ -222,25 +275,11 @@ export default function App() {
         });
       });
     });
-  }, [matchStates, daemonOnline, viewMode]);
+  }, [matchStates, engineOnline, viewMode]);
 
-  // ── Tournament restart ───────────────────────────────────────────────────────
-  const doRestart = useCallback(() => {
-    simCleanupRef.current.forEach(c => c());
-    simCleanupRef.current.clear();
-    bracketProcessedRef.current.clear();
-    championTriggeredRef.current = false;
-    setMatchStates({});
-    setFixtures(STATIC_FIXTURES);
-    setEliminatedTeams(new Set());
-    setChampion(null);
-    setRestartIn(0);
-    setTournamentGen(g => g + 1);
-  }, []);
-
-  // Detect final finish → show champion overlay
+  // Detect Final finish → champion phase
   useEffect(() => {
-    if (daemonOnline || viewMode !== 'simulated') return;
+    if (engineOnline || viewMode !== 'simulated' || phase !== 'playing') return;
     const ms = matchStates['f-1'];
     if (ms?.status !== 'finished') return;
     if (championTriggeredRef.current) return;
@@ -249,18 +288,9 @@ export default function App() {
     if (!fx) return;
     const winner = ms.homeScore >= ms.awayScore ? fx.home : fx.away;
     setChampion(winner);
-    setRestartIn(10);
-  }, [matchStates, daemonOnline, viewMode, fixtures]);
-
-  // Countdown → auto-restart
-  useEffect(() => {
-    if (!champion) return;
-    if (restartIn > 0) {
-      const t = setTimeout(() => setRestartIn(n => n - 1), 1000);
-      return () => clearTimeout(t);
-    }
-    doRestart();
-  }, [champion, restartIn, doRestart]);
+    setPhase('champion');
+    setPhaseTimer(10);
+  }, [matchStates, engineOnline, viewMode, phase, fixtures]);
 
   const handleStake    = useCallback((fixtureId: string, outcome: Outcome) => setStakeTarget({ fixtureId, outcome }), []);
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
@@ -280,6 +310,8 @@ export default function App() {
     ? 'dark:text-amber-400 text-amber-600'
     : 'dark:text-emerald-400 text-emerald-600';
 
+  const seasonLabel = `FanVibe Season ${seasonNumber}`;
+
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
 
@@ -290,6 +322,11 @@ export default function App() {
           {/* Brand */}
           <div className="flex items-center gap-3">
             <span className="text-base font-bold tracking-tight dark:text-white text-zinc-900">X Cup FanVibe</span>
+            {viewMode === 'simulated' && (
+              <span className="hidden sm:inline text-[11px] font-mono dark:text-zinc-500 text-zinc-400">
+                {seasonLabel}
+              </span>
+            )}
             <span className="hidden sm:flex badge-live text-[10px]">
               <span className="dot-live" /> X Layer · 196
             </span>
@@ -299,7 +336,7 @@ export default function App() {
           <div className="hidden md:flex items-center gap-4 text-xs font-mono dark:text-zinc-300 text-zinc-600">
             {lastBlock > 0 && (
               <span className="flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${wsConnected || daemonOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-600 bg-zinc-400'}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${wsConnected || engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-600 bg-zinc-400'}`} />
                 #{lastBlock.toLocaleString()}
               </span>
             )}
@@ -319,9 +356,9 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <span className={`hidden sm:flex items-center gap-1.5 text-xs font-mono font-semibold
-              ${daemonOnline ? 'dark:text-emerald-400 text-emerald-600' : 'dark:text-zinc-600 text-zinc-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
-              {daemonOnline ? 'LIVE' : 'OFFLINE'}
+              ${engineOnline ? 'dark:text-emerald-400 text-emerald-600' : 'dark:text-zinc-600 text-zinc-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
+              {engineOnline ? 'Connected' : 'Standby'}
             </span>
             <ThemeSwitcher dark={dark} onToggle={() => setDark(d => !d)} />
           </div>
@@ -337,11 +374,11 @@ export default function App() {
               onClick={() => setViewMode('simulated')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
                 ${viewMode === 'simulated'
-                  ? 'bg-emerald-500 text-black shadow-sm'
+                  ? 'bg-amber-500 text-black shadow-sm'
                   : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
             >
               <Zap size={13} className={viewMode === 'simulated' ? 'text-black' : ''} />
-              Simulated
+              Season Play
             </button>
             <button
               onClick={() => setViewMode('realtime')}
@@ -357,10 +394,22 @@ export default function App() {
 
           <div className="text-xs font-mono dark:text-zinc-500 text-zinc-400 flex items-center gap-1.5">
             {viewMode === 'simulated' ? (
-              <>
-                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                Simulated matches · stake &amp; watch live now
-              </>
+              phase === 'preseason' ? (
+                <>
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                  {seasonLabel} starts in {fmtDuration(phaseTimer)} · staking open
+                </>
+              ) : phase === 'interseason' ? (
+                <>
+                  <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full" />
+                  Season {seasonNumber + 1} starts in {fmtDuration(phaseTimer)}
+                </>
+              ) : (
+                <>
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                  {seasonLabel} · matches live now
+                </>
+              )
             ) : (
               <>
                 <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
@@ -369,6 +418,61 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {/* ── Pre-season banner ─────────────────────────────────────────── */}
+        {viewMode === 'simulated' && phase === 'preseason' && (
+          <div className="dark:bg-amber-500/8 bg-amber-50 border dark:border-amber-500/20 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="text-sm font-bold dark:text-amber-300 text-amber-700 mb-0.5">{seasonLabel} — Staking Open</div>
+              <div className="text-xs dark:text-zinc-400 text-zinc-600">
+                Predict the champion and stake on opening fixtures before kick-off.
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <div className="font-serif text-3xl dark:text-amber-300 text-amber-600 tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
+                <div className="text-[10px] font-mono dark:text-zinc-500 text-zinc-400 uppercase mt-0.5">until kick-off</div>
+              </div>
+              <button
+                onClick={() => setPhase('playing')}
+                className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-amber-500 text-black hover:bg-amber-400 active:scale-95 transition-all"
+              >
+                Start Now →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Inter-season banner ───────────────────────────────────────── */}
+        {viewMode === 'simulated' && phase === 'interseason' && (
+          <div className="dark:bg-zinc-900/80 bg-zinc-100 border dark:border-zinc-700 border-zinc-300 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="text-sm font-bold dark:text-zinc-200 text-zinc-700 mb-0.5">
+                Season {seasonNumber + 1} — Coming Soon
+              </div>
+              <div className="text-xs dark:text-zinc-400 text-zinc-600">
+                A new tournament is being prepared. Stake positions for the next season.
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <div className="font-serif text-3xl dark:text-zinc-300 text-zinc-600 tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
+                <div className="text-[10px] font-mono dark:text-zinc-500 text-zinc-400 uppercase mt-0.5">until next season</div>
+              </div>
+              <button
+                onClick={() => {
+                  setSeasonNumber(n => n + 1);
+                  doRestart();
+                  setPhase('preseason');
+                  setPhaseTimer(5 * 60);
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-mono font-bold dark:bg-zinc-700 bg-zinc-200 dark:text-zinc-100 text-zinc-800 dark:hover:bg-zinc-600 hover:bg-zinc-300 active:scale-95 transition-all"
+              >
+                Start Early →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Recent settlements strip */}
         {settlements.length > 0 && (
@@ -424,19 +528,19 @@ export default function App() {
         )}
 
         {/* ── Simulation running indicator ──────────────────────────────── */}
-        {viewMode === 'simulated' && !daemonOnline && Object.keys(matchStates).length > 0 && (() => {
-          const liveEntries  = Object.entries(matchStates).filter(([, ms]) => ms.status === 'live');
+        {viewMode === 'simulated' && phase === 'playing' && !engineOnline && Object.keys(matchStates).length > 0 && (() => {
+          const liveEntries   = Object.entries(matchStates).filter(([, ms]) => ms.status === 'live');
           const finishedCount = Object.values(matchStates).filter(ms => ms.status === 'finished').length;
           return (
             <div className="flex items-center gap-2.5 overflow-x-auto pb-0.5 scrollbar-none">
               <div className="shrink-0 flex items-center gap-1.5 text-xs font-mono font-semibold">
                 {liveEntries.length > 0 ? (
                   <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="dark:text-emerald-400 text-emerald-600">{liveEntries.length} LIVE</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="dark:text-amber-400 text-amber-600">{liveEntries.length} LIVE</span>
                   </>
                 ) : (
-                  <span className="dark:text-zinc-500 text-zinc-400">Simulation complete</span>
+                  <span className="dark:text-zinc-500 text-zinc-400">Season complete</span>
                 )}
                 {finishedCount > 0 && (
                   <span className="dark:text-zinc-600 text-zinc-400">· {finishedCount} done</span>
@@ -449,11 +553,11 @@ export default function App() {
                   <button
                     key={id}
                     onClick={() => setWatchingId(id)}
-                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-emerald-500/30 border-emerald-200
-                      dark:bg-emerald-500/8 bg-emerald-50 dark:hover:border-emerald-400/50 hover:border-emerald-300
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-amber-500/30 border-amber-200
+                      dark:bg-amber-500/8 bg-amber-50 dark:hover:border-amber-400/50 hover:border-amber-300
                       transition-all active:scale-95 text-[11px] font-mono font-semibold"
                   >
-                    <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0" />
                     <span className="dark:text-zinc-200 text-zinc-700">{fx.home.flag} {ms.homeScore}</span>
                     <span className="dark:text-zinc-600 text-zinc-400">–</span>
                     <span className="dark:text-zinc-200 text-zinc-700">{ms.awayScore} {fx.away.flag}</span>
@@ -470,12 +574,11 @@ export default function App() {
           <div className="dark:bg-blue-500/8 bg-blue-50 border dark:border-blue-500/20 border-blue-200 rounded-xl p-4 flex items-start gap-3">
             <Globe size={18} className="dark:text-blue-400 text-blue-600 shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm font-bold dark:text-blue-300 text-blue-700 mb-1">World Cup 2026 — Realtime Mode</div>
+              <div className="text-sm font-bold dark:text-blue-300 text-blue-700 mb-1">FIFA World Cup 2026 — All 12 Groups</div>
               <div className="text-xs dark:text-zinc-400 text-zinc-600 leading-relaxed">
-                Real FIFA World Cup 2026 Group Stage fixtures. Staking is open now — matches settle
-                automatically when the tournament starts. First kick-off is
-                <span className="font-semibold dark:text-zinc-200 text-zinc-800"> June 11, 2026</span>.
-                Switch to Simulated to watch live matches running now.
+                Official WC 2026 group stage fixtures (MD1 + MD2). Staking is open now for all 48 matches.
+                First kick-off <span className="font-semibold dark:text-zinc-200 text-zinc-800">June 11, 2026</span>.
+                Switch to Season Play to watch live simulated matches running right now.
               </div>
             </div>
           </div>
@@ -514,60 +617,68 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Top Scorers leaderboard (simulated mode only, once matches start) ── */}
-        {viewMode === 'simulated' && Object.keys(matchStates).length > 0 && (
-          <Leaderboard matchStates={matchStates} fixtures={fixtures} />
+        {/* ── Group standings (realtime mode) ───────────────────────────── */}
+        {viewMode === 'realtime' && (
+          <GroupTable fixtures={REALTIME_FIXTURES} matchStates={matchStates} />
         )}
 
-        {/* ── Log toggle ────────────────────────────────────────────────── */}
+        {/* ── Activity feed toggle ──────────────────────────────────────── */}
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setLogOpen(o => !o)}
             className="w-full flex items-center justify-between px-4 py-3 text-xs font-mono dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
-              Daemon Log · {logs.length} entries
+              <span className={`w-1.5 h-1.5 rounded-full ${engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
+              Activity Feed · {logs.length} entries
             </span>
             {logOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
-          {logOpen && <LogStream logs={logs} daemonOnline={daemonOnline} />}
+          {logOpen && <LogStream logs={logs} daemonOnline={engineOnline} />}
+        </div>
+
+        {/* ── How it works ─────────────────────────────────────────────── */}
+        <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
+          <button
+            onClick={() => setHowOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-xs font-mono dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
+          >
+            <span className="flex items-center gap-2">
+              <Info size={13} />
+              How it works
+            </span>
+            {howOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
+          {howOpen && (
+            <div className="px-4 pb-4 pt-1 space-y-2 text-xs dark:text-zinc-400 text-zinc-600 border-t dark:border-zinc-800 border-zinc-100">
+              <p>· Send OKB to the Settlement Wallet with ABI-encoded calldata specifying your fixture and outcome.</p>
+              <p>· When the match settles, the winning pool is distributed pro-rata to all backers of the correct outcome.</p>
+              <p>· The Champion market pays out proportionally to all stakers who backed the tournament winner after the Final.</p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 space-y-3">
-          {/* Support row */}
-          <div className="flex items-center gap-6">
-            <span className="text-[11px] font-mono font-semibold dark:text-zinc-600 text-zinc-400 uppercase tracking-widest">Support</span>
+        <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
+          <div className="text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
+            Built on OKX X Layer · Settlement Wallet · O2 Autonomous Metabolism
+          </div>
+          <div className="flex items-center justify-center gap-4">
             <a
               href="https://x.com/xcupfanvibe"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
-                dark:text-zinc-500 text-zinc-500 dark:hover:text-zinc-100 hover:text-zinc-900
-                dark:hover:bg-zinc-900 hover:bg-zinc-100 border border-transparent
-                dark:hover:border-zinc-800 hover:border-zinc-200 transition-all duration-150"
+              className="text-xs font-mono dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
             >
-              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="currentColor" aria-hidden="true">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.846L1.254 2.25H8.08l4.26 5.636zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-              </svg>
-              <span>X</span>
+              𝕏 / Twitter
             </a>
-            <a
-              href="#docs"
-              className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
-                dark:text-zinc-500 text-zinc-500 dark:hover:text-zinc-100 hover:text-zinc-900
-                dark:hover:bg-zinc-900 hover:bg-zinc-100 border border-transparent
-                dark:hover:border-zinc-800 hover:border-zinc-200 transition-all duration-150"
+            <span className="dark:text-zinc-800 text-zinc-200">·</span>
+            <button
+              onClick={() => setHowOpen(true)}
+              className="text-xs font-mono dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
             >
-              <BookOpen size={13} className="shrink-0" />
-              <span>Docs</span>
-            </a>
-          </div>
-
-          {/* Built on row */}
-          <div className="text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
-            Built on OKX XLayer · O2 Autonomous Metabolism
+              How it works
+            </button>
           </div>
         </div>
       </main>
@@ -590,7 +701,7 @@ export default function App() {
       )}
 
       {/* ── Champion overlay ─────────────────────────────────────────────── */}
-      {champion && viewMode === 'simulated' && !daemonOnline && (
+      {champion && phase === 'champion' && viewMode === 'simulated' && !engineOnline && (
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 backdrop-blur-md"
           style={{ animation: 'overlayIn 0.4s ease both' }}
@@ -602,30 +713,30 @@ export default function App() {
             >
               {champion.flag}
             </div>
-            <div className="text-3xl font-black text-white tracking-tight mb-1">
+            <div className="font-serif text-3xl text-white tracking-tight mb-1">
               {champion.name}
             </div>
-            <div className="text-base font-bold text-yellow-400 mb-5 tracking-widest uppercase">
-              🏆 World Cup 2026 Champions
+            <div className="text-base font-bold text-amber-400 mb-5 tracking-widest uppercase">
+              🏆 {seasonLabel} Champions
             </div>
 
-            {/* Progress bar */}
+            {/* Countdown bar */}
             <div className="w-full h-1 dark:bg-zinc-800 bg-zinc-700 rounded-full overflow-hidden mb-3">
               <div
-                className="h-full bg-emerald-400 rounded-full transition-all duration-1000 ease-linear"
-                style={{ width: `${(restartIn / 10) * 100}%` }}
+                className="h-full bg-amber-400 rounded-full transition-all duration-1000 ease-linear"
+                style={{ width: `${(phaseTimer / 10) * 100}%` }}
               />
             </div>
             <p className="text-xs font-mono dark:text-zinc-400 text-zinc-400 mb-5">
-              New tournament in <span className="font-bold text-white tabular-nums">{restartIn}s</span>
+              Next season in <span className="font-bold text-white tabular-nums">{phaseTimer}s</span>
             </p>
 
             <button
-              onClick={doRestart}
-              className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-bold text-sm
-                hover:bg-emerald-400 active:scale-95 transition-all"
+              onClick={() => { setChampion(null); setPhase('interseason'); setPhaseTimer(20 * 60); }}
+              className="px-6 py-2.5 rounded-xl bg-amber-500 text-black font-bold text-sm
+                hover:bg-amber-400 active:scale-95 transition-all"
             >
-              Start Next Tournament →
+              Continue →
             </button>
           </div>
         </div>
