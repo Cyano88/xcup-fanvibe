@@ -826,31 +826,21 @@ export default function App() {
 
         {/* -- How it works ----------------------------------------------- */}
         <section
-          className="relative mx-auto max-w-4xl overflow-hidden rounded-xl border dark:border-zinc-900 border-zinc-200 bg-center bg-cover px-3 py-3"
+          className="relative mx-auto max-w-4xl overflow-hidden rounded-xl border border-zinc-900 bg-center bg-cover px-4 py-3"
           style={{ backgroundImage: "url('/assets/how-it-works-bg.jpeg')" }}
         >
-          <div className="absolute inset-0 dark:bg-black/88 bg-zinc-950/74" />
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-950/20 via-zinc-950/30 to-blue-950/20" />
-          <div className="relative mx-auto max-w-xl text-center">
-            <div className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-white">
+          <div className="absolute inset-0 bg-zinc-950/88" />
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-950/28 via-black/42 to-zinc-950/54" />
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="inline-flex shrink-0 items-center gap-1.5 text-xs font-bold text-white">
               <Info size={12} className="text-blue-300" />
               How it works
             </div>
-          </div>
-          <div className="relative mt-3 grid gap-2 md:grid-cols-3">
-            {[
-              ['1', 'Choose', 'Pick a fixture or champion.'],
-              ['2', 'Stake', 'Send OKB from your wallet.'],
-              ['3', 'Settle', 'Winners split payouts.'],
-            ].map(([step, title, copy]) => (
-              <div key={step} className="rounded-lg border border-white/10 bg-zinc-950/76 px-3 py-2.5 backdrop-blur-md">
-                <div className="mb-2 grid h-5 w-5 place-items-center rounded-full bg-blue-400/18 text-[10px] font-extrabold text-blue-200">
-                  {step}
-                </div>
-                <div className="text-xs font-semibold text-white">{title}</div>
-                <p className="mt-0.5 text-[11px] leading-4 text-zinc-300">{copy}</p>
-              </div>
-            ))}
+            <div className="how-it-works-rotate min-w-0 text-[11px] font-semibold text-zinc-100">
+              <span><strong>Step 1</strong> - Choose a fixture or champion market.</span>
+              <span><strong>Step 2</strong> - Stake OKB from your connected wallet.</span>
+              <span><strong>Step 3</strong> - Settled winners split payouts proportionally.</span>
+            </div>
           </div>
         </section>
 
