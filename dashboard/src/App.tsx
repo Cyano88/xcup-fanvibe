@@ -415,8 +415,11 @@ export default function App() {
   const liveEntries = viewMode === 'simulated'
     ? Object.entries(matchStates).filter(([id, ms]) => ms.status === 'live' && isResolvedFixture(fixtures.find(f => f.id === id)))
     : [];
+  const finishedSeasonEntries = viewMode === 'simulated'
+    ? Object.entries(matchStates).filter(([id, ms]) => ms.status === 'finished' && isResolvedFixture(fixtures.find(f => f.id === id)))
+    : [];
   const finishedSeasonCount = viewMode === 'simulated'
-    ? Object.values(matchStates).filter(ms => ms.status === 'finished').length
+    ? finishedSeasonEntries.length
     : 0;
   const seasonStatusDetail = phase === 'preseason'
     ? `Kick-off in ${fmtDuration(phaseTimer)}`
