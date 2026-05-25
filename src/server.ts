@@ -40,6 +40,18 @@ wss.on('connection', (ws) => {
 
 // ── REST API ──────────────────────────────────────────────────────────────────
 
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'X Cup FanVibe API',
+    status: 'ok',
+    endpoints: {
+      health: '/health',
+      state: '/state',
+      seasonState: '/season-state',
+    },
+  });
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
