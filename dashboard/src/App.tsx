@@ -582,15 +582,15 @@ export default function App() {
           <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
             {[
               { id: 'all', label: `Live MD${activeGroupMatchday}`, tone: 'live' },
-              { id: 'md1', label: 'Matchday 1', tone: 'matchday' },
-              { id: 'md2', label: 'Matchday 2', tone: 'matchday' },
-              { id: 'md3', label: 'Matchday 3', tone: 'matchday' },
-              ...SEASON_GROUPS.map(g => ({ id: g, label: `Group ${g}`, tone: 'group' })),
+              { id: 'md1', label: 'MD1', tone: 'matchday' },
+              { id: 'md2', label: '2', tone: 'matchday' },
+              { id: 'md3', label: '3', tone: 'matchday' },
+              ...SEASON_GROUPS.map(g => ({ id: g, label: g, tone: 'group' })),
               { id: 'knockouts', label: 'Knockouts', tone: 'knockout' },
               { id: 'bracket', label: 'Bracket', tone: 'bracket' },
             ].map(t => (
               <button key={t.id} onClick={() => setRoundFilter(t.id)}
-                className={`season-filter-tab shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
+                className={`season-filter-tab shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
                   ${roundFilter === t.id
                     ? t.tone === 'live'
                       ? 'bg-emerald-500 text-black shadow-sm'
@@ -608,11 +608,11 @@ export default function App() {
           <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
             {rtGroups.map(g => (
               <button key={g} onClick={() => setGroupFilter(g)}
-                className={`season-filter-tab shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
+                className={`season-filter-tab shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
                   ${groupFilter === g
                     ? 'dark:bg-blue-500 dark:text-white bg-blue-600 text-white'
                     : 'dark:text-zinc-400 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-300 dark:hover:text-zinc-100 hover:text-zinc-900 dark:bg-zinc-900/35 bg-zinc-50'}`}>
-                {g === 'all' ? 'All Groups' : `Group ${g}`}
+                {g === 'all' ? 'All' : g}
               </button>
             ))}
           </div>
