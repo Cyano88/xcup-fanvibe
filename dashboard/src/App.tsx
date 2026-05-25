@@ -37,6 +37,8 @@ const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP  ?? 'http://localhost:300
 const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
+const BRAND_E_IMAGE_1 = '/assets/brand-e-1.png';
+const BRAND_E_IMAGE_2 = '/assets/brand-e-2.png';
 
 const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
 
@@ -537,6 +539,22 @@ export default function App() {
     : phase === 'preseason'
       ? 'Staking open'
       : 'Broadcast reset';
+  const settledRailItems = [...settlements]
+    .reverse()
+    .map((settlement) => {
+      const fixture = fixtures.find(f => f.id === settlement.fixtureId)
+        ?? REALTIME_FIXTURES.find(f => f.id === settlement.fixtureId)
+        ?? null;
+      const matchState = matchStates[settlement.fixtureId];
+      return { settlement, fixture, matchState };
+    })
+    .filter(({ settlement, fixture, matchState }) => {
+      const hasPayoutTx = settlement.payouts.some(p => !!p.txHash);
+      const hasSettledFixture = fixture?.status === 'settled';
+      const hasFinishedMatch = matchState?.status === 'finished';
+      return !!fixture && hasPayoutTx && !!settlement.explorerUrl && (hasSettledFixture || hasFinishedMatch);
+    })
+    .slice(0, 5);
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
@@ -554,13 +572,15 @@ export default function App() {
             />
             <span className="truncate text-sm sm:text-base font-extrabold tracking-tight">
               <span className="dark:text-zinc-100 text-black">Fan</span>
-              <span className="text-blue-600 dark:text-blue-400">Vibe</span>
-            </span>
-            {viewMode === 'simulated' && (
-              <span className="hidden sm:inline text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
-                {seasonLabel}
+              <span className="text-blue-600 dark:text-blue-400">
+                Vib
+                <span className="brand-e-cycle" aria-label="e">
+                  <span className="brand-e-letter">e</span>
+                  <img src={BRAND_E_IMAGE_1} alt="" aria-hidden="true" />
+                  <img src={BRAND_E_IMAGE_2} alt="" aria-hidden="true" />
+                </span>
               </span>
-            )}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -655,16 +675,19 @@ export default function App() {
         )}
 
         {/* Recent settlements strip */}
-        {settlements.length > 0 && (
+        {settledRailItems.length > 0 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-mono font-semibold uppercase tracking-wider">Settled</span>
-            {[...settlements].reverse().slice(0, 5).map((s) => {
-              const fix = fixtures.find(f => f.id === s.fixtureId);
+            <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-semibold uppercase tracking-[0.18em]">Settled</span>
+            {settledRailItems.map(({ settlement: s, fixture: fix }) => {
+              const payoutTx = s.payouts.find(p => p.txHash)?.txHash ?? '';
               return (
                 <a key={`${s.fixtureId}-${s.blockNumber}`} href={s.explorerUrl} target="_blank" rel="noopener noreferrer"
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border dark:border-zinc-800 border-zinc-300 dark:hover:border-zinc-700 hover:border-zinc-400 dark:text-zinc-200 text-zinc-700 text-xs font-medium transition-colors">
-                  <span>{fix ? `${fix.home.flag} vs ${fix.away.flag}` : s.fixtureId}</span>
-                  <span className="text-emerald-500 font-mono font-semibold capitalize">{s.outcome}</span>
+                  className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border dark:border-zinc-800 border-zinc-300 dark:bg-zinc-950 bg-white dark:hover:border-blue-500/50 hover:border-blue-300 dark:text-zinc-200 text-zinc-700 text-xs font-semibold transition-colors">
+                  <span>{fix?.home.flag} {fix?.home.code}</span>
+                  <span className="dark:text-zinc-600 text-zinc-400">vs</span>
+                  <span>{fix?.away.code} {fix?.away.flag}</span>
+                  <span className="rounded bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-300 uppercase">{s.outcome}</span>
+                  <span className="text-[10px] tabular-nums dark:text-zinc-500 text-zinc-400">Payout {shortAddr(payoutTx)}</span>
                 </a>
               );
             })}
