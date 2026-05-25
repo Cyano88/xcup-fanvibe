@@ -88,11 +88,11 @@ export function GroupTable({ fixtures, matchStates, selectedGroup }: Props) {
           return (
             <div key={group} className="dark:bg-zinc-900/60 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b dark:border-zinc-800 border-zinc-100">
-                <span className="text-xs font-mono font-bold dark:text-zinc-400 text-zinc-500 uppercase tracking-widest">
+                <span className="text-xs font-bold dark:text-zinc-400 text-zinc-500 uppercase tracking-widest">
                   Group {group}
                 </span>
               </div>
-              <table className="w-full text-[11px] font-mono">
+              <table className="w-full text-[11px]">
                 <thead>
                   <tr className="dark:text-zinc-600 text-zinc-400 border-b dark:border-zinc-800/60 border-zinc-100">
                     <th className="text-left px-3 py-1.5 font-semibold w-5">#</th>

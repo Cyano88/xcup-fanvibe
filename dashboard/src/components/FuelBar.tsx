@@ -1,4 +1,4 @@
-﻿interface Props {
+interface Props {
   percent: number;
   okbFormatted: string;
   isRefuelNeeded: boolean;
@@ -27,7 +27,7 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Prop
             style={{ width: `${Math.max(2, percent)}%` }}
           />
         </div>
-        <span className={`font-mono text-[10px] tabular-nums font-semibold ${textColor}`}>{percent}%</span>
+        <span className={` text-[10px] tabular-nums font-semibold ${textColor}`}>{percent}%</span>
       </div>
     );
   }
@@ -38,7 +38,7 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Prop
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
         <span className="text-zinc-500">Gas Vitality</span>
-        <span className={`font-mono font-semibold ${textColor}`}>{label}</span>
+        <span className={` font-semibold ${textColor}`}>{label}</span>
       </div>
 
       <div className="relative h-2 rounded-full bg-zinc-800 overflow-hidden">
@@ -55,8 +55,8 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Prop
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="font-mono text-xs text-zinc-400">{okbFormatted} OKB</span>
-        <span className="font-mono text-xs text-zinc-600">{percent}%</span>
+        <span className=" text-xs text-zinc-400">{okbFormatted} OKB</span>
+        <span className=" text-xs text-zinc-600">{percent}%</span>
       </div>
     </div>
   );

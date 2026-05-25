@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
 import { ChevronDown, ChevronUp, Globe, Info } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
@@ -534,7 +534,7 @@ export default function App() {
             </div>
             <div className="relative z-10 rounded-md border border-white/10 bg-black/35 px-4 py-2 text-center backdrop-blur-[2px]">
               <div className="text-3xl font-semibold text-white tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
-              <div className="text-[10px] font-mono text-zinc-300 uppercase mt-0.5">until kick-off</div>
+              <div className="text-[10px] text-zinc-300 uppercase mt-0.5">until kick-off</div>
             </div>
           </div>
         )}
@@ -552,7 +552,7 @@ export default function App() {
             </div>
             <div className="text-center">
               <div className="text-3xl font-semibold dark:text-zinc-300 text-zinc-600 tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
-              <div className="text-[10px] font-mono dark:text-zinc-500 text-zinc-400 uppercase mt-0.5">until next season</div>
+              <div className="text-[10px] dark:text-zinc-500 text-zinc-400 uppercase mt-0.5">until next season</div>
             </div>
           </div>
         )}
@@ -694,14 +694,14 @@ export default function App() {
           <section className="space-y-4">
             <div className="flex items-end justify-between gap-4 border-b dark:border-zinc-900 border-zinc-200 pb-3">
               <div>
-                <div className="text-[11px] font-mono font-semibold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                <div className="text-[11px] font-semibold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
                   World Cup Group
                 </div>
                 <h2 className="mt-1 text-xl font-semibold tracking-tight dark:text-zinc-100 text-zinc-900">
                   Group {groupFilter}
                 </h2>
               </div>
-              <div className="text-right text-xs font-mono dark:text-zinc-500 text-zinc-400">
+              <div className="text-right text-xs dark:text-zinc-500 text-zinc-400">
                 {selectedGroupFixtures.length} fixtures
               </div>
             </div>
@@ -709,7 +709,7 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4">
               <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-900 border-zinc-200 rounded-lg overflow-hidden">
                 <div className="px-4 py-3 border-b dark:border-zinc-900 border-zinc-100">
-                  <div className="text-xs font-mono font-bold uppercase tracking-widest dark:text-zinc-400 text-zinc-500">
+                  <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-400 text-zinc-500">
                     Previously Played
                   </div>
                 </div>
@@ -722,7 +722,7 @@ export default function App() {
                           <div className="font-semibold dark:text-zinc-200 text-zinc-800 truncate">
                             {fixture.home.code} vs {fixture.away.code}
                           </div>
-                          <div className="mt-0.5 text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
+                          <div className="mt-0.5 text-[11px] dark:text-zinc-600 text-zinc-400">
                             {fixture.venue}
                           </div>
                         </div>
@@ -759,18 +759,18 @@ export default function App() {
           <section className="space-y-3">
             {viewMode === 'simulated' && roundFilter !== 'bracket' && (
               <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-mono font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
                   {simulatedFixtureSectionLabel}
                 </div>
                 {phase === 'playing' && (
-                  <div className="text-[11px] font-mono dark:text-zinc-500 text-zinc-400">
+                  <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
                     MD1 {'->'} MD2 {'->'} MD3 {'->'} Knockouts {'->'} Final
                   </div>
                 )}
               </div>
             )}
             {viewMode === 'realtime' && groupFilter !== 'all' && (
-              <div className="text-xs font-mono font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+              <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
                 Group {groupFilter} Fixtures
               </div>
             )}
@@ -798,7 +798,7 @@ export default function App() {
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setLogOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-xs font-mono dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
+            className="w-full flex items-center justify-between px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
@@ -813,7 +813,7 @@ export default function App() {
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setHowOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-xs font-mono dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
+            className="w-full flex items-center justify-between px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex items-center gap-2">
               <Info size={13} />
@@ -869,12 +869,12 @@ export default function App() {
               href="https://x.com/xcupfanvibe"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-mono dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
+              className="text-xs dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
             >
               X / Twitter
             </a>
           </div>
-          <div className="text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
+          <div className="text-[11px] dark:text-zinc-600 text-zinc-400">
             Built on OKX X Layer - Settlement Wallet - O2 Autonomous Metabolism
           </div>
         </div>
@@ -924,7 +924,7 @@ export default function App() {
                 style={{ width: `${(phaseTimer / 10) * 100}%` }}
               />
             </div>
-            <p className="text-xs font-mono dark:text-zinc-400 text-zinc-400 mb-5">
+            <p className="text-xs dark:text-zinc-400 text-zinc-400 mb-5">
               Next season in <span className="font-bold text-white tabular-nums">{phaseTimer}s</span>
             </p>
 

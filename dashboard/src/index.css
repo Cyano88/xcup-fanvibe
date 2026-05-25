@@ -81,9 +81,6 @@
     @apply w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse;
   }
 
-  .mono {
-    @apply font-mono text-xs tracking-tight;
-  }
 }
 
 /* Goal overlay: instant appear, 4.5 s hold, fade out */

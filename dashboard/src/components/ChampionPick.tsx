@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Trophy, Zap, CheckCircle } from 'lucide-react';
 import { parseEther } from 'viem';
 import type { Fixture, MatchState, ChampionPool } from '../types';
@@ -169,12 +169,12 @@ export function ChampionPick({
           <Trophy size={15} className="text-emerald-500" />
           <span className="text-sm font-bold dark:text-zinc-100 text-zinc-800">Predict the Champion</span>
           {isSettled && settledWinner && (
-            <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
               <CheckCircle size={9} /> Settled  - {settledWinner}
             </span>
           )}
           {!isSettled && (
-            <span className="text-[11px] font-mono dark:text-zinc-500 text-zinc-400">
+            <span className="text-[11px] dark:text-zinc-500 text-zinc-400">
               {totalWei > 0n
                 ? `${fmtWei(totalWei)} OKB  - ${totalCount} pick${totalCount !== 1 ? 's' : ''}`
                 : 'Be the first to stake'}
@@ -188,7 +188,7 @@ export function ChampionPick({
         <div className="px-4 pb-4 space-y-3">
 
           {/* Subheading */}
-          <p className="text-[11px] dark:text-zinc-500 text-zinc-400 font-mono">
+          <p className="text-[11px] dark:text-zinc-500 text-zinc-400">
             Stake OKB on the team you think will lift the trophy. Pool pays out proportionally to backers of the champion when the Final settles.
             {eliminatedTeams.size > 0 && (
               <span className="dark:text-zinc-600 text-zinc-400">  - {eliminatedTeams.size} eliminated</span>
@@ -234,7 +234,7 @@ export function ChampionPick({
                     <span className="absolute top-1.5 right-1.5 z-10 grid h-4 w-4 place-items-center rounded-full bg-black/35 text-emerald-200 ring-1 ring-white/15 backdrop-blur-sm"><Trophy size={9} strokeWidth={1.8} /></span>
                   )}
 
-                  <span className={`relative z-10 text-[11px] font-mono font-bold leading-none drop-shadow ${
+                  <span className={`relative z-10 text-[11px] font-bold leading-none drop-shadow ${
                     isWinner ? 'text-emerald-200' :
                     selected === team.code ? 'text-white' :
                     elim ? 'dark:text-zinc-600 text-zinc-400' :
@@ -242,12 +242,12 @@ export function ChampionPick({
                     {team.code}
                   </span>
                   {!elim ? (
-                    <span className={`relative z-10 mt-1 rounded bg-black/58 px-1.5 py-0.5 text-[11px] font-mono font-black leading-none shadow-sm ring-1 ring-white/12 backdrop-blur-[1px] ${
+                    <span className={`relative z-10 mt-1 rounded bg-black/58 px-1.5 py-0.5 text-[11px] font-black leading-none shadow-sm ring-1 ring-white/12 backdrop-blur-[1px] ${
                       share > 0 ? 'text-white' : 'text-zinc-100'}`}>
                       {totalWei > 0n ? fmtOdds(odds) : `~${fmtOdds(odds)}`}
                     </span>
                   ) : (
-                    <span className="relative z-10 text-[9px] font-mono text-zinc-300 leading-none">OUT</span>
+                    <span className="relative z-10 text-[9px] text-zinc-300 leading-none">OUT</span>
                   )}
                 </button>
               );
@@ -267,7 +267,7 @@ export function ChampionPick({
                     </>
                   ) : <span>{selected}</span>;
                 })()}
-                <span className="text-xs font-mono dark:text-zinc-400 text-zinc-500 font-normal">to win WC 2026</span>
+                <span className="text-xs dark:text-zinc-400 text-zinc-500 font-normal">to win WC 2026</span>
               </div>
               <div className="flex items-center gap-2 ml-auto">
                 <div className="flex items-center gap-1 dark:bg-zinc-900 bg-white border dark:border-zinc-700 border-zinc-200 rounded-lg px-2 py-1.5">
@@ -277,20 +277,20 @@ export function ChampionPick({
                     min="0.001"
                     value={amountOKB}
                     onChange={e => setAmountOKB(e.target.value)}
-                    className="w-20 bg-transparent text-xs font-mono dark:text-zinc-100 text-zinc-800 outline-none text-right"
+                    className="w-20 bg-transparent text-xs dark:text-zinc-100 text-zinc-800 outline-none text-right"
                   />
-                  <span className="text-[10px] font-mono dark:text-zinc-500 text-zinc-400">OKB</span>
+                  <span className="text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
                 </div>
                 <button
                   onClick={() => setSelected(null)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-mono dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
+                  className="px-2.5 py-1.5 rounded-lg text-xs dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleStake}
                   disabled={txPending || !refereeAddress}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all active:scale-95
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95
                     bg-emerald-500 text-black hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {txPending ? (
@@ -301,14 +301,14 @@ export function ChampionPick({
                 </button>
               </div>
               {txError && (
-                <p className="w-full text-[11px] text-red-400 font-mono mt-1">{txError}</p>
+                <p className="w-full text-[11px] text-red-400 mt-1">{txError}</p>
               )}
             </div>
           )}
 
           {/* Recent tx confirmation */}
           {txHash && (
-            <div className="flex items-center gap-2 text-[11px] font-mono dark:text-emerald-400 text-emerald-600">
+            <div className="flex items-center gap-2 text-[11px] dark:text-emerald-400 text-emerald-600">
               <CheckCircle size={11} />
               <span>Staked! Tx:</span>
               <a

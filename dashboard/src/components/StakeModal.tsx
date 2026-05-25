@@ -160,15 +160,15 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
                     onChange={(e) => setAmount(e.target.value)}
                     min="0.001"
                     step="0.01"
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100
                       focus:outline-none focus:border-emerald-500/50 transition-colors"
                   />
-                  <span className="text-xs text-zinc-500 font-mono shrink-0">OKB</span>
+                  <span className="text-xs text-zinc-500 shrink-0">OKB</span>
                 </div>
                 <div className="flex gap-2">
                   {['0.01', '0.05', '0.1', '0.5'].map((v) => (
                     <button key={v} onClick={() => setAmount(v)}
-                      className="text-xs font-mono px-2 py-1 rounded bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors">
+                      className="text-xs px-2 py-1 rounded bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors">
                       {v}
                     </button>
                   ))}
@@ -200,7 +200,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
                 <span className="text-sm font-medium">Stake confirmed!</span>
               </div>
               <div className="text-xs text-zinc-500">
-                Your stake of <span className="text-zinc-300 font-mono">{amount} OKB</span> on{' '}
+                Your stake of <span className="text-zinc-300">{amount} OKB</span> on{' '}
                 <span className="text-zinc-300">{OUTCOME_LABEL[outcome]}</span> is live on-chain.
               </div>
               <a
@@ -210,7 +210,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
                 className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
               >
                 <ExternalLink size={12} />
-                <span className="font-mono">{txHash.slice(0, 16)}…</span>
+                <span>{txHash.slice(0, 16)}…</span>
                 View on OKX Explorer
               </a>
               <button onClick={onClose} className="btn-primary w-full mt-1">Done</button>

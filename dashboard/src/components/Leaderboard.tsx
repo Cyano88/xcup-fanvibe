@@ -42,28 +42,28 @@ export function Leaderboard({ matchStates, fixtures }: Props) {
   return (
     <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3 border-b dark:border-zinc-800 border-zinc-200">
-        <span className="text-xs font-mono font-bold dark:text-zinc-400 text-zinc-500 uppercase tracking-widest">
+        <span className="text-xs font-bold dark:text-zinc-400 text-zinc-500 uppercase tracking-widest">
           ⚽ Top Scorers
         </span>
       </div>
       <div className="divide-y dark:divide-zinc-800/60 divide-zinc-100">
         {sorted.map((row, i) => (
           <div key={row.player} className="flex items-center gap-3 px-5 py-2.5">
-            <span className="text-[11px] font-mono dark:text-zinc-600 text-zinc-400 w-4 tabular-nums">{i + 1}</span>
+            <span className="text-[11px] dark:text-zinc-600 text-zinc-400 w-4 tabular-nums">{i + 1}</span>
             <span className="text-lg">{row.flag}</span>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900 truncate">{row.player}</div>
-              <div className="text-[10px] font-mono dark:text-zinc-500 text-zinc-500">{row.team}</div>
+              <div className="text-[10px] dark:text-zinc-500 text-zinc-500">{row.team}</div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <div className="text-center">
                 <div className="text-lg font-black tabular-nums dark:text-emerald-400 text-emerald-600 leading-none">{row.goals}</div>
-                <div className="text-[9px] font-mono dark:text-zinc-600 text-zinc-400 uppercase">goals</div>
+                <div className="text-[9px] dark:text-zinc-600 text-zinc-400 uppercase">goals</div>
               </div>
               {row.assists > 0 && (
                 <div className="text-center">
                   <div className="text-lg font-black tabular-nums dark:text-zinc-300 text-zinc-700 leading-none">{row.assists}</div>
-                  <div className="text-[9px] font-mono dark:text-zinc-600 text-zinc-400 uppercase">ast</div>
+                  <div className="text-[9px] dark:text-zinc-600 text-zinc-400 uppercase">ast</div>
                 </div>
               )}
             </div>

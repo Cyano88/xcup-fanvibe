@@ -1,4 +1,4 @@
-﻿import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Copy, CheckCheck, ExternalLink, Zap, Activity } from 'lucide-react';
 import { FuelBar } from './FuelBar';
 import type { MetabolicState } from '../types';
@@ -36,7 +36,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
         </div>
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-          <span className={`text-xs font-mono ${daemonOnline ? 'text-emerald-400' : 'text-zinc-600'}`}>
+          <span className={`text-xs ${daemonOnline ? 'text-emerald-400' : 'text-zinc-600'}`}>
             {daemonOnline ? 'ONLINE' : 'OFFLINE'}
           </span>
         </div>
@@ -44,7 +44,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
 
       {/* Wallet address capsule */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 dark:bg-zinc-800/50 border border-zinc-700/50">
-        <span className="font-mono text-xs text-zinc-300 flex-1 truncate">
+        <span className=" text-xs text-zinc-300 flex-1 truncate">
           {refereeAddress || '0x0000...0000'}
         </span>
         <div className="flex items-center gap-1 shrink-0">
@@ -83,7 +83,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
             <Zap size={11} />
             O2 Metabolism
           </span>
-          <span className={`font-mono font-medium ${metabolism.isRefuelNeeded ? 'text-blue-400' : 'text-emerald-400'}`}>
+          <span className={` font-medium ${metabolism.isRefuelNeeded ? 'text-blue-400' : 'text-emerald-400'}`}>
             {metabolism.isRefuelNeeded ? 'REFUELING' : 'Active - 60s'}
           </span>
         </div>
@@ -91,7 +91,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
         {sinceCheck !== null && (
           <div className="flex justify-between text-xs text-zinc-600">
             <span>Last check</span>
-            <span className="font-mono">{sinceCheck}s ago</span>
+            <span>{sinceCheck}s ago</span>
           </div>
         )}
 
@@ -102,7 +102,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
               href={`https://www.okx.com/web3/explorer/xlayer/tx/${metabolism.lastTxHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-emerald-500 hover:text-emerald-400 transition-colors"
+              className=" text-emerald-500 hover:text-emerald-400 transition-colors"
             >
               {shortAddr(metabolism.lastTxHash)} open
             </a>
@@ -118,18 +118,18 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
         </div>
         <div>
           <div className="text-zinc-600">Latest Block</div>
-          <div className="font-mono text-zinc-300 mt-0.5 flex items-center gap-1">
+          <div className=" text-zinc-300 mt-0.5 flex items-center gap-1">
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${wsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
             {lastBlock > 0 ? `#${lastBlock.toLocaleString()}` : '--'}
           </div>
         </div>
         <div>
           <div className="text-zinc-600">Chain ID</div>
-          <div className="font-mono text-zinc-300 mt-0.5">196</div>
+          <div className=" text-zinc-300 mt-0.5">196</div>
         </div>
         <div>
           <div className="text-zinc-600">Protocol Fee</div>
-          <div className="font-mono text-zinc-300 mt-0.5">0.5%</div>
+          <div className=" text-zinc-300 mt-0.5">0.5%</div>
         </div>
       </div>
     </div>

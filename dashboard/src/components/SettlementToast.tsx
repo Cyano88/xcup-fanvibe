@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle, ExternalLink, Minus, X } from 'lucide-react';
 import type { SettlementResult } from '../types';
 import { formatOKB } from '../lib/encode';
@@ -40,7 +40,7 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
               <CheckCircle size={16} className="text-emerald-400 shrink-0" />
               <div>
                 <div className="text-sm font-semibold text-zinc-100">Match Settled</div>
-                <div className="text-xs text-zinc-500 font-mono">{settlement.fixtureId}</div>
+                <div className="text-xs text-zinc-500">{settlement.fixtureId}</div>
               </div>
             </div>
             <button onClick={onDismiss} className="p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors shrink-0">
@@ -66,7 +66,7 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
               className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
             >
               <ExternalLink size={11} />
-              <span className="font-mono">{settlement.payouts[0].txHash.slice(0, 18)}...</span>
+              <span>{settlement.payouts[0].txHash.slice(0, 18)}...</span>
               Verify on-chain open
             </a>
           )}

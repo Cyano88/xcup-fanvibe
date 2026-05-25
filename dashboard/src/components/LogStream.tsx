@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Terminal } from 'lucide-react';
 import type { DaemonLog, LogPrefix, LogLevel } from '../types';
 import { explorerTx } from '../lib/chain';
@@ -47,7 +47,7 @@ export function LogStream({ logs, daemonOnline }: Props) {
         </div>
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full ${daemonOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400'}`} />
-          <span className="text-xs font-mono dark:text-zinc-600 text-zinc-400">{logs.length} entries</span>
+          <span className="text-xs dark:text-zinc-600 text-zinc-400">{logs.length} entries</span>
         </div>
       </div>
 
@@ -60,11 +60,11 @@ export function LogStream({ logs, daemonOnline }: Props) {
 
         {logs.map((log) => (
           <div key={log.id} className="flex items-start gap-2 text-xs animate-fade-in group">
-            <span className="font-mono dark:text-zinc-700 text-zinc-400 shrink-0 mt-px">{formatTs(log.ts)}</span>
-            <span className={`shrink-0 mt-px px-1.5 py-px rounded text-[10px] font-bold font-mono ${PREFIX_STYLE[log.prefix]}`}>
+            <span className=" dark:text-zinc-700 text-zinc-400 shrink-0 mt-px">{formatTs(log.ts)}</span>
+            <span className={`shrink-0 mt-px px-1.5 py-px rounded text-[10px] font-bold ${PREFIX_STYLE[log.prefix]}`}>
               {log.prefix}
             </span>
-            <span className={`flex-1 font-mono leading-5 break-all ${LEVEL_TEXT[log.level]}`}>
+            <span className={`flex-1 leading-5 break-all ${LEVEL_TEXT[log.level]}`}>
               {log.message}
               {log.txHash && (
                 <a

@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Send, MessageCircle, BarChart2, List, Users } from 'lucide-react';
 import type { Fixture, MatchState, MatchEvent } from '../types';
 import { getSquad } from '../lib/squadData';
@@ -33,7 +33,7 @@ function TeamFlag({ iso, fallback, className = '' }: { iso: string; fallback: st
   );
 }
 
-// â”€â”€ Stat helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stat helpers ──────────────────────────────────────────────────────────────
 
 function computeStats(events: MatchEvent[]) {
   let shotsOnHome = 0, shotsOnAway = 0;
@@ -119,9 +119,9 @@ function getActionLabel(ev: MatchEvent | undefined, home: string, away: string):
   return { text: `${team} - Attacking`, isHome };
 }
 
-// â”€â”€ Pitch simulation engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Logical coordinate space: X âˆˆ [-100, 100] (left goal = -100, right = 100)
-//                           Y âˆˆ [-50, 50]
+// ── Pitch simulation engine ───────────────────────────────────────────────────
+// Logical coordinate space: X ∈ [-100, 100] (left goal = -100, right = 100)
+//                           Y ∈ [-50, 50]
 // SVG viewport: 0 0 400 200 - mapping: svgX = (lx+100)*2, svgY = (ly+50)*2
 
 const toSVG = (lx: number, ly: number) => ({ x: (lx + 100) * 2, y: (ly + 50) * 2 });
@@ -627,7 +627,7 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
   );
 }
 
-// â”€â”€ Stats tab - Sportybet style â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stats tab - Sportybet style ───────────────────────────────────────────────
 
 function StatRow({ label, home, away }: { label: string; home: number; away: number }) {
   const total = Math.max(home + away, 1);
@@ -639,7 +639,7 @@ function StatRow({ label, home, away }: { label: string; home: number; away: num
       <div className="flex justify-end h-1.5">
         <div className="rounded-l-full bg-emerald-500 transition-all duration-700 h-full" style={{ width: `${hw}%` }} />
       </div>
-      <span className="text-center text-[10px] font-mono dark:text-zinc-500 text-zinc-500 uppercase tracking-wide leading-tight">
+      <span className="text-center text-[10px] dark:text-zinc-500 text-zinc-500 uppercase tracking-wide leading-tight">
         {label}
       </span>
       <div className="flex justify-start h-1.5">
@@ -679,7 +679,7 @@ function StatsPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
         <div className="flex justify-end h-1.5">
           <div className="rounded-l-full bg-emerald-500 h-full" style={{ width: `${state.possession}%` }} />
         </div>
-        <span className="text-center text-[10px] font-mono dark:text-zinc-500 text-zinc-500 uppercase tracking-wide">Possession</span>
+        <span className="text-center text-[10px] dark:text-zinc-500 text-zinc-500 uppercase tracking-wide">Possession</span>
         <div className="flex justify-start h-1.5">
           <div className="rounded-r-full bg-red-500 h-full" style={{ width: `${100 - state.possession}%` }} />
         </div>
@@ -689,7 +689,7 @@ function StatsPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
   );
 }
 
-// â”€â”€ Commentary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Commentary ────────────────────────────────────────────────────────────────
 
 function CommentaryFeed({ state }: { state: MatchState }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -703,7 +703,7 @@ function CommentaryFeed({ state }: { state: MatchState }) {
   return (
     <div ref={ref} className="h-44 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
       {state.events.length === 0 && (
-        <p className="text-xs dark:text-zinc-500 text-zinc-400 text-center pt-10 font-mono">Waiting for kick off...</p>
+        <p className="text-xs dark:text-zinc-500 text-zinc-400 text-center pt-10">Waiting for kick off...</p>
       )}
       {[...state.events].reverse().map(ev => (
         <div key={ev.id} className={`flex items-start gap-2 text-xs rounded-lg px-2.5 py-1.5
@@ -712,7 +712,7 @@ function CommentaryFeed({ state }: { state: MatchState }) {
             : isCard(ev.type)
             ? 'dark:bg-zinc-900 bg-zinc-50 border dark:border-zinc-800 border-zinc-200'
             : 'dark:bg-zinc-900/50 bg-zinc-50 border border-transparent'}`}>
-          <span className="font-mono dark:text-zinc-500 text-zinc-400 shrink-0 w-7 text-right tabular-nums">{ev.minute}'</span>
+          <span className=" dark:text-zinc-500 text-zinc-400 shrink-0 w-7 text-right tabular-nums">{ev.minute}'</span>
           <span className={`leading-snug font-medium ${
             isGoal(ev.type) ? 'dark:text-emerald-300 text-emerald-700 font-semibold' :
             isCard(ev.type) ? 'dark:text-zinc-300 text-zinc-700' :
@@ -725,7 +725,7 @@ function CommentaryFeed({ state }: { state: MatchState }) {
   );
 }
 
-// â”€â”€ Match Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Match Chat ────────────────────────────────────────────────────────────────
 
 function SquadPanel({ fixture, state }: { fixture: Fixture; state: MatchState }) {
   const renderTeam = (side: 'home' | 'away') => {
@@ -761,12 +761,12 @@ function SquadPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
     const PlayerRow = ({ player, muted = false }: { player: typeof starters[number]; muted?: boolean }) => (
       <div className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 ${muted ? 'dark:bg-zinc-900/35 bg-zinc-50' : 'dark:bg-zinc-900/70 bg-white border dark:border-zinc-800 border-zinc-200'}`}>
         <div className="flex min-w-0 items-center gap-2">
-          <span className="w-5 text-right text-[10px] font-mono dark:text-zinc-500 text-zinc-400 tabular-nums">{player.no}</span>
-          <span className="w-6 text-[10px] font-mono dark:text-zinc-500 text-zinc-400">{player.pos}</span>
+          <span className="w-5 text-right text-[10px] dark:text-zinc-500 text-zinc-400 tabular-nums">{player.no}</span>
+          <span className="w-6 text-[10px] dark:text-zinc-500 text-zinc-400">{player.pos}</span>
           <span className={`truncate text-xs font-medium ${muted ? 'dark:text-zinc-500 text-zinc-400' : 'dark:text-zinc-200 text-zinc-800'}`}>{player.name}</span>
         </div>
         {incidentMap[player.name]?.length ? (
-          <span className="shrink-0 text-[9px] font-mono font-semibold dark:text-emerald-300 text-emerald-700">
+          <span className="shrink-0 text-[9px] font-semibold dark:text-emerald-300 text-emerald-700">
             {incidentMap[player.name].slice(-2).join(', ')}
           </span>
         ) : null}
@@ -781,7 +781,7 @@ function SquadPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
               <TeamFlag iso={team.iso} fallback={team.flag} className="h-4 w-6" />
               <span className="text-xs font-bold dark:text-zinc-100 text-zinc-900">{team.code}</span>
             </div>
-            <span className="truncate text-[10px] font-mono dark:text-zinc-500 text-zinc-400">{squad.coach}</span>
+            <span className="truncate text-[10px] dark:text-zinc-500 text-zinc-400">{squad.coach}</span>
           </div>
           <p className="text-xs leading-relaxed dark:text-zinc-400 text-zinc-600">
             Official FIFA squad list pending June 2. Player rows will appear here once the final roster is loaded.
@@ -797,14 +797,14 @@ function SquadPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
             <TeamFlag iso={team.iso} fallback={team.flag} className="h-4 w-6" />
             <span className="text-xs font-bold dark:text-zinc-100 text-zinc-900">{team.code}</span>
           </div>
-          <span className="truncate text-[10px] font-mono dark:text-zinc-500 text-zinc-400">{squad.coach}</span>
+          <span className="truncate text-[10px] dark:text-zinc-500 text-zinc-400">{squad.coach}</span>
         </div>
         <div className="space-y-1">
-          <div className="text-[9px] font-mono uppercase tracking-wide dark:text-zinc-500 text-zinc-400">Playing XI</div>
+          <div className="text-[9px] uppercase tracking-wide dark:text-zinc-500 text-zinc-400">Playing XI</div>
           {starters.map(player => <PlayerRow key={`${team.code}-xi-${player.no}-${player.name}`} player={player} />)}
         </div>
         <div className="mt-3 space-y-1">
-          <div className="text-[9px] font-mono uppercase tracking-wide dark:text-zinc-500 text-zinc-400">Substitutes</div>
+          <div className="text-[9px] uppercase tracking-wide dark:text-zinc-500 text-zinc-400">Substitutes</div>
           {substitutes.map(player => <PlayerRow key={`${team.code}-sub-${player.no}-${player.name}`} player={player} muted />)}
         </div>
       </div>
@@ -881,15 +881,15 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-mono dark:text-zinc-500 text-zinc-400 uppercase tracking-widest">Match Chat</span>
+        <span className="text-[11px] dark:text-zinc-500 text-zinc-400 uppercase tracking-widest">Match Chat</span>
         <button onClick={() => setUser(null)}
-          className="text-[10px] font-mono dark:text-zinc-600 text-zinc-400 hover:dark:text-zinc-400 hover:text-zinc-600 transition-colors">
+          className="text-[10px] dark:text-zinc-600 text-zinc-400 hover:dark:text-zinc-400 hover:text-zinc-600 transition-colors">
           {user}  - change
         </button>
       </div>
       <div ref={listRef} className="h-36 overflow-y-auto space-y-1 scrollbar-thin">
         {comments.length === 0 && (
-          <p className="text-xs dark:text-zinc-600 text-zinc-400 text-center pt-10 font-mono">No messages yet - be first!</p>
+          <p className="text-xs dark:text-zinc-600 text-zinc-400 text-center pt-10">No messages yet - be first!</p>
         )}
         {comments.map(c => (
           <div key={c.id} className="flex items-start gap-2 text-xs dark:bg-zinc-900/40 bg-zinc-50 rounded-lg px-2.5 py-1.5">
@@ -911,7 +911,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
   );
 }
 
-// â”€â”€ MatchViewer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── MatchViewer ───────────────────────────────────────────────────────────────
 
 type Tab = 'stats' | 'commentary' | 'squad' | 'chat';
 
@@ -1005,7 +1005,7 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
 
       <div className="relative z-10 w-full max-w-6xl max-h-[94vh] overflow-y-auto dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg shadow-2xl animate-slide-in">
 
-        {/* â”€â”€ Header â”€â”€ */}
+        {/* ── Header ── */}
         <div className="relative flex items-center justify-center px-5 pt-4 pb-3 border-b dark:border-zinc-800 border-zinc-100">
           <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900">
             <span>Live Match</span>
@@ -1018,7 +1018,7 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
           </div>
         </div>
 
-        {/* â”€â”€ Score â”€â”€ */}
+        {/* ── Score ── */}
         <div className="flex items-center justify-center gap-8 py-4">
           <div className="text-center min-w-[68px]">
             <TeamFlag iso={fixture.home.iso} fallback={fixture.home.flag} className="mx-auto mb-2 h-8 w-12" />
@@ -1174,7 +1174,7 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
             {tickers.map(t => (
               <div
                 key={t.id}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-mono font-bold shadow-xl whitespace-nowrap
+                className={`px-3 py-1.5 rounded-full text-[11px] font-bold shadow-xl whitespace-nowrap
                   ${t.isGoal
                     ? t.isHome
                       ? 'bg-emerald-500 text-black'

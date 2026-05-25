@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AlarmClock, Lock, MonitorPlay, TrendingUp, Zap } from 'lucide-react';
 import type { Fixture, Pool, Outcome, MatchState } from '../types';
 import { formatPool, countdown } from '../lib/encode';
@@ -37,10 +37,10 @@ function TBDCard({ fixture }: { fixture: Fixture }) {
           style={{ animation: 'shimmer 2.4s ease-in-out infinite' }}
         />
         <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 pt-3.5">
-          <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">
+          <span className="text-[11px] text-zinc-500 uppercase tracking-widest">
             {fixture.round ? (ROUND_LABEL[fixture.round] ?? fixture.round) : 'Upcoming'}
           </span>
-          <span className="text-[10px] font-mono font-bold text-zinc-600 dark:text-zinc-500 bg-zinc-200/60 dark:bg-zinc-800/60 border border-zinc-300/50 dark:border-zinc-700/40 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-500 bg-zinc-200/60 dark:bg-zinc-800/60 border border-zinc-300/50 dark:border-zinc-700/40 px-2 py-0.5 rounded-full">
             UPCOMING
           </span>
         </div>
@@ -49,12 +49,12 @@ function TBDCard({ fixture }: { fixture: Fixture }) {
             <div className="h-14 w-14 rounded-full border dark:border-zinc-700 border-zinc-300 dark:bg-zinc-800 bg-zinc-200 grid place-items-center">
               <span className="text-sm font-bold dark:text-zinc-600 text-zinc-400">TBD</span>
             </div>
-            <span className="text-xs font-mono dark:text-zinc-700 text-zinc-400">vs</span>
+            <span className="text-xs dark:text-zinc-700 text-zinc-400">vs</span>
             <div className="h-14 w-14 rounded-full border dark:border-zinc-700 border-zinc-300 dark:bg-zinc-800 bg-zinc-200 grid place-items-center">
               <span className="text-sm font-bold dark:text-zinc-600 text-zinc-400">TBD</span>
             </div>
           </div>
-          <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-600">Awaiting group qualifiers</span>
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-600">Awaiting group qualifiers</span>
         </div>
         <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t dark:from-zinc-900 from-zinc-100 to-transparent" />
       </div>
@@ -160,7 +160,7 @@ export function FixtureCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* â”€â”€ Flag hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Flag hero ───────────────────────────────────────────────── */}
       <div className="relative h-44 overflow-hidden select-none">
 
         {/* Home flag layer */}
@@ -184,34 +184,34 @@ export function FixtureCard({
 
         {/* Top bar */}
         <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 pt-3.5">
-          <span className="text-[11px] font-mono text-white/60 uppercase tracking-widest">
+          <span className="text-[11px] text-white/60 uppercase tracking-widest">
             {fixture.round
               ? `${ROUND_LABEL[fixture.round] ?? 'Knockout'}  - Match ${fixture.matchday}`
               : `Group ${fixture.group}  - MD${fixture.matchday}`}
           </span>
           {matchState?.status === 'live' ? (
-            <span className="text-[10px] font-mono font-bold text-emerald-200 bg-emerald-500/25 border border-emerald-300/40 px-2 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-emerald-200 bg-emerald-500/25 border border-emerald-300/40 px-2 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
               LIVE
             </span>
           ) : matchState?.status === 'half_time' ? (
-            <span className="text-[10px] font-mono font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
+            <span className="text-[10px] font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
               HALF TIME
             </span>
           ) : matchState?.status === 'finished' ? (
-            <span className="text-[10px] font-mono font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
+            <span className="text-[10px] font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
               FT
             </span>
           ) : isSettled ? (
-            <span className="text-[10px] font-mono font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
+            <span className="text-[10px] font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
               SETTLED
             </span>
           ) : isLocked ? (
-            <span className="text-[10px] font-mono font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
+            <span className="text-[10px] font-bold text-zinc-100 bg-zinc-900/55 border border-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
               LOCKED
             </span>
           ) : (
-            <span className="text-[10px] font-mono font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               OPEN
             </span>
@@ -245,7 +245,7 @@ export function FixtureCard({
                   <span className="text-white/40 text-lg">-</span>
                   <span>{matchState.awayScore}</span>
                 </div>
-                <span className="text-[10px] text-emerald-300 font-mono font-bold flex items-center gap-1">
+                <span className="text-[10px] text-emerald-300 font-bold flex items-center gap-1">
                   <Zap size={9} className="animate-pulse" />{matchState.minute}'
                 </span>
               </>
@@ -256,7 +256,7 @@ export function FixtureCard({
                   <span className="text-white/40 text-lg">-</span>
                   <span>{matchState.awayScore}</span>
                 </div>
-                <span className="text-[10px] text-zinc-200 font-mono font-bold">HT</span>
+                <span className="text-[10px] text-zinc-200 font-bold">HT</span>
               </>
             ) : matchState?.status === 'finished' ? (
               <>
@@ -265,20 +265,20 @@ export function FixtureCard({
                   <span className="text-white/40 text-lg">-</span>
                   <span>{matchState.awayScore}</span>
                 </div>
-                <span className="text-[10px] text-zinc-200 font-mono font-bold">FT</span>
+                <span className="text-[10px] text-zinc-200 font-bold">FT</span>
               </>
             ) : isSettled && fixture.result ? (
-              <span className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-widest">
+              <span className="text-sm font-bold text-zinc-100 uppercase tracking-widest">
                 {fixture.result === 'draw' ? 'DRAW' : fixture.result === 'home' ? fixture.home.code : fixture.away.code}
               </span>
             ) : (
               <>
-                <span className="text-xs font-bold text-white/40 font-mono tracking-widest">VS</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/24 px-2 py-0.5 text-[13px] text-white font-mono font-semibold tabular-nums ring-1 ring-white/10 backdrop-blur-sm">
+                <span className="text-xs font-bold text-white/40 tracking-widest">VS</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/24 px-2 py-0.5 text-[13px] text-white font-semibold tabular-nums ring-1 ring-white/10 backdrop-blur-sm">
                   <AlarmClock size={12} strokeWidth={1.65} className="text-white/75" />
                   {timeLabel}
                 </span>
-                <span className="text-[10px] text-white/55 font-mono">{kickoffStr}</span>
+                <span className="text-[10px] text-white/55">{kickoffStr}</span>
               </>
             )}
           </div>
@@ -311,13 +311,13 @@ export function FixtureCard({
         </div>
       </div>
 
-      {/* â”€â”€ Outcome buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Outcome buttons ──────────────────────────────────────────── */}
       <div className="p-3 dark:bg-zinc-950 bg-white">
         {isLocked || canStream ? (
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
               <Lock size={11} />
-              <span className="font-mono">
+              <span>
                 {isLiveMatch ? 'Match live' : isFinishedMatch ? 'Match ended' : `Staking ${isSettled ? 'closed' : 'locked'}`}
               </span>
               {isSettled && fixture.result && (
@@ -348,11 +348,11 @@ export function FixtureCard({
                 dark:hover:bg-emerald-500/18 hover:bg-emerald-100 dark:hover:border-emerald-400/50 hover:border-emerald-400
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="text-[11px] dark:text-emerald-400 text-emerald-700 font-mono font-semibold">{fixture.home.code}</span>
+              <span className="text-[11px] dark:text-emerald-400 text-emerald-700 font-semibold">{fixture.home.code}</span>
               <span className="text-lg font-black dark:text-emerald-300 text-emerald-700 tabular-nums leading-none">
                 {homeOdds}%
               </span>
-              <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-mono font-medium">
+              <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-medium">
                 {hasPool ? `${fmt.homeOKB}` : 'Stake ->'}
               </span>
             </button>
@@ -366,11 +366,11 @@ export function FixtureCard({
                 dark:hover:bg-zinc-700/60 hover:bg-zinc-200 dark:hover:border-zinc-500 hover:border-zinc-400
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="text-[11px] dark:text-zinc-400 text-zinc-600 font-mono font-semibold">Draw</span>
+              <span className="text-[11px] dark:text-zinc-400 text-zinc-600 font-semibold">Draw</span>
               <span className="text-lg font-black dark:text-zinc-100 text-zinc-800 tabular-nums leading-none">
                 {drawOdds}%
               </span>
-              <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-mono font-medium">
+              <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-medium">
                 {hasPool ? `${fmt.drawOKB}` : 'Stake ->'}
               </span>
             </button>
@@ -385,11 +385,11 @@ export function FixtureCard({
                 dark:hover:bg-blue-500/14 hover:bg-blue-100 dark:hover:border-blue-400/45 hover:border-blue-300
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span className="text-[11px] dark:text-blue-300 text-blue-700 font-mono font-semibold">{fixture.away.code}</span>
+              <span className="text-[11px] dark:text-blue-300 text-blue-700 font-semibold">{fixture.away.code}</span>
               <span className="text-lg font-black dark:text-blue-200 text-blue-700 tabular-nums leading-none">
                 {awayOdds}%
               </span>
-              <span className="text-[10px] dark:text-blue-500 text-blue-600 font-mono font-medium">
+              <span className="text-[10px] dark:text-blue-500 text-blue-600 font-medium">
                 {hasPool ? `${fmt.awayOKB}` : 'Stake ->'}
               </span>
             </button>
@@ -397,9 +397,9 @@ export function FixtureCard({
         )}
       </div>
 
-      {/* â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Footer ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pb-3 dark:bg-zinc-950 bg-white">
-        <div className="flex items-center gap-1.5 text-[11px] dark:text-zinc-500 text-zinc-500 font-mono font-medium">
+        <div className="flex items-center gap-1.5 text-[11px] dark:text-zinc-500 text-zinc-500 font-medium">
           <TrendingUp size={10} />
           <span>
             {hasPool
@@ -407,7 +407,7 @@ export function FixtureCard({
               : 'No stakes yet'}
           </span>
         </div>
-        <span className="text-[11px] dark:text-zinc-500 text-zinc-500 font-mono truncate max-w-[160px]">
+        <span className="text-[11px] dark:text-zinc-500 text-zinc-500 truncate max-w-[160px]">
           {fixture.stadium
             ? `${fixture.stadium.city.split(',')[0]}  - ${fixture.stadium.capacity.toLocaleString()}`
             : fixture.venue.split(' -')[0].trim()}
