@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { ChevronDown, ChevronUp, Globe, Info } from 'lucide-react';
+import { ChevronDown, ChevronUp, Globe } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
@@ -831,15 +831,11 @@ export default function App() {
         >
           <div className="absolute inset-0 bg-zinc-950/88" />
           <div className="absolute inset-0 bg-gradient-to-r from-blue-950/28 via-black/42 to-zinc-950/54" />
-          <div className="relative flex items-center justify-between gap-4">
-            <div className="inline-flex shrink-0 items-center gap-1.5 text-xs font-bold text-white">
-              <Info size={12} className="text-blue-300" />
-              How it works
-            </div>
-            <div className="how-it-works-rotate min-w-0 text-[11px] font-semibold text-zinc-100">
-              <span><strong>Step 1</strong> - Choose a fixture or champion market.</span>
-              <span><strong>Step 2</strong> - Stake OKB from your connected wallet.</span>
-              <span><strong>Step 3</strong> - Settled winners split payouts proportionally.</span>
+          <div className="relative">
+            <div className="how-it-works-rotate text-[11px] font-semibold text-zinc-100">
+              <span><strong>Step 1</strong> - Choose a fixture or champion market</span>
+              <span><strong>Step 2</strong> - Stake OKB from your connected wallet</span>
+              <span><strong>Step 3</strong> - Winners split payouts after settlement</span>
             </div>
           </div>
         </section>

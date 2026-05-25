@@ -264,6 +264,7 @@
   display: block;
   height: 18px;
   overflow: hidden;
+  width: 100%;
 }
 
 .how-it-works-rotate span {
@@ -273,7 +274,7 @@
   transform: translateY(8px);
   animation: seasonStatusRotate 9s ease-in-out infinite;
   overflow: hidden;
-  text-align: right;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
