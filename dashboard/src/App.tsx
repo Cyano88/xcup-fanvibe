@@ -824,21 +824,19 @@ export default function App() {
           {logOpen && <LogStream logs={logs} daemonOnline={engineOnline} />}
         </div>
 
-        {/* -- How it works ----------------------------------------------- */}
-        <section
-          className="relative mx-auto max-w-4xl overflow-hidden rounded-xl border border-zinc-900 bg-center bg-cover px-4 py-3"
-          style={{ backgroundImage: "url('/assets/how-it-works-bg.jpeg')" }}
-        >
-          <div className="absolute inset-0 bg-zinc-950/88" />
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-950/28 via-black/42 to-zinc-950/54" />
-          <div className="relative">
-            <div className="how-it-works-rotate text-[11px] font-semibold text-zinc-100">
-              <span><strong>Step 1</strong> - Choose a fixture or champion market</span>
-              <span><strong>Step 2</strong> - Stake OKB from your connected wallet</span>
-              <span><strong>Step 3</strong> - Winners split payouts after settlement</span>
-            </div>
+        {/* -- Platform steps --------------------------------------------- */}
+        <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
+          <div className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:bg-transparent bg-white">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Platform Steps</span>
+              <span className="how-it-works-rotate hidden sm:inline-flex text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
+                <span><strong>Step 1</strong> Choose a fixture or champion market</span>
+                <span><strong>Step 2</strong> Stake OKB from your connected wallet</span>
+                <span><strong>Step 3</strong> Winners split payouts after settlement</span>
+              </span>
+            </span>
           </div>
-        </section>
+        </div>
 
         {/* Footer */}
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
