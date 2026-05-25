@@ -105,7 +105,6 @@ export default function App() {
   const [pendingToasts, setPendingToasts]       = useState<SettlementResult[]>([]);
   const [stakeTarget, setStakeTarget]           = useState<{ fixtureId: string; outcome: Outcome } | null>(null);
   const [logOpen, setLogOpen]                   = useState(false);
-  const [howOpen, setHowOpen]                   = useState(false);
   const [roundFilter, setRoundFilter]           = useState<string>('all');
   const [groupFilter, setGroupFilter]           = useState<string>('all');
   const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>(initialSeason.matchStates);
@@ -810,11 +809,16 @@ export default function App() {
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setLogOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
+            className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
-            <span className="flex items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
-              Activity Feed - {logs.length} entries
+              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Agent Self Maintenance History</span>
+              <span className="season-status-rotate hidden sm:inline-flex text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
+                <span>{logs.length} maintenance entries</span>
+                <span>{engineOnline ? 'Engine online' : 'Engine offline'}</span>
+                <span>{logs[logs.length - 1]?.prefix ?? 'SYSTEM'} monitor</span>
+              </span>
             </span>
             {logOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
@@ -822,25 +826,29 @@ export default function App() {
         </div>
 
         {/* -- How it works ----------------------------------------------- */}
-        <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
-          <button
-            onClick={() => setHowOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
-          >
-            <span className="flex items-center gap-2">
-              <Info size={13} />
+        <section className="dark:border-zinc-900 border-zinc-200 border rounded-xl dark:bg-transparent bg-white px-4 py-5">
+          <div className="mx-auto max-w-xl text-center">
+            <div className="inline-flex items-center justify-center gap-2 text-sm font-bold dark:text-zinc-100 text-zinc-900">
+              <Info size={14} className="text-blue-500" />
               How it works
-            </span>
-            {howOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
-          {howOpen && (
-            <div className="px-4 pb-4 pt-1 space-y-2 text-xs dark:text-zinc-400 text-zinc-600 border-t dark:border-zinc-800 border-zinc-100">
-              <p>- Send OKB to the Settlement Wallet with ABI-encoded calldata specifying your fixture and outcome.</p>
-              <p>- When the match settles, the winning pool is distributed pro-rata to all backers of the correct outcome.</p>
-              <p>- The Champion market pays out proportionally to all stakers who backed the tournament winner after the Final.</p>
             </div>
-          )}
-        </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {[
+              ['1', 'Choose a market', 'Pick a fixture outcome or back the team you think will win the season.'],
+              ['2', 'Stake OKB', 'Your wallet sends OKB with encoded match or champion selection data.'],
+              ['3', 'Settle and payout', 'When results finalize, winning backers receive proportional payouts.'],
+            ].map(([step, title, copy]) => (
+              <div key={step} className="rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950/70 bg-zinc-50 p-4">
+                <div className="mb-3 grid h-7 w-7 place-items-center rounded-full bg-blue-500/12 text-xs font-extrabold text-blue-600 dark:text-blue-300">
+                  {step}
+                </div>
+                <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900">{title}</div>
+                <p className="mt-1 text-xs leading-5 dark:text-zinc-500 text-zinc-500">{copy}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* Footer */}
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
