@@ -40,6 +40,12 @@ const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
+const isResolvedFixture = (fixture?: Fixture | null) =>
+  !!fixture
+  && fixture.home.code !== 'TBD'
+  && fixture.away.code !== 'TBD'
+  && fixture.home.iso !== 'tbd'
+  && fixture.away.iso !== 'tbd';
 
 const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
 
@@ -407,7 +413,7 @@ export default function App() {
   });
   const seasonStartedAt = phase === 'playing' ? phaseEndsAt : Date.now() + phaseTimer * 1000;
   const liveEntries = viewMode === 'simulated'
-    ? Object.entries(matchStates).filter(([, ms]) => ms.status === 'live')
+    ? Object.entries(matchStates).filter(([id, ms]) => ms.status === 'live' && isResolvedFixture(fixtures.find(f => f.id === id)))
     : [];
   const finishedSeasonCount = viewMode === 'simulated'
     ? Object.values(matchStates).filter(ms => ms.status === 'finished').length
