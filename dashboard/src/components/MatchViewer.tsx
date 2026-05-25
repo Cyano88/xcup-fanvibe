@@ -966,25 +966,34 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
     : matchState.awayScore > matchState.homeScore ? 'away'
     : 'draw'
     : null;
-  const homeCards = matchState.events.filter(ev => ev.team === 'home' && (ev.type.startsWith('yellow') || ev.type.startsWith('red')));
-  const awayCards = matchState.events.filter(ev => ev.team === 'away' && (ev.type.startsWith('yellow') || ev.type.startsWith('red')));
-  const homeScorers = matchState.events
-    .filter(ev => ev.type === 'goal_home' && ev.player)
-    .map(ev => `${ev.player} ${ev.minute}'`)
-    .slice(-3);
-  const awayScorers = matchState.events
-    .filter(ev => ev.type === 'goal_away' && ev.player)
-    .map(ev => `${ev.player} ${ev.minute}'`)
-    .slice(-3);
-  const CardBadges = ({ cards }: { cards: MatchEvent[] }) => (
-    <div className="mt-1 flex min-h-[16px] justify-center gap-1">
-      {cards.slice(-4).map(card => (
-        <span
-          key={card.id}
-          title={card.player}
-          className={`h-3.5 w-2.5 rounded-[2px] border border-black/20 shadow-sm ${card.type.startsWith('red') ? 'bg-red-500' : 'bg-yellow-400'}`}
-        />
-      ))}
+  const teamEvents = (team: 'home' | 'away') => matchState.events
+    .filter(ev =>
+      ev.team === team &&
+      (ev.type === `goal_${team}` || ev.type.startsWith('yellow') || ev.type.startsWith('red')) &&
+      ev.player
+    )
+    .slice(-4);
+  const homeMarkers = teamEvents('home');
+  const awayMarkers = teamEvents('away');
+  const TeamEventMarkers = ({ events, align = 'left' }: { events: MatchEvent[]; align?: 'left' | 'right' }) => (
+    <div className={`flex min-w-0 flex-col gap-0.5 ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
+      {events.length > 0 ? events.map(ev => {
+        const isGoal = ev.type === 'goal_home' || ev.type === 'goal_away';
+        const isRed = ev.type.startsWith('red');
+        return (
+          <div key={ev.id} className="flex max-w-[138px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700">
+            {isGoal ? (
+              <span className="text-[11px] leading-none">⚽</span>
+            ) : (
+              <span className={`h-3.5 w-2.5 rounded-[2px] border border-black/20 ${isRed ? 'bg-red-500' : 'bg-yellow-400'}`} />
+            )}
+            <span className="truncate">{ev.player}</span>
+            <span className="shrink-0 tabular-nums dark:text-zinc-500 text-zinc-400">{ev.minute}&apos;</span>
+          </div>
+        );
+      }) : (
+        <div className="h-3.5" />
+      )}
     </div>
   );
 
@@ -1016,19 +1025,12 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
 
         {/* ── Score ── */}
         <div className="flex items-center justify-center gap-8 py-4">
-          <div className="text-center min-w-[68px]">
-            <TeamFlag iso={fixture.home.iso} fallback={fixture.home.flag} className="mx-auto mb-2 h-8 w-12" />
-            {homeScorers.length > 0 && (
-              <div className="mx-auto mb-1 max-w-[116px] space-y-0.5">
-                {homeScorers.map((name, idx) => (
-                  <div key={`${name}-${idx}`} className="truncate text-[10px] font-bold text-emerald-600 dark:text-emerald-300">
-                    {name}
-                  </div>
-                ))}
-              </div>
-            )}
-            <CardBadges cards={homeCards} />
-            <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.home.name}</div>
+          <div className="flex min-w-[180px] items-center justify-end gap-2.5">
+            <TeamEventMarkers events={homeMarkers} align="right" />
+            <div className="text-center min-w-[68px]">
+              <TeamFlag iso={fixture.home.iso} fallback={fixture.home.flag} className="mx-auto mb-2 h-8 w-12" />
+              <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.home.name}</div>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <span
@@ -1045,19 +1047,12 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
                 : { color: undefined }}
             >{matchState.awayScore}</span>
           </div>
-          <div className="text-center min-w-[68px]">
-            <TeamFlag iso={fixture.away.iso} fallback={fixture.away.flag} className="mx-auto mb-2 h-8 w-12" />
-            {awayScorers.length > 0 && (
-              <div className="mx-auto mb-1 max-w-[116px] space-y-0.5">
-                {awayScorers.map((name, idx) => (
-                  <div key={`${name}-${idx}`} className="truncate text-[10px] font-bold text-blue-600 dark:text-blue-300">
-                    {name}
-                  </div>
-                ))}
-              </div>
-            )}
-            <CardBadges cards={awayCards} />
-            <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.away.name}</div>
+          <div className="flex min-w-[180px] items-center justify-start gap-2.5">
+            <div className="text-center min-w-[68px]">
+              <TeamFlag iso={fixture.away.iso} fallback={fixture.away.flag} className="mx-auto mb-2 h-8 w-12" />
+              <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.away.name}</div>
+            </div>
+            <TeamEventMarkers events={awayMarkers} />
           </div>
         </div>
 
