@@ -812,7 +812,6 @@ export default function App() {
             className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
               <span className="font-semibold dark:text-zinc-400 text-zinc-600">Agent Self Maintenance History</span>
               <span className="season-status-rotate hidden sm:inline-flex text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
                 <span>{logs.length} maintenance entries</span>
@@ -826,25 +825,25 @@ export default function App() {
         </div>
 
         {/* -- How it works ----------------------------------------------- */}
-        <section className="dark:border-zinc-900 border-zinc-200 border rounded-xl dark:bg-transparent bg-white px-4 py-5">
+        <section className="mx-auto max-w-4xl dark:border-zinc-900 border-zinc-200 border rounded-xl dark:bg-transparent bg-white px-3 py-3">
           <div className="mx-auto max-w-xl text-center">
-            <div className="inline-flex items-center justify-center gap-2 text-sm font-bold dark:text-zinc-100 text-zinc-900">
-              <Info size={14} className="text-blue-500" />
+            <div className="inline-flex items-center justify-center gap-1.5 text-xs font-bold dark:text-zinc-200 text-zinc-800">
+              <Info size={12} className="text-blue-500" />
               How it works
             </div>
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
             {[
-              ['1', 'Choose a market', 'Pick a fixture outcome or back the team you think will win the season.'],
-              ['2', 'Stake OKB', 'Your wallet sends OKB with encoded match or champion selection data.'],
-              ['3', 'Settle and payout', 'When results finalize, winning backers receive proportional payouts.'],
+              ['1', 'Choose', 'Pick a fixture or champion.'],
+              ['2', 'Stake', 'Send OKB from your wallet.'],
+              ['3', 'Settle', 'Winners split payouts.'],
             ].map(([step, title, copy]) => (
-              <div key={step} className="rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950/70 bg-zinc-50 p-4">
-                <div className="mb-3 grid h-7 w-7 place-items-center rounded-full bg-blue-500/12 text-xs font-extrabold text-blue-600 dark:text-blue-300">
+              <div key={step} className="rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950/50 bg-zinc-50 px-3 py-2.5">
+                <div className="mb-2 grid h-5 w-5 place-items-center rounded-full bg-blue-500/12 text-[10px] font-extrabold text-blue-600 dark:text-blue-300">
                   {step}
                 </div>
-                <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900">{title}</div>
-                <p className="mt-1 text-xs leading-5 dark:text-zinc-500 text-zinc-500">{copy}</p>
+                <div className="text-xs font-semibold dark:text-zinc-100 text-zinc-900">{title}</div>
+                <p className="mt-0.5 text-[11px] leading-4 dark:text-zinc-500 text-zinc-500">{copy}</p>
               </div>
             ))}
           </div>
