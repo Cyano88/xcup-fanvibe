@@ -38,6 +38,8 @@ const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
+const flagUrl = (iso: string) =>
+  iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
 const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
 
@@ -565,14 +567,18 @@ export default function App() {
                           <button
                             key={`${id}-${index}`}
                             onClick={() => setWatchingId(id)}
-                            className="shrink-0 flex items-center gap-2 rounded-lg border border-white/12 bg-black/35 px-3 py-2 text-white shadow-sm backdrop-blur-[2px] transition-all hover:border-blue-300/60 active:scale-95"
+                            className="live-score-card shrink-0 flex items-center gap-2 rounded-lg border border-white/12 px-3 py-2 text-white shadow-sm backdrop-blur-[2px] transition-all hover:border-blue-300/60 active:scale-95"
+                            style={{
+                              '--home-flag': `url(${flagUrl(fx.home.iso)})`,
+                              '--away-flag': `url(${flagUrl(fx.away.iso)})`,
+                            } as React.CSSProperties}
                           >
-                            <span className="text-sm">{fx.home.flag}</span>
-                            <span className="text-xs font-extrabold">{fx.home.code}</span>
-                            <span className="rounded bg-blue-500 px-1.5 py-0.5 text-[11px] font-black tabular-nums text-white">{ms.homeScore}-{ms.awayScore}</span>
-                            <span className="text-xs font-extrabold">{fx.away.code}</span>
-                            <span className="text-sm">{fx.away.flag}</span>
-                            <span className="text-[11px] font-bold tabular-nums text-blue-100">{ms.minute}&apos;</span>
+                            <span className="relative z-10 text-sm">{fx.home.flag}</span>
+                            <span className="relative z-10 min-w-[2.1rem] text-xs font-extrabold">{fx.home.code}</span>
+                            <span className="relative z-10 rounded bg-blue-500/95 px-1.5 py-0.5 text-[11px] font-black tabular-nums text-white shadow-sm">{ms.homeScore}-{ms.awayScore}</span>
+                            <span className="relative z-10 min-w-[2.1rem] text-xs font-extrabold">{fx.away.code}</span>
+                            <span className="relative z-10 text-sm">{fx.away.flag}</span>
+                            <span className="relative z-10 text-[11px] font-bold tabular-nums text-blue-100">{ms.minute}&apos;</span>
                           </button>
                         );
                       })}
