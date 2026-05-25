@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { ChevronDown, ChevronUp, Globe } from 'lucide-react';
+import { ChevronDown, ChevronUp, Globe, Volume2, VolumeX } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
@@ -38,6 +38,7 @@ const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
+const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 const isResolvedFixture = (fixture?: Fixture | null) =>
@@ -116,6 +117,7 @@ export default function App() {
   const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>(initialSeason.matchStates);
   const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
   const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
+  const [soundMuted, setSoundMuted]             = useState(false);
   const [eliminatedTeams, setEliminatedTeams]   = useState<Set<string>>(() => new Set(initialSeason.eliminatedTeams));
   const [champion, setChampion]                 = useState<Team | null>(initialSeason.champion);
   const [tournamentGen, setTournamentGen]       = useState(initialSeason.tournamentGen);
@@ -136,8 +138,29 @@ export default function App() {
   const championTriggeredRef   = useRef(false);
   const watchedStateRef        = useRef<Record<string, MatchState>>({});
   const watchedFixtureRef      = useRef<Record<string, Fixture>>({});
+  const themeAudioRef          = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
+
+  useEffect(() => {
+    const audio = themeAudioRef.current;
+    if (!audio) return;
+    audio.volume = 0.34;
+    audio.muted = soundMuted;
+    if (!soundMuted) audio.play().catch(() => setSoundMuted(true));
+  }, [soundMuted]);
+
+  const toggleSound = useCallback(() => {
+    const audio = themeAudioRef.current;
+    setSoundMuted(prev => {
+      const next = !prev;
+      if (audio) {
+        audio.muted = next;
+        if (!next) audio.play().catch(() => {});
+      }
+      return next;
+    });
+  }, []);
 
   const connectWS = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -453,6 +476,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
+      <audio ref={themeAudioRef} src={FRANCE_26_THEME} autoPlay loop preload="auto" />
 
       {/* -- Header ----------------------------------------------------------- */}
       <header className="sticky top-0 z-40 border-b dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/95 bg-white/95 backdrop-blur-sm">
@@ -478,6 +502,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={toggleSound}
+              aria-label={soundMuted ? 'Unmute theme song' : 'Mute theme song'}
+              title={soundMuted ? 'Unmute theme song' : 'Mute theme song'}
+              className="relative w-9 h-9 flex items-center justify-center rounded-lg border transition-all duration-200
+                dark:border-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800 dark:hover:border-zinc-600
+                border-zinc-300 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 hover:border-zinc-400"
+            >
+              {soundMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
             <ThemeSwitcher dark={dark} onToggle={() => setDark(d => !d)} />
           </div>
         </div>
