@@ -549,54 +549,21 @@ export default function App() {
           <div className="flex min-w-0 items-center gap-3">
             <img
               src={FANVIBE_HERO_LOGO}
-              alt="X Cup FanVibe"
+              alt="FanVibe"
               className="h-8 w-8 rounded-md object-cover ring-1 ring-black/10 dark:ring-white/10"
             />
-            <span className="truncate text-sm sm:text-base font-semibold tracking-tight dark:text-white text-zinc-950">X Cup FanVibe</span>
+            <span className="truncate text-sm sm:text-base font-extrabold tracking-tight">
+              <span className="dark:text-zinc-100 text-black">Fan</span>
+              <span className="text-blue-600 dark:text-blue-400">Vibe</span>
+            </span>
             {viewMode === 'simulated' && (
               <span className="hidden sm:inline text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
                 {seasonLabel}
               </span>
             )}
-            <span className="hidden lg:inline text-[11px] font-medium dark:text-zinc-600 text-zinc-400">
-              X Layer 196
-            </span>
-          </div>
-
-          {/* Status strip */}
-          <div className="hidden lg:flex items-center gap-5 text-[11px] dark:text-zinc-500 text-zinc-500">
-            {lastBlock > 0 && (
-              <span className="whitespace-nowrap">
-                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Block</span>
-                <span className="font-medium tabular-nums dark:text-zinc-300 text-zinc-700">{lastBlock.toLocaleString()}</span>
-              </span>
-            )}
-            {refereeAddress && (
-              <a href={explorerAddr(refereeAddress)} target="_blank" rel="noopener noreferrer"
-                className="whitespace-nowrap transition-colors dark:hover:text-white hover:text-zinc-950">
-                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Wallet</span>
-                <span className="font-medium dark:text-zinc-300 text-zinc-700">{shortAddr(refereeAddress)}</span>
-              </a>
-            )}
-            <span className="whitespace-nowrap">
-              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Balance</span>
-              <span className={`font-medium tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</span>
-            </span>
-            <div className="w-16 opacity-80">
-              <FuelBar percent={metabolism.healthPercent} okbFormatted="" isRefuelNeeded={metabolism.isRefuelNeeded} compact />
-            </div>
-            <span className="whitespace-nowrap">
-              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Engine</span>
-              <span className={`font-medium ${wsConnected || engineOnline ? 'dark:text-zinc-300 text-zinc-700' : 'dark:text-zinc-600 text-zinc-400'}`}>
-                {wsConnected || engineOnline ? 'Online' : 'Offline'}
-              </span>
-            </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline lg:hidden text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
-              {wsConnected || engineOnline ? 'Online' : 'Offline'}
-            </span>
             <ThemeSwitcher dark={dark} onToggle={() => setDark(d => !d)} />
           </div>
         </div>
@@ -959,6 +926,38 @@ export default function App() {
 
         {/* Footer */}
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/70 bg-white px-4 py-3 text-[11px] dark:text-zinc-500 text-zinc-500">
+            {lastBlock > 0 && (
+              <span className="whitespace-nowrap">
+                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Block</span>
+                <span className="font-semibold tabular-nums dark:text-zinc-300 text-zinc-700">{lastBlock.toLocaleString()}</span>
+              </span>
+            )}
+            {refereeAddress && (
+              <a
+                href={explorerAddr(refereeAddress)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="whitespace-nowrap transition-colors dark:hover:text-white hover:text-zinc-950"
+              >
+                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Wallet</span>
+                <span className="font-semibold dark:text-zinc-300 text-zinc-700">{shortAddr(refereeAddress)}</span>
+              </a>
+            )}
+            <span className="whitespace-nowrap">
+              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Balance</span>
+              <span className={`font-semibold tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</span>
+            </span>
+            <span className="flex w-16 items-center opacity-80">
+              <FuelBar percent={metabolism.healthPercent} okbFormatted="" isRefuelNeeded={metabolism.isRefuelNeeded} compact />
+            </span>
+            <span className="whitespace-nowrap">
+              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Engine</span>
+              <span className={`font-semibold ${wsConnected || engineOnline ? 'dark:text-zinc-300 text-zinc-700' : 'dark:text-zinc-600 text-zinc-400'}`}>
+                {wsConnected || engineOnline ? 'Online' : 'Offline'}
+              </span>
+            </span>
+          </div>
           <div className="flex items-center justify-center gap-4">
             <a
               href="https://x.com/xcupfanvibe"
