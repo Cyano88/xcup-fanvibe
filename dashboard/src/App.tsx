@@ -423,6 +423,7 @@ export default function App() {
     : phase === 'preseason'
       ? 'Staking open'
       : 'Broadcast reset';
+  const liveRailEntries = liveEntries.length > 1 ? [...liveEntries, ...liveEntries] : liveEntries;
   const settledRailItems = [...settlements]
     .reverse()
     .map((settlement) => {
@@ -520,22 +521,70 @@ export default function App() {
           </div>
         </div>
 
-        {/* -- Pre-season banner ------------------------------------------- */}
-        {viewMode === 'simulated' && phase === 'preseason' && (
+        {/* -- Season live dashboard --------------------------------------- */}
+        {viewMode === 'simulated' && (phase === 'preseason' || phase === 'playing') && (
           <div
-            className="fanvibe-live-panel rounded-lg border border-white/10 p-4 flex items-center justify-between gap-4 flex-wrap shadow-sm"
+            className="fanvibe-live-panel rounded-lg border border-white/10 p-4 shadow-sm"
             style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
           >
-            <div className="relative z-10">
-              <div className="text-sm font-semibold text-white mb-0.5 drop-shadow-sm">World Cup Season - Staking Open</div>
-              <div className="text-xs text-zinc-200/90">
-                First fixture window begins at {seasonStartsAt}. More group matches follow in shared broadcast waves.
+            {phase === 'preseason' ? (
+              <div className="relative z-10 flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="text-sm font-semibold text-white mb-0.5 drop-shadow-sm">World Cup Season - Staking Open</div>
+                  <div className="text-xs text-zinc-200/90">
+                    First fixture window begins at {seasonStartsAt}. More group matches follow in shared broadcast waves.
+                  </div>
+                </div>
+                <div className="rounded-md border border-white/10 bg-black/35 px-4 py-2 text-center backdrop-blur-[2px]">
+                  <div className="text-3xl font-semibold text-white tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
+                  <div className="text-[10px] text-zinc-300 uppercase mt-0.5">until kick-off</div>
+                </div>
               </div>
-            </div>
-            <div className="relative z-10 rounded-md border border-white/10 bg-black/35 px-4 py-2 text-center backdrop-blur-[2px]">
-              <div className="text-3xl font-semibold text-white tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
-              <div className="text-[10px] text-zinc-300 uppercase mt-0.5">until kick-off</div>
-            </div>
+            ) : (
+              <div className="relative z-10 space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="text-[10px] font-extrabold tracking-[0.18em] text-blue-100/90">LIVE SCORES</div>
+                    <div className="mt-0.5 text-sm font-semibold text-white">
+                      {liveEntries.length > 0 ? `${liveEntries.length} live - ${finishedSeasonCount} FT` : `Matchday ${activeGroupMatchday} broadcast window`}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-black/35 px-3 py-1.5 text-right backdrop-blur-[2px]">
+                    <div className="text-[10px] font-bold uppercase text-zinc-300">World Cup Season</div>
+                    <div className="text-lg font-semibold tabular-nums text-white">MD{activeGroupMatchday}</div>
+                  </div>
+                </div>
+
+                <div className="live-score-mask overflow-hidden">
+                  {liveEntries.length > 0 ? (
+                    <div className={liveEntries.length > 2 ? 'live-score-track flex items-center gap-2' : 'flex items-center gap-2'}>
+                      {liveRailEntries.map(([id, ms], index) => {
+                        const fx = fixtures.find(f => f.id === id);
+                        if (!fx) return null;
+                        return (
+                          <button
+                            key={`${id}-${index}`}
+                            onClick={() => setWatchingId(id)}
+                            className="shrink-0 flex items-center gap-2 rounded-lg border border-white/12 bg-black/35 px-3 py-2 text-white shadow-sm backdrop-blur-[2px] transition-all hover:border-blue-300/60 active:scale-95"
+                          >
+                            <span className="text-sm">{fx.home.flag}</span>
+                            <span className="text-xs font-extrabold">{fx.home.code}</span>
+                            <span className="rounded bg-blue-500 px-1.5 py-0.5 text-[11px] font-black tabular-nums text-white">{ms.homeScore}-{ms.awayScore}</span>
+                            <span className="text-xs font-extrabold">{fx.away.code}</span>
+                            <span className="text-sm">{fx.away.flag}</span>
+                            <span className="text-[11px] font-bold tabular-nums text-blue-100">{ms.minute}&apos;</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs font-semibold text-zinc-200">
+                      Waiting for the next fixture wave. Completed cards stay marked FT.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -617,49 +666,6 @@ export default function App() {
             ))}
           </div>
         )}
-
-        {/* -- Simulation running indicator -------------------------------- */}
-        {viewMode === 'simulated' && phase === 'playing' && (() => {
-          const railEntries = liveEntries.length > 1 ? [...liveEntries, ...liveEntries] : liveEntries;
-          return (
-            <div className="live-score-rail flex items-center gap-3 rounded-xl border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 shadow-sm">
-              <div className="shrink-0">
-                <div className="text-[10px] font-extrabold tracking-[0.18em] dark:text-zinc-400 text-zinc-500">LIVE SCORES</div>
-                {liveEntries.length > 0 ? (
-                  <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-300">{liveEntries.length} live - {finishedSeasonCount} FT</div>
-                ) : (
-                  <div className="text-[11px] font-bold text-blue-600 dark:text-blue-300">MD{activeGroupMatchday} broadcast window</div>
-                )}
-              </div>
-              <div className="live-score-mask min-w-0 flex-1 overflow-hidden">
-                {liveEntries.length > 0 ? (
-                  <div className={liveEntries.length > 2 ? 'live-score-track flex items-center gap-2' : 'flex items-center gap-2'}>
-                    {railEntries.map(([id, ms], index) => {
-                      const fx = fixtures.find(f => f.id === id);
-                      if (!fx) return null;
-                      return (
-                        <button
-                          key={`${id}-${index}`}
-                          onClick={() => setWatchingId(id)}
-                          className="shrink-0 flex items-center gap-2 rounded-lg border dark:border-zinc-700 border-zinc-200 dark:bg-zinc-900 bg-zinc-50 px-3 py-1.5 transition-all hover:border-emerald-400/60 active:scale-95"
-                        >
-                          <span className="text-xs font-extrabold dark:text-white text-zinc-950">{fx.home.code}</span>
-                          <span className="rounded bg-emerald-500 px-1.5 py-0.5 text-[11px] font-black tabular-nums text-black">{ms.homeScore}-{ms.awayScore}</span>
-                          <span className="text-xs font-extrabold dark:text-white text-zinc-950">{fx.away.code}</span>
-                          <span className="text-[11px] font-bold tabular-nums text-blue-600 dark:text-blue-300">{ms.minute}&apos;</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-600">
-                    Waiting for the next fixture wave. Completed cards stay marked FT.
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
 
         {/* -- Realtime mode notice ---------------------------------------- */}
         {viewMode === 'realtime' && (
