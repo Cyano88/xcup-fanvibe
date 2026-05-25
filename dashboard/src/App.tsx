@@ -29,6 +29,7 @@ import {
   qualifiedTeams,
   seedRoundOf32,
   seasonFixtureKickoffDelayMs,
+  seasonFixtureStartAtMs,
 } from './lib/seasonTournament';
 
 const BACKEND_WS   = import.meta.env.VITE_BACKEND_WS   ?? 'ws://localhost:3001';
@@ -518,6 +519,24 @@ export default function App() {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
   const seasonStartedAt = phase === 'playing' ? phaseEndsAt : Date.now() + phaseTimer * 1000;
+  const liveEntries = viewMode === 'simulated'
+    ? Object.entries(matchStates).filter(([, ms]) => ms.status === 'live')
+    : [];
+  const finishedSeasonCount = viewMode === 'simulated'
+    ? Object.values(matchStates).filter(ms => ms.status === 'finished').length
+    : 0;
+  const seasonStatusDetail = phase === 'preseason'
+    ? `Kick-off in ${fmtDuration(phaseTimer)}`
+    : phase === 'interseason'
+      ? `Next season in ${fmtDuration(phaseTimer)}`
+      : phase === 'champion'
+        ? 'Final settled'
+        : `Matchday ${activeGroupMatchday} live`;
+  const seasonStatusAccent = phase === 'playing'
+    ? `${liveEntries.length} live - ${finishedSeasonCount} FT`
+    : phase === 'preseason'
+      ? 'Staking open'
+      : 'Broadcast reset';
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
@@ -609,28 +628,23 @@ export default function App() {
             </button>
           </div>
 
-          <div className="text-xs font-mono dark:text-zinc-500 text-zinc-400 flex items-center gap-1.5">
+          <div className="hidden sm:flex items-center gap-2 rounded-full border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-1.5 shadow-sm">
             {viewMode === 'simulated' ? (
-              phase === 'preseason' ? (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />
-                  World Cup Season starts in {fmtDuration(phaseTimer)} - fixtures open in broadcast waves
-                </>
-              ) : phase === 'interseason' ? (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500/70" />
-                  Season {seasonNumber + 1} starts in {fmtDuration(phaseTimer)}
-                </>
-              ) : (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />
-                  World Cup Season - group matches live now
-                </>
-              )
+              <>
+                <span className="text-[11px] font-bold tracking-tight dark:text-white text-zinc-950">World Cup Season</span>
+                <span className="season-status-rotate text-[11px] font-semibold dark:text-zinc-300 text-zinc-600">
+                  <span>{seasonStatusDetail}</span>
+                  <span>{seasonStatusAccent}</span>
+                  <span>{seasonLabel}</span>
+                </span>
+                <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-300">
+                  {phase === 'playing' ? `MD${activeGroupMatchday}` : fmtDuration(phaseTimer)}
+                </span>
+              </>
             ) : (
               <>
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400/80" />
-                Real WC - staking open - first kick-off Jun 11 2026
+                <span className="text-[11px] font-bold dark:text-white text-zinc-950">World Cup 2026</span>
+                <span className="text-[11px] font-semibold dark:text-zinc-400 text-zinc-500">Staking open - first kick-off Jun 11 2026</span>
               </>
             )}
           </div>
@@ -692,33 +706,39 @@ export default function App() {
 
         {/* -- Round / group filter tabs ----------------------------------- */}
         {viewMode === 'simulated' ? (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+          <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
             {[
-              { id: 'all', label: `Live MD${activeGroupMatchday}` },
-              { id: 'md1', label: 'Matchday 1' },
-              { id: 'md2', label: 'Matchday 2' },
-              { id: 'md3', label: 'Matchday 3' },
-              ...SEASON_GROUPS.map(g => ({ id: g, label: `Group ${g}` })),
-              { id: 'knockouts', label: 'Knockouts' },
-              { id: 'bracket', label: 'Bracket' },
+              { id: 'all', label: `Live MD${activeGroupMatchday}`, tone: 'live' },
+              { id: 'md1', label: 'Matchday 1', tone: 'matchday' },
+              { id: 'md2', label: 'Matchday 2', tone: 'matchday' },
+              { id: 'md3', label: 'Matchday 3', tone: 'matchday' },
+              ...SEASON_GROUPS.map(g => ({ id: g, label: `Group ${g}`, tone: 'group' })),
+              { id: 'knockouts', label: 'Knockouts', tone: 'knockout' },
+              { id: 'bracket', label: 'Bracket', tone: 'bracket' },
             ].map(t => (
               <button key={t.id} onClick={() => setRoundFilter(t.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-150
+                className={`season-filter-tab shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
                   ${roundFilter === t.id
-                    ? 'dark:bg-zinc-100 dark:text-zinc-900 bg-zinc-900 text-white'
-                    : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-700'}`}>
+                    ? t.tone === 'live'
+                      ? 'bg-emerald-500 text-black shadow-sm'
+                      : t.tone === 'group'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : t.tone === 'knockout' || t.tone === 'bracket'
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'dark:bg-zinc-100 dark:text-zinc-950 bg-zinc-950 text-white shadow-sm'
+                    : 'dark:text-zinc-400 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-300 dark:hover:text-zinc-100 hover:text-zinc-900 dark:bg-zinc-900/35 bg-zinc-50'}`}>
                 {t.label}
               </button>
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+          <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
             {rtGroups.map(g => (
               <button key={g} onClick={() => setGroupFilter(g)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-150
+                className={`season-filter-tab shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
                   ${groupFilter === g
                     ? 'dark:bg-blue-500 dark:text-white bg-blue-600 text-white'
-                    : 'dark:text-zinc-500 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-700'}`}>
+                    : 'dark:text-zinc-400 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-300 dark:hover:text-zinc-100 hover:text-zinc-900 dark:bg-zinc-900/35 bg-zinc-50'}`}>
                 {g === 'all' ? 'All Groups' : `Group ${g}`}
               </button>
             ))}
@@ -726,43 +746,44 @@ export default function App() {
         )}
 
         {/* -- Simulation running indicator -------------------------------- */}
-        {viewMode === 'simulated' && phase === 'playing' && Object.keys(matchStates).length > 0 && (() => {
-          const liveEntries   = Object.entries(matchStates).filter(([, ms]) => ms.status === 'live');
-          const finishedCount = Object.values(matchStates).filter(ms => ms.status === 'finished').length;
+        {viewMode === 'simulated' && phase === 'playing' && (() => {
+          const railEntries = liveEntries.length > 1 ? [...liveEntries, ...liveEntries] : liveEntries;
           return (
-            <div className="flex items-center gap-2.5 overflow-x-auto pb-0.5 scrollbar-none">
-              <div className="shrink-0 flex items-center gap-1.5 text-xs font-mono font-semibold">
+            <div className="live-score-rail flex items-center gap-3 rounded-xl border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 shadow-sm">
+              <div className="shrink-0">
+                <div className="text-[10px] font-extrabold tracking-[0.18em] dark:text-zinc-400 text-zinc-500">LIVE SCORES</div>
                 {liveEntries.length > 0 ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="dark:text-emerald-400 text-emerald-600">{liveEntries.length} LIVE</span>
-                  </>
+                  <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-300">{liveEntries.length} live - {finishedSeasonCount} FT</div>
                 ) : (
-                  <span className="dark:text-zinc-500 text-zinc-400">Season complete</span>
-                )}
-                {finishedCount > 0 && (
-                  <span className="dark:text-zinc-600 text-zinc-400">- {finishedCount} done</span>
+                  <div className="text-[11px] font-bold text-blue-600 dark:text-blue-300">MD{activeGroupMatchday} broadcast window</div>
                 )}
               </div>
-              {liveEntries.map(([id, ms]) => {
-                const fx = fixtures.find(f => f.id === id);
-                if (!fx) return null;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => setWatchingId(id)}
-                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-emerald-500/30 border-emerald-200
-                      dark:bg-emerald-500/8 bg-emerald-50 dark:hover:border-emerald-400/50 hover:border-emerald-300
-                      transition-all active:scale-95 text-[11px] font-mono font-semibold"
-                  >
-                    <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                    <span className="dark:text-zinc-200 text-zinc-700">{fx.home.flag} {ms.homeScore}</span>
-                    <span className="dark:text-zinc-600 text-zinc-400">-</span>
-                    <span className="dark:text-zinc-200 text-zinc-700">{ms.awayScore} {fx.away.flag}</span>
-                    <span className="dark:text-zinc-500 text-zinc-400">{ms.minute}&apos;</span>
-                  </button>
-                );
-              })}
+              <div className="live-score-mask min-w-0 flex-1 overflow-hidden">
+                {liveEntries.length > 0 ? (
+                  <div className={liveEntries.length > 2 ? 'live-score-track flex items-center gap-2' : 'flex items-center gap-2'}>
+                    {railEntries.map(([id, ms], index) => {
+                      const fx = fixtures.find(f => f.id === id);
+                      if (!fx) return null;
+                      return (
+                        <button
+                          key={`${id}-${index}`}
+                          onClick={() => setWatchingId(id)}
+                          className="shrink-0 flex items-center gap-2 rounded-lg border dark:border-zinc-700 border-zinc-200 dark:bg-zinc-900 bg-zinc-50 px-3 py-1.5 transition-all hover:border-emerald-400/60 active:scale-95"
+                        >
+                          <span className="text-xs font-extrabold dark:text-white text-zinc-950">{fx.home.code}</span>
+                          <span className="rounded bg-emerald-500 px-1.5 py-0.5 text-[11px] font-black tabular-nums text-black">{ms.homeScore}-{ms.awayScore}</span>
+                          <span className="text-xs font-extrabold dark:text-white text-zinc-950">{fx.away.code}</span>
+                          <span className="text-[11px] font-bold tabular-nums text-blue-600 dark:text-blue-300">{ms.minute}&apos;</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-600">
+                    Waiting for the next fixture wave. Completed cards stay marked FT.
+                  </div>
+                )}
+              </div>
             </div>
           );
         })()}
@@ -891,6 +912,7 @@ export default function App() {
                   seasonTimer={viewMode === 'simulated' ? phaseTimer : undefined}
                   seasonKickoffDelayMs={viewMode === 'simulated' ? seasonFixtureKickoffDelayMs(fixtures, fixture.id) : undefined}
                   seasonStartedAt={viewMode === 'simulated' ? seasonStartedAt : undefined}
+                  seasonFixtureStartsAt={viewMode === 'simulated' ? seasonFixtureStartAtMs(fixtures, fixture, seasonStartedAt, matchStates) : undefined}
                   onStake={handleStake}
                   onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
                 />

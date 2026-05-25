@@ -373,6 +373,7 @@ export function simulateMatch(
 
     if (minute >= 90) {
       state.status = 'finished';
+      state.finishedAt = Date.now();
       state.events.push({ id: ++eid, minute: 90, type: 'full_time', team: 'neutral',
         commentary: `FULL TIME — ${fixture.home.name} ${state.homeScore}–${state.awayScore} ${fixture.away.name}`,
         lx: 0, ly: 0 });

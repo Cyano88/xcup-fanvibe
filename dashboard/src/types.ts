@@ -57,6 +57,7 @@ export interface MatchState {
   events: MatchEvent[];
   simulatedKickoff: string;
   possession: number;
+  finishedAt?: number;
 }
 
 export interface Pool {

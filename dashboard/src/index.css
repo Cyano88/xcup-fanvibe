@@ -231,6 +231,72 @@
   100% { transform: translateX(13%) rotate(2deg) skewX(-6deg); }
 }
 
+.season-status-rotate {
+  position: relative;
+  display: inline-block;
+  width: 168px;
+  height: 16px;
+  overflow: hidden;
+}
+
+.season-status-rotate span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: seasonStatusRotate 9s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+.season-status-rotate span:nth-child(2) {
+  animation-delay: 3s;
+}
+
+.season-status-rotate span:nth-child(3) {
+  animation-delay: 6s;
+}
+
+@keyframes seasonStatusRotate {
+  0%, 7% { opacity: 0; transform: translateY(8px); }
+  12%, 30% { opacity: 1; transform: translateY(0); }
+  35%, 100% { opacity: 0; transform: translateY(-8px); }
+}
+
+.season-filter-tab {
+  letter-spacing: 0;
+}
+
+.live-score-rail {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.dark .live-score-rail {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 34px rgba(0, 0, 0, 0.28);
+}
+
+.live-score-mask {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+
+.live-score-track {
+  width: max-content;
+  animation: liveScoreRail 28s linear infinite;
+}
+
+.live-score-track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes liveScoreRail {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 4px;

@@ -11,6 +11,7 @@ interface Props {
   seasonTimer?: number;
   seasonKickoffDelayMs?: number;
   seasonStartedAt?: number;
+  seasonFixtureStartsAt?: number | null;
   onStake: (fixtureId: string, outcome: Outcome) => void;
   onWatch: (fixtureId: string) => void;
 }
@@ -82,6 +83,7 @@ export function FixtureCard({
   seasonTimer = 0,
   seasonKickoffDelayMs = 0,
   seasonStartedAt,
+  seasonFixtureStartsAt,
   onStake,
   onWatch,
 }: Props) {
@@ -124,14 +126,18 @@ export function FixtureCard({
   const isOpen    = fixture.status === 'open';
   const seasonFixtureStartsIn = seasonPhase === 'preseason'
     ? seasonTimer + Math.ceil(seasonKickoffDelayMs / 1000)
-    : seasonPhase === 'playing' && seasonStartedAt
-      ? Math.ceil((seasonStartedAt + seasonKickoffDelayMs - Date.now()) / 1000)
+    : seasonPhase === 'playing'
+      ? seasonFixtureStartsAt === null
+        ? Number.POSITIVE_INFINITY
+        : Math.ceil(((seasonFixtureStartsAt ?? seasonStartedAt ?? Date.now()) - Date.now()) / 1000)
       : 0;
   const timeLabel = isSeasonPlay
-    ? seasonFixtureStartsIn > 0
+    ? !Number.isFinite(seasonFixtureStartsIn)
+      ? 'Awaiting MD'
+      : seasonFixtureStartsIn > 0
       ? formatShortDuration(seasonFixtureStartsIn)
       : seasonPhase === 'playing'
-        ? 'Queued'
+        ? 'Starting'
         : 'Awaiting'
     : countdown(fixture.kickoff);
 
@@ -140,7 +146,7 @@ export function FixtureCard({
   const drawOdds = hasPool ? Math.round(fmt.drawShare)  : fixture.baseOdds.draw;
   const awayOdds = hasPool ? Math.round(fmt.awayShare)  : fixture.baseOdds.away;
 
-  const kickoffStr = isSeasonPlay ? (seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(fixture.kickoff).toLocaleString('en-US', {
+  const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(fixture.kickoff).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
   });
 

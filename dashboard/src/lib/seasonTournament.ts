@@ -4,10 +4,10 @@ import { REALTIME_FIXTURES } from '../types';
 export const SEASON_GROUPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 export const GROUP_STAGE_MATCH_MS = 10 * 60 * 1000;
 export const SEASON_PRESTART_SECONDS = 5 * 60;
-export const SEASON_INTERMISSION_SECONDS = 10 * 60;
+export const SEASON_INTERMISSION_SECONDS = 5 * 60;
 export const SEASON_WAVE_SIZE = 6;
 export const SEASON_WAVE_GAP_MS = 75 * 1000;
-export const SEASON_MATCHDAY_GAP_MS = 95 * 1000;
+export const SEASON_MATCHDAY_GAP_MS = 10 * 60 * 1000;
 
 export const TBD_TEAM: Team = {
   name: 'Awaiting qualifier',
@@ -198,8 +198,32 @@ export function seasonFixtureKickoffDelayMs(fixtures: Fixture[], fixtureId: stri
     .filter(f => isGroupStageFixture(f) && (!fixture || f.matchday === fixture.matchday));
   const index = groupFixtures.findIndex(f => f.id === fixtureId);
   if (index < 0) return 0;
-  const matchdayDelay = fixture ? (fixture.matchday - 1) * SEASON_MATCHDAY_GAP_MS : 0;
+  const matchdayDelay = fixture ? (fixture.matchday - 1) * (GROUP_STAGE_MATCH_MS + SEASON_MATCHDAY_GAP_MS) : 0;
   return matchdayDelay + Math.floor(index / SEASON_WAVE_SIZE) * SEASON_WAVE_GAP_MS;
+}
+
+export function seasonFixtureStartAtMs(
+  fixtures: Fixture[],
+  fixture: Fixture,
+  seasonStartedAt: number,
+  matchStates: Record<string, MatchState> = {},
+): number | null {
+  if (!isGroupStageFixture(fixture)) return seasonStartedAt;
+
+  const sameDayFixtures = fixtures.filter(f => isGroupStageFixture(f) && f.matchday === fixture.matchday);
+  const waveDelay = Math.floor(Math.max(0, sameDayFixtures.findIndex(f => f.id === fixture.id)) / SEASON_WAVE_SIZE) * SEASON_WAVE_GAP_MS;
+
+  if (fixture.matchday <= 1) return seasonStartedAt + waveDelay;
+
+  const previousMatchdays = fixtures.filter(f => isGroupStageFixture(f) && f.matchday < fixture.matchday);
+  if (!previousMatchdays.every(f => matchStates[f.id]?.status === 'finished')) {
+    return null;
+  }
+
+  const latestPreviousFinish = Math.max(
+    ...previousMatchdays.map(f => matchStates[f.id]?.finishedAt ?? seasonStartedAt + seasonFixtureKickoffDelayMs(fixtures, f.id) + GROUP_STAGE_MATCH_MS),
+  );
+  return latestPreviousFinish + SEASON_MATCHDAY_GAP_MS + waveDelay;
 }
 
 export function isSeasonFixtureDue(
@@ -214,7 +238,8 @@ export function isSeasonFixtureDue(
     const previousMatchdays = fixtures.filter(f => isGroupStageFixture(f) && f.matchday < fixture.matchday);
     if (!previousMatchdays.every(f => matchStates[f.id]?.status === 'finished')) return false;
   }
-  return now >= seasonStartedAt + seasonFixtureKickoffDelayMs(fixtures, fixture.id);
+  const startsAt = seasonFixtureStartAtMs(fixtures, fixture, seasonStartedAt, matchStates);
+  return startsAt !== null && now >= startsAt;
 }
 
 export function currentGroupMatchday(fixtures: Fixture[], matchStates: Record<string, MatchState>): number {

@@ -230,6 +230,7 @@ export class MatchSimulator {
         this.timers.delete(fixture.id);
         this.addEvent(state, 'full_time', fixture, 'neutral');
         state.status = 'finished';
+        state.finishedAt = Date.now();
         this.onEvent(fixture.id, state);
         const outcome = this.determineOutcome(state);
         this.log('SYSTEM', 'success',
