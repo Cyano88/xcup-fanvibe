@@ -481,7 +481,7 @@ export default function App() {
               onClick={() => setViewMode('simulated')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
                 ${viewMode === 'simulated'
-                  ? 'bg-emerald-500 text-black shadow-sm'
+                  ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
                   : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
             >
               Season Play
@@ -593,7 +593,7 @@ export default function App() {
                 className={`season-filter-tab shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
                   ${roundFilter === t.id
                     ? t.tone === 'live'
-                      ? 'bg-emerald-500 text-black shadow-sm'
+                      ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
                       : t.tone === 'group'
                         ? 'bg-blue-600 text-white shadow-sm'
                         : t.tone === 'knockout' || t.tone === 'bracket'
