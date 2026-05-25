@@ -241,22 +241,22 @@
   inset: 0;
   opacity: 0;
   transform: translateY(8px);
-  animation: seasonStatusRotate 9s ease-in-out infinite;
+  animation: seasonStatusRotate 15s ease-in-out infinite;
   white-space: nowrap;
 }
 
 .season-status-rotate span:nth-child(2) {
-  animation-delay: 3s;
+  animation-delay: 5s;
 }
 
 .season-status-rotate span:nth-child(3) {
-  animation-delay: 6s;
+  animation-delay: 10s;
 }
 
 @keyframes seasonStatusRotate {
-  0%, 7% { opacity: 0; transform: translateY(8px); }
-  12%, 30% { opacity: 1; transform: translateY(0); }
-  35%, 100% { opacity: 0; transform: translateY(-8px); }
+  0%, 4% { opacity: 0; transform: translateY(8px); }
+  7%, 30% { opacity: 1; transform: translateY(0); }
+  33.333%, 100% { opacity: 0; transform: translateY(-8px); }
 }
 
 .how-it-works-rotate {
@@ -272,7 +272,7 @@
   inset: 0;
   opacity: 0;
   transform: translateY(8px);
-  animation: seasonStatusRotate 9s ease-in-out infinite;
+  animation: seasonStatusRotate 15s ease-in-out infinite;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
@@ -280,11 +280,11 @@
 }
 
 .how-it-works-rotate span:nth-child(2) {
-  animation-delay: 3s;
+  animation-delay: 5s;
 }
 
 .how-it-works-rotate span:nth-child(3) {
-  animation-delay: 6s;
+  animation-delay: 10s;
 }
 
 .how-it-works-rotate strong {
