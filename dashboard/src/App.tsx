@@ -825,20 +825,25 @@ export default function App() {
         </div>
 
         {/* -- How it works ----------------------------------------------- */}
-        <section className="mx-auto max-w-4xl dark:border-zinc-900 border-zinc-200 border rounded-xl dark:bg-transparent bg-white px-3 py-3">
-          <div className="mx-auto max-w-xl text-center">
+        <section
+          className="relative mx-auto max-w-4xl overflow-hidden rounded-xl border dark:border-zinc-900 border-zinc-200 bg-center bg-cover px-3 py-3"
+          style={{ backgroundImage: "url('/assets/how-it-works-bg.jpeg')" }}
+        >
+          <div className="absolute inset-0 dark:bg-black/82 bg-white/78" />
+          <div className="absolute inset-0 dark:bg-zinc-950/20 bg-white/15" />
+          <div className="relative mx-auto max-w-xl text-center">
             <div className="inline-flex items-center justify-center gap-1.5 text-xs font-bold dark:text-zinc-200 text-zinc-800">
               <Info size={12} className="text-blue-500" />
               How it works
             </div>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <div className="relative mt-3 grid gap-2 md:grid-cols-3">
             {[
               ['1', 'Choose', 'Pick a fixture or champion.'],
               ['2', 'Stake', 'Send OKB from your wallet.'],
               ['3', 'Settle', 'Winners split payouts.'],
             ].map(([step, title, copy]) => (
-              <div key={step} className="rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950/50 bg-zinc-50 px-3 py-2.5">
+              <div key={step} className="rounded-lg border dark:border-zinc-800/80 border-zinc-200/80 dark:bg-zinc-950/72 bg-white/82 px-3 py-2.5 backdrop-blur-sm">
                 <div className="mb-2 grid h-5 w-5 place-items-center rounded-full bg-blue-500/12 text-[10px] font-extrabold text-blue-600 dark:text-blue-300">
                   {step}
                 </div>
