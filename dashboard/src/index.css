@@ -384,7 +384,7 @@
 
 .live-score-track {
   width: max-content;
-  animation: liveScoreRail 28s linear infinite;
+  animation: liveScoreRail 72s linear infinite;
 }
 
 .live-score-track:hover {
