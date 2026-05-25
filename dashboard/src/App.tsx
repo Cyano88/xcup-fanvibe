@@ -43,19 +43,16 @@ const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('ht
 
 type SeasonPhase = 'preseason' | 'playing' | 'champion' | 'interseason';
 
-interface StoredSeasonState {
+interface InitialSeasonState {
   seasonNumber: number;
   phase: SeasonPhase;
   phaseEndsAt: number;
+  phaseTimer: number;
   fixtures: Fixture[];
   matchStates: Record<string, MatchState>;
   eliminatedTeams: string[];
   champion: Team | null;
   tournamentGen: number;
-}
-
-interface InitialSeasonState extends StoredSeasonState {
-  phaseTimer: number;
 }
 
 function defaultMetabolism(): MetabolicState {
@@ -86,60 +83,6 @@ function freshSeasonState(seasonNumber = 1, now = Date.now()): InitialSeasonStat
     champion: null,
     tournamentGen: 0,
   };
-}
-
-function resolveSeasonState(parsed: Partial<StoredSeasonState> | null | undefined): InitialSeasonState {
-  const fallback = freshSeasonState(1);
-  if (!parsed?.fixtures?.length || parsed.fixtures.some(f => f.id?.startsWith('r32-'))) return fallback;
-
-  try {
-    const now = Date.now();
-    let phase = parsed.phase ?? 'preseason';
-    let phaseEndsAt = Number(parsed.phaseEndsAt || 0);
-    let seasonNumber = Math.max(1, Number(parsed.seasonNumber || 1));
-    let fixtures = parsed.fixtures ?? fallback.fixtures;
-    let matchStates = parsed.matchStates ?? {};
-    let champion = parsed.champion ?? null;
-    let tournamentGen = Number(parsed.tournamentGen || 0);
-    let eliminatedTeams = parsed.eliminatedTeams ?? [];
-
-    if (!['preseason', 'playing', 'champion', 'interseason'].includes(phase) || phaseEndsAt <= 0) {
-      return fallback;
-    }
-
-    if (phase !== 'playing' && now >= phaseEndsAt) {
-      if (phase === 'preseason') {
-        phase = 'playing';
-      } else if (phase === 'champion') {
-        phase = 'interseason';
-        phaseEndsAt = now + SEASON_INTERMISSION_SECONDS * 1000;
-        champion = null;
-      } else if (phase === 'interseason') {
-        seasonNumber += 1;
-        phase = 'preseason';
-        phaseEndsAt = now + SEASON_PRESTART_SECONDS * 1000;
-        fixtures = createSeasonFixtures(seasonNumber);
-        matchStates = {};
-        eliminatedTeams = [];
-        champion = null;
-        tournamentGen += 1;
-      }
-    }
-
-    return {
-      seasonNumber,
-      phase,
-      phaseEndsAt,
-      phaseTimer: phase === 'playing' ? 0 : Math.max(0, Math.ceil((phaseEndsAt - now) / 1000)),
-      fixtures,
-      matchStates,
-      eliminatedTeams,
-      champion,
-      tournamentGen,
-    };
-  } catch {
-    return fallback;
-  }
 }
 
 export default function App() {
@@ -186,70 +129,8 @@ export default function App() {
   const championTriggeredRef   = useRef(false);
   const watchedStateRef        = useRef<Record<string, MatchState>>({});
   const watchedFixtureRef      = useRef<Record<string, Fixture>>({});
-  const seasonHydratedRef      = useRef(false);
-  const seasonSaveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
-
-  const applySeasonState = useCallback((state: InitialSeasonState) => {
-    setSeasonNumber(state.seasonNumber);
-    setPhase(state.phase);
-    setPhaseEndsAt(state.phaseEndsAt);
-    setPhaseTimer(state.phaseTimer);
-    setFixtures(state.fixtures);
-    setMatchStates(state.matchStates);
-    setEliminatedTeams(new Set(state.eliminatedTeams));
-    setChampion(state.champion);
-    setTournamentGen(state.tournamentGen);
-    setRoundFilter('all');
-    setWatchingId(null);
-    bracketProcessedRef.current.clear();
-    championTriggeredRef.current = state.phase === 'champion';
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${BACKEND_HTTP}/season-state`)
-      .then(async r => {
-        if (r.status === 404) return null;
-        if (!r.ok) throw new Error('season state unavailable');
-        return await r.json();
-      })
-      .then((raw: Partial<StoredSeasonState> | { state: null } | null) => {
-        if (cancelled) return;
-        if (raw && !('state' in raw)) applySeasonState(resolveSeasonState(raw));
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) seasonHydratedRef.current = true;
-      });
-    return () => { cancelled = true; };
-  }, [applySeasonState]);
-
-  useEffect(() => {
-    if (!seasonHydratedRef.current) return;
-    if (seasonSaveTimerRef.current) clearTimeout(seasonSaveTimerRef.current);
-    const snapshot: StoredSeasonState = {
-      seasonNumber,
-      phase,
-      phaseEndsAt,
-      fixtures,
-      matchStates,
-      eliminatedTeams: [...eliminatedTeams],
-      champion,
-      tournamentGen,
-    };
-    seasonSaveTimerRef.current = setTimeout(() => {
-      fetch(`${BACKEND_HTTP}/season-state`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(snapshot),
-      }).catch(() => {});
-    }, 400);
-    return () => {
-      if (seasonSaveTimerRef.current) clearTimeout(seasonSaveTimerRef.current);
-    };
-  }, [seasonNumber, phase, phaseEndsAt, fixtures, matchStates, eliminatedTeams, champion, tournamentGen]);
 
   const connectWS = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -282,10 +163,6 @@ export default function App() {
           setSettlements(prev => [...prev, s]);
           setPendingToasts(prev => [...prev, s]);
           setFixtures(prev => prev.map(f => f.id === s.fixtureId ? { ...f, status: 'settled', result: s.outcome } : f));
-        } else if (msg.type === 'season-state') {
-          applySeasonState(resolveSeasonState(msg.data as Partial<StoredSeasonState>));
-        } else if (msg.type === 'season-state-reset') {
-          applySeasonState(freshSeasonState(1));
         }
       } catch { /* malformed */ }
     };
@@ -342,7 +219,7 @@ export default function App() {
     simCleanupRef.current.clear();
     bracketProcessedRef.current.clear();
     championTriggeredRef.current = false;
-  }, [applySeasonState]);
+  }, []);
 
   // -- Tournament phase transitions --------------------------------------------
   const startPreseason = useCallback((nextSeasonNumber = seasonNumber) => {

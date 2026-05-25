@@ -17,10 +17,6 @@ const httpServer = createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
 
 const engine = new RefereeEngine();
-const SEASON_STATE_KEY = 'fanvibe:season-state';
-const kvRestUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-const kvRestToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-let memorySeasonState: unknown = null;
 
 // ── WebSocket broadcast ───────────────────────────────────────────────────────
 
@@ -47,7 +43,6 @@ app.get('/', (_req, res) => {
     endpoints: {
       health: '/health',
       state: '/state',
-      seasonState: '/season-state',
     },
   });
 });
@@ -58,86 +53,6 @@ app.get('/health', (_req, res) => {
 
 app.get('/state', (_req, res) => {
   res.json(engine.getState());
-});
-
-const SeasonStateSchema = z.object({
-  seasonNumber: z.number().int().min(1),
-  phase: z.enum(['preseason', 'playing', 'champion', 'interseason']),
-  phaseEndsAt: z.number().finite().positive(),
-  fixtures: z.array(z.unknown()).min(1),
-  matchStates: z.record(z.unknown()),
-  eliminatedTeams: z.array(z.string()),
-  champion: z.unknown().nullable(),
-  tournamentGen: z.number().int().min(0),
-  savedAt: z.number().int().positive().optional(),
-});
-
-type SeasonStatePayload = z.infer<typeof SeasonStateSchema>;
-
-async function kvCommand<T = unknown>(path: string, init?: RequestInit): Promise<T> {
-  if (!kvRestUrl || !kvRestToken) throw new Error('KV not configured');
-  const res = await fetch(`${kvRestUrl.replace(/\/$/, '')}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${kvRestToken}`,
-      ...init?.headers,
-    },
-  });
-  if (!res.ok) throw new Error(`KV request failed: ${res.status}`);
-  return await res.json() as T;
-}
-
-async function readSeasonState(): Promise<SeasonStatePayload | null> {
-  if (!kvRestUrl || !kvRestToken) return memorySeasonState as SeasonStatePayload | null;
-  const data = await kvCommand<{ result: string | null }>(`/get/${encodeURIComponent(SEASON_STATE_KEY)}`);
-  if (!data.result) return null;
-  return JSON.parse(data.result) as SeasonStatePayload;
-}
-
-async function writeSeasonState(state: SeasonStatePayload): Promise<void> {
-  if (!kvRestUrl || !kvRestToken) {
-    memorySeasonState = state;
-    return;
-  }
-  await kvCommand(`/set/${encodeURIComponent(SEASON_STATE_KEY)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(JSON.stringify(state)),
-  });
-}
-
-async function deleteSeasonState(): Promise<void> {
-  if (!kvRestUrl || !kvRestToken) {
-    memorySeasonState = null;
-    return;
-  }
-  await kvCommand(`/del/${encodeURIComponent(SEASON_STATE_KEY)}`, { method: 'POST' });
-}
-
-app.get('/season-state', async (_req, res) => {
-  try {
-    const state = await readSeasonState();
-    if (!state) return res.status(404).json({ state: null });
-    res.json(state);
-  } catch {
-    res.status(404).json({ state: null });
-  }
-});
-
-app.put('/season-state', async (req, res) => {
-  const parsed = SeasonStateSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-
-  const state = { ...parsed.data, savedAt: Date.now() };
-  await writeSeasonState(state);
-  broadcast('season-state', state);
-  res.json({ ok: true, state });
-});
-
-app.delete('/season-state', async (_req, res) => {
-  await deleteSeasonState();
-  broadcast('season-state-reset', { ts: Date.now() });
-  res.json({ ok: true });
 });
 
 app.get('/encode-stake', (req, res) => {
