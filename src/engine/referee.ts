@@ -23,6 +23,7 @@ import { checkAndRefuel } from './metabolism.js';
 import { MatchSimulator } from './simulation.js';
 import type {
   Fixture,
+  Team,
   Stake,
   Pool,
   DaemonLog,
@@ -41,6 +42,45 @@ const PROTOCOL_FEE_BPS = 50n; // 0.5%
 const METABOLISM_INTERVAL_MS = 60_000;
 const OUTCOME_MAP: Record<number, Outcome> = { 0: 'home', 1: 'draw', 2: 'away' };
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
+
+const TBD_TEAM: Team = { name: 'TBD', code: 'TBD', flag: '🏆', iso: 'un' };
+const NEXT_SIM_KICKOFF_MS = Number(process.env.SIM_NEXT_KICKOFF_MS ?? '30000');
+
+const BRACKET: Record<string, {
+  winner: { matchId: string; slot: 'home' | 'away' };
+  loser?: { matchId: string; slot: 'home' | 'away' };
+}> = {
+  'r32-1':  { winner: { matchId: 'r16-1', slot: 'home' } },
+  'r32-2':  { winner: { matchId: 'r16-1', slot: 'away' } },
+  'r32-3':  { winner: { matchId: 'r16-2', slot: 'home' } },
+  'r32-4':  { winner: { matchId: 'r16-2', slot: 'away' } },
+  'r32-5':  { winner: { matchId: 'r16-3', slot: 'home' } },
+  'r32-6':  { winner: { matchId: 'r16-3', slot: 'away' } },
+  'r32-7':  { winner: { matchId: 'r16-4', slot: 'home' } },
+  'r32-8':  { winner: { matchId: 'r16-4', slot: 'away' } },
+  'r32-9':  { winner: { matchId: 'r16-5', slot: 'home' } },
+  'r32-10': { winner: { matchId: 'r16-5', slot: 'away' } },
+  'r32-11': { winner: { matchId: 'r16-6', slot: 'home' } },
+  'r32-12': { winner: { matchId: 'r16-6', slot: 'away' } },
+  'r32-13': { winner: { matchId: 'r16-7', slot: 'home' } },
+  'r32-14': { winner: { matchId: 'r16-7', slot: 'away' } },
+  'r32-15': { winner: { matchId: 'r16-8', slot: 'home' } },
+  'r32-16': { winner: { matchId: 'r16-8', slot: 'away' } },
+  'r16-1':  { winner: { matchId: 'qf-1', slot: 'home' } },
+  'r16-2':  { winner: { matchId: 'qf-1', slot: 'away' } },
+  'r16-3':  { winner: { matchId: 'qf-2', slot: 'home' } },
+  'r16-4':  { winner: { matchId: 'qf-2', slot: 'away' } },
+  'r16-5':  { winner: { matchId: 'qf-3', slot: 'home' } },
+  'r16-6':  { winner: { matchId: 'qf-3', slot: 'away' } },
+  'r16-7':  { winner: { matchId: 'qf-4', slot: 'home' } },
+  'r16-8':  { winner: { matchId: 'qf-4', slot: 'away' } },
+  'qf-1':   { winner: { matchId: 'sf-1', slot: 'home' } },
+  'qf-2':   { winner: { matchId: 'sf-1', slot: 'away' } },
+  'qf-3':   { winner: { matchId: 'sf-2', slot: 'home' } },
+  'qf-4':   { winner: { matchId: 'sf-2', slot: 'away' } },
+  'sf-1':   { winner: { matchId: 'f-1', slot: 'home' }, loser: { matchId: '3pl-1', slot: 'home' } },
+  'sf-2':   { winner: { matchId: 'f-1', slot: 'away' }, loser: { matchId: '3pl-1', slot: 'away' } },
+};
 
 // ── Champion prediction market ─────────────────────────────────────────────────
 export const CHAMP_FIXTURE_ID = 'champion-2026';
@@ -135,6 +175,11 @@ export class RefereeEngine {
     };
 
     for (const f of this.fixtures) {
+      if (f.mode === 'simulated' && f.round && f.round !== 'R32') {
+        f.home = { ...TBD_TEAM };
+        f.away = { ...TBD_TEAM };
+        f.status = 'upcoming';
+      }
       this.pools.set(f.id, { fixtureId: f.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 });
     }
 
@@ -154,10 +199,10 @@ export class RefereeEngine {
     this.startMetabolismLoop();
 
     // Simulation mode: schedule compressed matches
-    const simulated = this.fixtures.filter(f => f.mode === 'simulated');
+    const simulated = this.fixtures.filter(f => f.mode === 'simulated' && f.home.code !== 'TBD' && f.away.code !== 'TBD');
     if (simulated.length > 0) {
-      const delayMins    = parseInt(process.env.SIM_FIRST_KICKOFF_DELAY ?? '30');
-      const intervalMins = parseInt(process.env.SIM_MATCH_INTERVAL_MINS ?? '60');
+      const delayMins    = parseInt(process.env.SIM_FIRST_KICKOFF_DELAY ?? '5');
+      const intervalMins = parseInt(process.env.SIM_MATCH_INTERVAL_MINS ?? '0');
       const firstKickoff = Date.now() + delayMins * 60_000;
       this.simulator.schedule(simulated, firstKickoff, intervalMins * 60_000);
       this.log('SYSTEM', 'success', `Simulation scheduled — ${simulated.length} matches, first kickoff in ${delayMins} min, ${intervalMins} min intervals`);
@@ -461,6 +506,7 @@ export class RefereeEngine {
 
     fixture.status = 'settled';
     fixture.result = outcome;
+    this.advanceBracket(fixture, outcome);
 
     const result: SettlementResult = {
       fixtureId,
@@ -491,6 +537,34 @@ export class RefereeEngine {
   }
 
   // ── Metabolism loop ──────────────────────────────────────────────────────────
+
+  private advanceBracket(fixture: Fixture, outcome: Outcome): void {
+    if (fixture.mode !== 'simulated') return;
+    const entry = BRACKET[fixture.id];
+    if (!entry) return;
+
+    const winner = outcome === 'away' ? fixture.away
+      : outcome === 'home' ? fixture.home
+      : Math.random() > 0.5 ? fixture.home : fixture.away;
+    const loser = winner.code === fixture.home.code ? fixture.away : fixture.home;
+
+    this.placeAdvancingTeam(entry.winner, winner);
+    if (entry.loser) this.placeAdvancingTeam(entry.loser, loser);
+  }
+
+  private placeAdvancingTeam(target: { matchId: string; slot: 'home' | 'away' }, team: Team): void {
+    const next = this.fixtures.find((f) => f.id === target.matchId);
+    if (!next) return;
+
+    next[target.slot] = team;
+    const ready = next.home.code !== 'TBD' && next.away.code !== 'TBD';
+    if (!ready || next.status === 'locked' || next.status === 'settled') return;
+
+    next.status = 'upcoming';
+    next.baseOdds = { home: 50, draw: 25, away: 25 };
+    this.log('SYSTEM', 'info', `Qualified: ${team.code} -> ${next.id} ${target.slot}`);
+    this.simulator.schedule([next], Date.now() + NEXT_SIM_KICKOFF_MS, 0);
+  }
 
   private startMetabolismLoop(): void {
     setInterval(async () => {

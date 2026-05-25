@@ -40,7 +40,7 @@ export function Leaderboard({ matchStates, fixtures }: Props) {
   if (sorted.length === 0) return null;
 
   return (
-    <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-2xl overflow-hidden">
+    <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3 border-b dark:border-zinc-800 border-zinc-200">
         <span className="text-xs font-mono font-bold dark:text-zinc-400 text-zinc-500 uppercase tracking-widest">
           ⚽ Top Scorers
@@ -62,7 +62,7 @@ export function Leaderboard({ matchStates, fixtures }: Props) {
               </div>
               {row.assists > 0 && (
                 <div className="text-center">
-                  <div className="text-lg font-black tabular-nums dark:text-amber-400 text-amber-600 leading-none">{row.assists}</div>
+                  <div className="text-lg font-black tabular-nums dark:text-zinc-300 text-zinc-700 leading-none">{row.assists}</div>
                   <div className="text-[9px] font-mono dark:text-zinc-600 text-zinc-400 uppercase">ast</div>
                 </div>
               )}

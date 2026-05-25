@@ -16,6 +16,20 @@ interface TeamRow {
 interface Props {
   fixtures: Fixture[];
   matchStates: Record<string, MatchState>;
+  selectedGroup?: string;
+}
+
+const flagUrl = (iso: string) =>
+  iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w80/${iso.toLowerCase()}.png`;
+
+function TeamFlag({ iso, fallback }: { iso?: string; fallback: string }) {
+  const src = iso ? flagUrl(iso) : '';
+  if (!src) return <span className="text-sm leading-none">{fallback}</span>;
+  return (
+    <span className="inline-flex h-3.5 w-5 overflow-hidden rounded-[2px] bg-zinc-200 dark:bg-zinc-800 ring-1 ring-black/10 dark:ring-white/10">
+      <img src={src} alt="" loading="lazy" className="h-full w-full object-cover" />
+    </span>
+  );
 }
 
 function buildGroup(
@@ -57,21 +71,22 @@ function buildGroup(
   );
 }
 
-export function GroupTable({ fixtures, matchStates }: Props) {
-  const realtimeFixtures = fixtures.filter(f => f.mode === 'realtime');
+export function GroupTable({ fixtures, matchStates, selectedGroup }: Props) {
+  const realtimeFixtures = fixtures.filter(f => f.mode === 'realtime' && (!selectedGroup || f.group === selectedGroup));
   if (realtimeFixtures.length === 0) return null;
 
   const groups = [...new Set(realtimeFixtures.map(f => f.group))].sort();
+  const teamByCode = new Map(realtimeFixtures.flatMap(f => [[f.home.code, f.home], [f.away.code, f.away]]));
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${selectedGroup ? '' : 'md:grid-cols-2 xl:grid-cols-3'}`}>
         {groups.map(group => {
           const groupFixtures = realtimeFixtures.filter(f => f.group === group);
           const rows = buildGroup(groupFixtures, matchStates);
 
           return (
-            <div key={group} className="dark:bg-zinc-900/60 bg-white border dark:border-zinc-800 border-zinc-200 rounded-xl overflow-hidden">
+            <div key={group} className="dark:bg-zinc-900/60 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b dark:border-zinc-800 border-zinc-100">
                 <span className="text-xs font-mono font-bold dark:text-zinc-400 text-zinc-500 uppercase tracking-widest">
                   Group {group}
@@ -99,7 +114,7 @@ export function GroupTable({ fixtures, matchStates }: Props) {
                         <td className="px-3 py-2 dark:text-zinc-600 text-zinc-400 tabular-nums">{i + 1}</td>
                         <td className="px-1 py-2">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm leading-none">{row.flag}</span>
+                            <TeamFlag iso={teamByCode.get(row.code)?.iso} fallback={row.flag} />
                             <span className="dark:text-zinc-200 text-zinc-700 font-bold">{row.code}</span>
                           </div>
                         </td>

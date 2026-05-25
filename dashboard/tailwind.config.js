@@ -11,7 +11,6 @@ export default {
       },
       colors: {
         emerald: { DEFAULT: '#10b981', 400: '#34d399', 500: '#10b981' },
-        amber:   { DEFAULT: '#f59e0b', 400: '#fbbf24', 500: '#f59e0b' },
         crimson: { DEFAULT: '#ef4444', 400: '#f87171', 500: '#ef4444' },
       },
       animation: {

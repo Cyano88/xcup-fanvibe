@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Trophy, Zap, CheckCircle } from 'lucide-react';
 import { parseEther } from 'viem';
 import type { Fixture, MatchState, ChampionPool } from '../types';
@@ -19,6 +19,30 @@ const R32_TEAMS = STATIC_FIXTURES
   .filter(f => f.round === 'R32')
   .flatMap(f => [f.home, f.away]);
 
+const flagUrl = (iso: string) =>
+  iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w160/${iso.toLowerCase()}.png`;
+
+function TeamFlag({ iso, fallback, className = '' }: { iso: string; fallback: string; className?: string }) {
+  const src = flagUrl(iso);
+  if (!src) return <span className={className}>{fallback}</span>;
+
+  return (
+    <span className={`relative inline-flex items-center justify-center overflow-hidden rounded-[3px] bg-zinc-200 dark:bg-zinc-800 shadow-sm ring-1 ring-black/10 dark:ring-white/10 ${className}`}>
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        className="h-full w-full object-cover"
+        onError={(event) => {
+          event.currentTarget.style.display = 'none';
+          const parent = event.currentTarget.parentElement;
+          if (parent) parent.textContent = fallback;
+        }}
+      />
+    </span>
+  );
+}
+
 function fmtWei(wei: string | bigint): string {
   const n = Number(BigInt(wei)) / 1e18;
   return n < 0.0001 ? '0' : n.toFixed(4);
@@ -29,7 +53,7 @@ export function ChampionPick({
   refereeAddress,
   daemonChampPool,
 }: Props) {
-  const [open, setOpen]           = useState(true);
+  const [open, setOpen]           = useState(false);
   const [selected, setSelected]   = useState<string | null>(null);
   const [amountOKB, setAmountOKB] = useState('0.01');
   const [txPending, setTxPending] = useState(false);
@@ -61,19 +85,35 @@ export function ChampionPick({
   const isSettled = daemonChampPool?.settled ?? false;
   const settledWinner = daemonChampPool?.winner;
 
-  // Odds: blend base strength with live pool share
+  // Odds: squad model first, then market flow as OKB enters the pool.
   const activeTeams = R32_TEAMS.filter(t => !eliminatedTeams.has(t.code));
-  const totalStrength = activeTeams.reduce((s, t) => s + (STRENGTH[t.code] ?? 60), 0);
+  const ratingWeight = (code: string) => {
+    const strength = STRENGTH[code] ?? 60;
+    return Math.exp((strength - 72) / 10);
+  };
+  const totalRatingWeight = activeTeams.reduce((s, t) => s + ratingWeight(t.code), 0);
 
-  function baseOdds(code: string): number {
+  function modelChance(code: string): number {
     if (eliminatedTeams.has(code)) return 0;
-    return Math.round(((STRENGTH[code] ?? 60) / totalStrength) * 100);
+    return (ratingWeight(code) / totalRatingWeight) * 100;
   }
 
   function poolShare(code: string): number {
     if (totalWei === 0n) return 0;
     const tw = BigInt(effectivePool[code] ?? '0');
     return Math.round(Number(tw * 10000n / totalWei) / 100);
+  }
+
+  function displayOdds(code: string): number {
+    const model = modelChance(code);
+    if (totalWei === 0n) return model;
+    const market = poolShare(code);
+    return model * 0.7 + market * 0.3;
+  }
+
+  function fmtOdds(value: number): string {
+    if (value <= 0) return '0%';
+    return value >= 10 ? `${Math.round(value)}%` : `${value.toFixed(1)}%`;
   }
 
   async function handleStake() {
@@ -118,7 +158,7 @@ export function ChampionPick({
   }
 
   return (
-    <div className="dark:bg-zinc-900/60 bg-white border dark:border-zinc-800 border-zinc-200 rounded-2xl overflow-hidden">
+    <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg overflow-hidden">
 
       {/* Header */}
       <button
@@ -126,17 +166,17 @@ export function ChampionPick({
         className="w-full flex items-center justify-between px-4 py-3 dark:hover:bg-zinc-800/40 hover:bg-zinc-50 transition-colors"
       >
         <div className="flex items-center gap-2.5">
-          <Trophy size={15} className="text-yellow-500" />
+          <Trophy size={15} className="text-emerald-500" />
           <span className="text-sm font-bold dark:text-zinc-100 text-zinc-800">Predict the Champion</span>
           {isSettled && settledWinner && (
-            <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
-              <CheckCircle size={9} /> Settled · {settledWinner}
+            <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+              <CheckCircle size={9} /> Settled  - {settledWinner}
             </span>
           )}
           {!isSettled && (
             <span className="text-[11px] font-mono dark:text-zinc-500 text-zinc-400">
               {totalWei > 0n
-                ? `${fmtWei(totalWei)} OKB · ${totalCount} pick${totalCount !== 1 ? 's' : ''}`
+                ? `${fmtWei(totalWei)} OKB  - ${totalCount} pick${totalCount !== 1 ? 's' : ''}`
                 : 'Be the first to stake'}
             </span>
           )}
@@ -151,7 +191,7 @@ export function ChampionPick({
           <p className="text-[11px] dark:text-zinc-500 text-zinc-400 font-mono">
             Stake OKB on the team you think will lift the trophy. Pool pays out proportionally to backers of the champion when the Final settles.
             {eliminatedTeams.size > 0 && (
-              <span className="dark:text-zinc-600 text-zinc-400"> · {eliminatedTeams.size} eliminated</span>
+              <span className="dark:text-zinc-600 text-zinc-400">  - {eliminatedTeams.size} eliminated</span>
             )}
           </p>
 
@@ -159,7 +199,7 @@ export function ChampionPick({
           <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5">
             {R32_TEAMS.map(team => {
               const elim    = eliminatedTeams.has(team.code);
-              const odds    = baseOdds(team.code);
+              const odds    = displayOdds(team.code);
               const share   = poolShare(team.code);
               const staked  = BigInt(effectivePool[team.code] ?? '0') > 0n;
               const isWinner = settledWinner === team.code;
@@ -171,40 +211,43 @@ export function ChampionPick({
                   key={team.code}
                   onClick={() => canStake ? setSelected(s => s === team.code ? null : team.code) : undefined}
                   disabled={!canStake}
-                  className={`relative flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl border text-center transition-all duration-150
+                  style={team.iso !== 'un' && team.iso !== 'tbd'
+                    ? { backgroundImage: `url(${flagUrl(team.iso)})` }
+                    : undefined}
+                  className={`group relative min-h-[78px] overflow-hidden bg-cover bg-center flex flex-col items-center justify-end gap-0.5 p-2 rounded-lg border text-center transition-all duration-150
                     ${isWinner
-                      ? 'dark:bg-yellow-500/15 bg-yellow-50 dark:border-yellow-500/40 border-yellow-300 shadow-sm shadow-yellow-500/10'
+                      ? 'dark:border-emerald-400 border-emerald-500 shadow-sm shadow-emerald-500/10'
                       : elim
-                        ? 'opacity-25 dark:bg-zinc-900 bg-zinc-100 dark:border-zinc-800 border-zinc-200 cursor-default'
+                        ? 'opacity-30 dark:border-zinc-800 border-zinc-200 cursor-default grayscale'
                         : selected === team.code
-                          ? 'dark:bg-emerald-500/15 bg-emerald-50 dark:border-emerald-400/60 border-emerald-300 shadow-sm shadow-emerald-500/10'
+                          ? 'dark:border-emerald-400 border-emerald-500 shadow-sm shadow-emerald-500/10'
                           : staked
-                            ? 'dark:bg-zinc-800/80 bg-zinc-50 dark:border-zinc-600 border-zinc-300 dark:hover:border-zinc-500 hover:border-zinc-400'
-                            : 'dark:bg-zinc-900 bg-white dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-300 active:scale-95'}`}
+                            ? 'dark:border-zinc-600 border-zinc-300 dark:hover:border-zinc-500 hover:border-zinc-400'
+                            : 'dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-500 hover:border-zinc-300 active:scale-95 hover:-translate-y-0.5'}`}
                 >
+                  <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/52 to-black/24 transition-opacity duration-200 group-hover:from-black/82 group-hover:via-black/42 group-hover:to-black/18" />
                   {/* Staked dot */}
                   {staked && !elim && (
-                    <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span className="absolute top-1.5 right-1.5 z-10 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm" />
                   )}
                   {isWinner && (
-                    <span className="absolute top-1 right-1 text-[10px]">🏆</span>
+                    <span className="absolute top-1.5 right-1.5 z-10 grid h-4 w-4 place-items-center rounded-full bg-black/35 text-emerald-200 ring-1 ring-white/15 backdrop-blur-sm"><Trophy size={9} strokeWidth={1.8} /></span>
                   )}
 
-                  <span className="text-xl leading-none">{team.flag}</span>
-                  <span className={`text-[10px] font-mono font-bold leading-none mt-0.5 ${
-                    isWinner ? 'text-yellow-400' :
-                    selected === team.code ? 'dark:text-emerald-300 text-emerald-700' :
+                  <span className={`relative z-10 text-[11px] font-mono font-bold leading-none drop-shadow ${
+                    isWinner ? 'text-emerald-200' :
+                    selected === team.code ? 'text-white' :
                     elim ? 'dark:text-zinc-600 text-zinc-400' :
-                    'dark:text-zinc-200 text-zinc-700'}`}>
+                    'text-white'}`}>
                     {team.code}
                   </span>
                   {!elim ? (
-                    <span className={`text-[9px] font-mono leading-none ${
-                      share > 0 ? 'dark:text-zinc-400 text-zinc-500' : 'dark:text-zinc-600 text-zinc-400'}`}>
-                      {share > 0 ? `${share}%` : `~${odds}%`}
+                    <span className={`relative z-10 mt-1 rounded bg-black/58 px-1.5 py-0.5 text-[11px] font-mono font-black leading-none shadow-sm ring-1 ring-white/12 backdrop-blur-[1px] ${
+                      share > 0 ? 'text-white' : 'text-zinc-100'}`}>
+                      {totalWei > 0n ? fmtOdds(odds) : `~${fmtOdds(odds)}`}
                     </span>
                   ) : (
-                    <span className="text-[9px] font-mono dark:text-zinc-700 text-zinc-400 leading-none">OUT</span>
+                    <span className="relative z-10 text-[9px] font-mono text-zinc-300 leading-none">OUT</span>
                   )}
                 </button>
               );
@@ -215,8 +258,15 @@ export function ChampionPick({
           {selected && !isSettled && (
             <div className="dark:bg-zinc-800/60 bg-zinc-50 border dark:border-zinc-700 border-zinc-200 rounded-xl p-3 flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-sm font-bold dark:text-zinc-100 text-zinc-800">
-                <span className="text-xl">{R32_TEAMS.find(t => t.code === selected)?.flag}</span>
-                <span>{R32_TEAMS.find(t => t.code === selected)?.name ?? selected}</span>
+                {(() => {
+                  const team = R32_TEAMS.find(t => t.code === selected);
+                  return team ? (
+                    <>
+                      <TeamFlag iso={team.iso} fallback={team.flag} className="h-5 w-7" />
+                      <span>{team.name}</span>
+                    </>
+                  ) : <span>{selected}</span>;
+                })()}
                 <span className="text-xs font-mono dark:text-zinc-400 text-zinc-500 font-normal">to win WC 2026</span>
               </div>
               <div className="flex items-center gap-2 ml-auto">
@@ -244,9 +294,9 @@ export function ChampionPick({
                     bg-emerald-500 text-black hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {txPending ? (
-                    <><Zap size={10} className="animate-pulse" />Confirm in wallet…</>
+                    <><Zap size={10} className="animate-pulse" />Confirm in wallet...</>
                   ) : (
-                    <>Stake {amountOKB} OKB →</>
+                    <>Stake {amountOKB} OKB {'->'}</>
                   )}
                 </button>
               </div>
@@ -267,9 +317,9 @@ export function ChampionPick({
                 rel="noopener noreferrer"
                 className="underline truncate max-w-[240px]"
               >
-                {txHash.slice(0, 16)}…
+                {txHash.slice(0, 16)}...
               </a>
-              <button onClick={() => setTxHash(null)} className="ml-auto dark:text-zinc-600 text-zinc-400 hover:dark:text-zinc-400 hover:text-zinc-600">✕</button>
+              <button onClick={() => setTxHash(null)} className="ml-auto dark:text-zinc-600 text-zinc-400 hover:dark:text-zinc-400 hover:text-zinc-600">x</button>
             </div>
           )}
         </div>
@@ -277,3 +327,5 @@ export function ChampionPick({
     </div>
   );
 }
+
+

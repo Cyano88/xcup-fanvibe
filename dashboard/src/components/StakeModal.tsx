@@ -22,7 +22,7 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
 const OUTCOME_COLOR: Record<Outcome, string> = {
   home: 'border-emerald-500/50 bg-emerald-500/5 text-emerald-400',
   draw: 'border-zinc-500/50 bg-zinc-500/5 text-zinc-400',
-  away: 'border-amber-500/50 bg-amber-500/5 text-amber-400',
+  away: 'border-blue-500/50 bg-blue-500/5 text-blue-400',
 };
 
 export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }: Props) {
@@ -114,7 +114,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl animate-slide-in">
+      <div className="relative z-10 w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl animate-slide-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-800">
           <div>

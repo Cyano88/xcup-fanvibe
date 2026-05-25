@@ -50,7 +50,7 @@ export interface MatchEvent {
 
 export interface MatchState {
   fixtureId: string;
-  status: 'scheduled' | 'live' | 'finished';
+  status: 'scheduled' | 'live' | 'half_time' | 'finished';
   minute: number;
   homeScore: number;
   awayScore: number;

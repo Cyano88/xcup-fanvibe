@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { ChevronDown, ChevronUp, Zap, Globe, Info } from 'lucide-react';
+import { ChevronDown, ChevronUp, Globe, Info } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
@@ -10,57 +10,51 @@ import { FuelBar } from './components/FuelBar';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
 import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team } from './types';
-import { STATIC_FIXTURES, REALTIME_FIXTURES } from './types';
+import { REALTIME_FIXTURES } from './types';
 import { BracketView } from './components/BracketView';
 import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
 import { xLayerMainnet, explorerAddr } from './lib/chain';
 import { shortAddr } from './lib/encode';
+import {
+  SEASON_GROUPS,
+  SEASON_INTERMISSION_SECONDS,
+  SEASON_PRESTART_SECONDS,
+  allGroupMatchesFinished,
+  advanceKnockout,
+  createSeasonFixtures,
+  currentGroupMatchday,
+  isSeasonFixtureDue,
+  isGroupStageFixture,
+  qualifiedTeams,
+  seedRoundOf32,
+  seasonFixtureKickoffDelayMs,
+} from './lib/seasonTournament';
 
 const BACKEND_WS   = import.meta.env.VITE_BACKEND_WS   ?? 'ws://localhost:3001';
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP  ?? 'http://localhost:3001';
 const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
+const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
+const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 
 const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
 
-// ── Bracket progression map ───────────────────────────────────────────────────
-const BRACKET: Record<string, {
-  winner: { matchId: string; slot: 'home' | 'away' };
-  loser?: { matchId: string; slot: 'home' | 'away' };
-}> = {
-  'r32-1':  { winner: { matchId: 'r16-1', slot: 'home' } },
-  'r32-2':  { winner: { matchId: 'r16-1', slot: 'away' } },
-  'r32-3':  { winner: { matchId: 'r16-2', slot: 'home' } },
-  'r32-4':  { winner: { matchId: 'r16-2', slot: 'away' } },
-  'r32-5':  { winner: { matchId: 'r16-3', slot: 'home' } },
-  'r32-6':  { winner: { matchId: 'r16-3', slot: 'away' } },
-  'r32-7':  { winner: { matchId: 'r16-4', slot: 'home' } },
-  'r32-8':  { winner: { matchId: 'r16-4', slot: 'away' } },
-  'r32-9':  { winner: { matchId: 'r16-5', slot: 'home' } },
-  'r32-10': { winner: { matchId: 'r16-5', slot: 'away' } },
-  'r32-11': { winner: { matchId: 'r16-6', slot: 'home' } },
-  'r32-12': { winner: { matchId: 'r16-6', slot: 'away' } },
-  'r32-13': { winner: { matchId: 'r16-7', slot: 'home' } },
-  'r32-14': { winner: { matchId: 'r16-7', slot: 'away' } },
-  'r32-15': { winner: { matchId: 'r16-8', slot: 'home' } },
-  'r32-16': { winner: { matchId: 'r16-8', slot: 'away' } },
-  'r16-1':  { winner: { matchId: 'qf-1', slot: 'home' } },
-  'r16-2':  { winner: { matchId: 'qf-1', slot: 'away' } },
-  'r16-3':  { winner: { matchId: 'qf-2', slot: 'home' } },
-  'r16-4':  { winner: { matchId: 'qf-2', slot: 'away' } },
-  'r16-5':  { winner: { matchId: 'qf-3', slot: 'home' } },
-  'r16-6':  { winner: { matchId: 'qf-3', slot: 'away' } },
-  'r16-7':  { winner: { matchId: 'qf-4', slot: 'home' } },
-  'r16-8':  { winner: { matchId: 'qf-4', slot: 'away' } },
-  'qf-1':   { winner: { matchId: 'sf-1', slot: 'home' } },
-  'qf-2':   { winner: { matchId: 'sf-1', slot: 'away' } },
-  'qf-3':   { winner: { matchId: 'sf-2', slot: 'home' } },
-  'qf-4':   { winner: { matchId: 'sf-2', slot: 'away' } },
-  'sf-1':   { winner: { matchId: 'f-1',   slot: 'home' }, loser: { matchId: '3pl-1', slot: 'home' } },
-  'sf-2':   { winner: { matchId: 'f-1',   slot: 'away' }, loser: { matchId: '3pl-1', slot: 'away' } },
-};
-
 type SeasonPhase = 'preseason' | 'playing' | 'champion' | 'interseason';
+
+interface StoredSeasonState {
+  seasonNumber: number;
+  phase: SeasonPhase;
+  phaseEndsAt: number;
+  fixtures: Fixture[];
+  matchStates: Record<string, MatchState>;
+  eliminatedTeams: string[];
+  champion: Team | null;
+  tournamentGen: number;
+}
+
+interface InitialSeasonState extends StoredSeasonState {
+  phaseTimer: number;
+}
 
 function defaultMetabolism(): MetabolicState {
   return { okbBalance: '0', okbBalanceFormatted: '0.000000', healthPercent: 0, isRefuelNeeded: false, checkedAt: Date.now() };
@@ -72,12 +66,90 @@ function fmtDuration(secs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function seasonFixturesFromState(incoming: Fixture[]): Fixture[] {
+  if (!incoming.length) return createSeasonFixtures(1);
+  if (incoming.some(f => f.id.startsWith('r32-'))) return createSeasonFixtures(1);
+  return incoming;
+}
+
+function freshSeasonState(seasonNumber = 1, now = Date.now()): InitialSeasonState {
+  return {
+    seasonNumber,
+    phase: 'preseason',
+    phaseEndsAt: now + SEASON_PRESTART_SECONDS * 1000,
+    phaseTimer: SEASON_PRESTART_SECONDS,
+    fixtures: createSeasonFixtures(seasonNumber),
+    matchStates: {},
+    eliminatedTeams: [],
+    champion: null,
+    tournamentGen: 0,
+  };
+}
+
+function resolveSeasonState(parsed: Partial<StoredSeasonState> | null | undefined): InitialSeasonState {
+  const fallback = freshSeasonState(1);
+  if (!parsed?.fixtures?.length || parsed.fixtures.some(f => f.id?.startsWith('r32-'))) return fallback;
+
+  try {
+    const now = Date.now();
+    let phase = parsed.phase ?? 'preseason';
+    let phaseEndsAt = Number(parsed.phaseEndsAt || 0);
+    let seasonNumber = Math.max(1, Number(parsed.seasonNumber || 1));
+    let fixtures = parsed.fixtures ?? fallback.fixtures;
+    let matchStates = parsed.matchStates ?? {};
+    let champion = parsed.champion ?? null;
+    let tournamentGen = Number(parsed.tournamentGen || 0);
+    let eliminatedTeams = parsed.eliminatedTeams ?? [];
+
+    if (!['preseason', 'playing', 'champion', 'interseason'].includes(phase) || phaseEndsAt <= 0) {
+      return fallback;
+    }
+
+    if (phase !== 'playing' && now >= phaseEndsAt) {
+      if (phase === 'preseason') {
+        phase = 'playing';
+      } else if (phase === 'champion') {
+        phase = 'interseason';
+        phaseEndsAt = now + SEASON_INTERMISSION_SECONDS * 1000;
+        champion = null;
+      } else if (phase === 'interseason') {
+        seasonNumber += 1;
+        phase = 'preseason';
+        phaseEndsAt = now + SEASON_PRESTART_SECONDS * 1000;
+        fixtures = createSeasonFixtures(seasonNumber);
+        matchStates = {};
+        eliminatedTeams = [];
+        champion = null;
+        tournamentGen += 1;
+      }
+    }
+
+    return {
+      seasonNumber,
+      phase,
+      phaseEndsAt,
+      phaseTimer: phase === 'playing' ? 0 : Math.max(0, Math.ceil((phaseEndsAt - now) / 1000)),
+      fixtures,
+      matchStates,
+      eliminatedTeams,
+      champion,
+      tournamentGen,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 export default function App() {
+  const initialSeasonRef = useRef<InitialSeasonState | null>(null);
+  if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
+  const initialSeason = initialSeasonRef.current;
+
   const [dark, setDark] = useState(true);
   const [engineOnline, setEngineOnline]         = useState(false);
   const [refereeAddress, setRefereeAddress]     = useState(REFEREE_ADDR);
   const [metabolism, setMetabolism]             = useState<MetabolicState>(defaultMetabolism);
-  const [fixtures, setFixtures]                 = useState<Fixture[]>(STATIC_FIXTURES);
+  const [fixtures, setFixtures]                 = useState<Fixture[]>(initialSeason.fixtures);
   const [pools, setPools]                       = useState<Record<string, Pool>>({});
   const [logs, setLogs]                         = useState<DaemonLog[]>([]);
   const [lastBlock, setLastBlock]               = useState(0);
@@ -89,32 +161,92 @@ export default function App() {
   const [howOpen, setHowOpen]                   = useState(false);
   const [roundFilter, setRoundFilter]           = useState<string>('all');
   const [groupFilter, setGroupFilter]           = useState<string>('all');
-  const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>({});
+  const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>(initialSeason.matchStates);
   const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
   const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
-  const [eliminatedTeams, setEliminatedTeams]   = useState<Set<string>>(new Set());
-  const [champion, setChampion]                 = useState<Team | null>(null);
-  const [tournamentGen, setTournamentGen]       = useState(0);
+  const [eliminatedTeams, setEliminatedTeams]   = useState<Set<string>>(() => new Set(initialSeason.eliminatedTeams));
+  const [champion, setChampion]                 = useState<Team | null>(initialSeason.champion);
+  const [tournamentGen, setTournamentGen]       = useState(initialSeason.tournamentGen);
 
   // Season / phase system
   const [seasonNumber, setSeasonNumber]         = useState<number>(() => {
-    try { return Math.max(1, parseInt(localStorage.getItem('xcup_season') ?? '1') || 1); } catch { return 1; }
+    return Math.max(1, initialSeason.seasonNumber || 1);
   });
-  const [phase, setPhase]                       = useState<SeasonPhase>('preseason');
-  const [phaseTimer, setPhaseTimer]             = useState(5 * 60); // 5-min pre-season
+  const [phase, setPhase]                       = useState<SeasonPhase>(initialSeason.phase);
+  const [phaseTimer, setPhaseTimer]             = useState(initialSeason.phaseTimer);
+  const [phaseEndsAt, setPhaseEndsAt]           = useState(initialSeason.phaseEndsAt);
+  const [seasonClockTick, setSeasonClockTick]   = useState(0);
 
   const wsRef                  = useRef<WebSocket | null>(null);
   const reconnectRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
   const simCleanupRef          = useRef<Map<string, () => void>>(new Map());
   const bracketProcessedRef    = useRef<Set<string>>(new Set());
   const championTriggeredRef   = useRef(false);
+  const watchedStateRef        = useRef<Record<string, MatchState>>({});
+  const seasonHydratedRef      = useRef(false);
+  const seasonSaveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
 
-  // Persist season number
+  const applySeasonState = useCallback((state: InitialSeasonState) => {
+    setSeasonNumber(state.seasonNumber);
+    setPhase(state.phase);
+    setPhaseEndsAt(state.phaseEndsAt);
+    setPhaseTimer(state.phaseTimer);
+    setFixtures(state.fixtures);
+    setMatchStates(state.matchStates);
+    setEliminatedTeams(new Set(state.eliminatedTeams));
+    setChampion(state.champion);
+    setTournamentGen(state.tournamentGen);
+    setRoundFilter('all');
+    setWatchingId(null);
+    bracketProcessedRef.current.clear();
+    championTriggeredRef.current = state.phase === 'champion';
+  }, []);
+
   useEffect(() => {
-    try { localStorage.setItem('xcup_season', String(seasonNumber)); } catch { /* private browsing */ }
-  }, [seasonNumber]);
+    let cancelled = false;
+    fetch(`${BACKEND_HTTP}/season-state`)
+      .then(async r => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error('season state unavailable');
+        return await r.json();
+      })
+      .then((raw: Partial<StoredSeasonState> | { state: null } | null) => {
+        if (cancelled) return;
+        if (raw && !('state' in raw)) applySeasonState(resolveSeasonState(raw));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) seasonHydratedRef.current = true;
+      });
+    return () => { cancelled = true; };
+  }, [applySeasonState]);
+
+  useEffect(() => {
+    if (!seasonHydratedRef.current) return;
+    if (seasonSaveTimerRef.current) clearTimeout(seasonSaveTimerRef.current);
+    const snapshot: StoredSeasonState = {
+      seasonNumber,
+      phase,
+      phaseEndsAt,
+      fixtures,
+      matchStates,
+      eliminatedTeams: [...eliminatedTeams],
+      champion,
+      tournamentGen,
+    };
+    seasonSaveTimerRef.current = setTimeout(() => {
+      fetch(`${BACKEND_HTTP}/season-state`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      }).catch(() => {});
+    }, 400);
+    return () => {
+      if (seasonSaveTimerRef.current) clearTimeout(seasonSaveTimerRef.current);
+    };
+  }, [seasonNumber, phase, phaseEndsAt, fixtures, matchStates, eliminatedTeams, champion, tournamentGen]);
 
   const connectWS = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -130,13 +262,16 @@ export default function App() {
           const s = msg.data as DaemonState;
           setRefereeAddress(s.refereeAddress || REFEREE_ADDR);
           setMetabolism(s.metabolism);
-          setFixtures(s.fixtures.length ? s.fixtures : STATIC_FIXTURES);
+          setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
           setPools(s.pools);
           setLogs(s.recentLogs);
           setLastBlock(s.lastBlock);
           setWsConnected(s.wsConnected);
           setSettlements(s.settlements);
-          setMatchStates(s.matchStates ?? {});
+          setMatchStates(prev => {
+            const incoming = s.matchStates ?? {};
+            return Object.keys(incoming).length ? { ...prev, ...incoming } : prev;
+          });
         } else if (msg.type === 'log') {
           setLogs(prev => [...prev.slice(-199), msg.data as DaemonLog]);
         } else if (msg.type === 'settlement') {
@@ -144,6 +279,10 @@ export default function App() {
           setSettlements(prev => [...prev, s]);
           setPendingToasts(prev => [...prev, s]);
           setFixtures(prev => prev.map(f => f.id === s.fixtureId ? { ...f, status: 'settled', result: s.outcome } : f));
+        } else if (msg.type === 'season-state') {
+          applySeasonState(resolveSeasonState(msg.data as Partial<StoredSeasonState>));
+        } else if (msg.type === 'season-state-reset') {
+          applySeasonState(freshSeasonState(1));
         }
       } catch { /* malformed */ }
     };
@@ -160,13 +299,16 @@ export default function App() {
         setEngineOnline(true);
         setRefereeAddress(s.refereeAddress || REFEREE_ADDR);
         setMetabolism(s.metabolism);
-        setFixtures(s.fixtures.length ? s.fixtures : STATIC_FIXTURES);
+        setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
         setPools(s.pools);
         setLogs(s.recentLogs);
         setLastBlock(s.lastBlock);
         setWsConnected(s.wsConnected);
         setSettlements(s.settlements);
-        setMatchStates(s.matchStates ?? {});
+        setMatchStates(prev => {
+          const incoming = s.matchStates ?? {};
+          return Object.keys(incoming).length ? { ...prev, ...incoming } : prev;
+        });
       })
       .catch(() => {});
 
@@ -192,94 +334,122 @@ export default function App() {
     return () => clearInterval(t);
   }, [engineOnline, refereeAddress]);
 
-  // ── Tournament restart ───────────────────────────────────────────────────────
-  const doRestart = useCallback(() => {
+  const resetRuntimeTournamentRefs = useCallback(() => {
     simCleanupRef.current.forEach(c => c());
     simCleanupRef.current.clear();
     bracketProcessedRef.current.clear();
     championTriggeredRef.current = false;
+  }, [applySeasonState]);
+
+  // -- Tournament phase transitions --------------------------------------------
+  const startPreseason = useCallback((nextSeasonNumber = seasonNumber) => {
+    resetRuntimeTournamentRefs();
+    const endsAt = Date.now() + SEASON_PRESTART_SECONDS * 1000;
+    setSeasonNumber(nextSeasonNumber);
     setMatchStates({});
-    setFixtures(STATIC_FIXTURES);
+    setFixtures(createSeasonFixtures(nextSeasonNumber));
     setEliminatedTeams(new Set());
     setChampion(null);
     setTournamentGen(g => g + 1);
-  }, []);
+    setRoundFilter('all');
+    setWatchingId(null);
+    setPhase('preseason');
+    setPhaseEndsAt(endsAt);
+    setPhaseTimer(SEASON_PRESTART_SECONDS);
+  }, [resetRuntimeTournamentRefs, seasonNumber]);
 
-  // ── Phase / season timer ─────────────────────────────────────────────────────
+  const startInterseason = useCallback(() => {
+    resetRuntimeTournamentRefs();
+    const endsAt = Date.now() + SEASON_INTERMISSION_SECONDS * 1000;
+    setChampion(null);
+    setWatchingId(null);
+    setPhase('interseason');
+    setPhaseEndsAt(endsAt);
+    setPhaseTimer(SEASON_INTERMISSION_SECONDS);
+  }, [resetRuntimeTournamentRefs]);
+
+  // -- Phase / season timer -----------------------------------------------------
   useEffect(() => {
     if (phase === 'playing') return;
-    if (phaseTimer <= 0) {
-      if (phase === 'champion') {
-        setChampion(null);
-        setPhase('interseason');
-        setPhaseTimer(20 * 60);
-      } else if (phase === 'interseason') {
-        setSeasonNumber(n => n + 1);
-        doRestart();
-        setPhase('preseason');
-        setPhaseTimer(5 * 60);
-      } else if (phase === 'preseason') {
-        setPhase('playing');
-      }
-      return;
-    }
-    const t = setTimeout(() => setPhaseTimer(n => n - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, phaseTimer, doRestart]);
 
-  // ── Client-side simulation ───────────────────────────────────────────────────
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000));
+      setPhaseTimer(remaining);
+      if (remaining > 0) return;
+
+      if (phase === 'preseason') {
+        setPhase('playing');
+        setPhaseTimer(0);
+        return;
+      }
+
+      if (phase === 'champion') {
+        startInterseason();
+        return;
+      }
+
+      if (phase === 'interseason') {
+        startPreseason(seasonNumber + 1);
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [phase, phaseEndsAt, seasonNumber, startInterseason, startPreseason]);
+
   useEffect(() => {
-    if (engineOnline || viewMode !== 'simulated' || phase !== 'playing') return;
+    if (phase !== 'playing' || viewMode !== 'simulated') return;
+    const t = setInterval(() => setSeasonClockTick(n => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [phase, viewMode]);
+
+  // -- Client-side simulation ---------------------------------------------------
+  useEffect(() => {
+    if (viewMode !== 'simulated' || phase !== 'playing') return;
     fixtures.forEach(fx => {
       if (fx.status !== 'open' && fx.status !== 'locked') return;
       if (fx.home.code === 'TBD' || fx.away.code === 'TBD') return;
+      if (!isSeasonFixtureDue(fixtures, fx, phaseEndsAt, matchStates)) return;
       if (simCleanupRef.current.has(fx.id)) return;
+      if (matchStates[fx.id]?.status === 'finished') return;
+      setFixtures(prev => prev.map(item => item.id === fx.id ? { ...item, status: 'locked' } : item));
       const cleanup = simulateMatch(fx, (state) => {
         setMatchStates(prev => ({ ...prev, [fx.id]: state }));
-      });
+      }, undefined, matchStates[fx.id]);
       simCleanupRef.current.set(fx.id, cleanup);
     });
-  }, [engineOnline, viewMode, phase, fixtures]);
+  }, [viewMode, phase, fixtures, matchStates, phaseEndsAt, seasonClockTick]);
 
-  // Advance bracket when a match finishes
+  // Seed knockouts after the 12 World Cup groups complete.
   useEffect(() => {
-    if (engineOnline || viewMode !== 'simulated') return;
+    if (viewMode !== 'simulated' || phase !== 'playing') return;
+    if (!allGroupMatchesFinished(fixtures, matchStates)) return;
+    if (fixtures.some(f => f.id === 'k32-1' && f.home.code !== 'TBD')) return;
+    const qualified = new Set(qualifiedTeams(fixtures, matchStates).map(team => team.code));
+    const allTeams = new Set(fixtures.filter(isGroupStageFixture).flatMap(f => [f.home.code, f.away.code]));
+    setEliminatedTeams(new Set([...allTeams].filter(code => !qualified.has(code))));
+    setFixtures(prev => seedRoundOf32(prev, matchStates));
+  }, [fixtures, matchStates, viewMode, phase]);
+
+  // Advance knockout bracket when a match finishes.
+  useEffect(() => {
+    if (viewMode !== 'simulated') return;
     Object.entries(matchStates).forEach(([id, ms]) => {
       if (ms.status !== 'finished') return;
       if (bracketProcessedRef.current.has(id)) return;
       bracketProcessedRef.current.add(id);
-      const entry = BRACKET[id];
-      if (!entry) return;
       setFixtures(prev => {
-        const fx = prev.find(f => f.id === id);
-        if (!fx) return prev;
-        const winner: Team = ms.homeScore > ms.awayScore ? fx.home
-          : ms.awayScore > ms.homeScore ? fx.away
-          : Math.random() > 0.5 ? fx.home : fx.away;
-        const loser: Team = winner.code === fx.home.code ? fx.away : fx.home;
-        setEliminatedTeams(prev => new Set([...prev, loser.code]));
-        return prev.map(f => {
-          if (f.id === entry.winner.matchId) {
-            const updated = { ...f, [entry.winner.slot]: winner };
-            const other: Team = entry.winner.slot === 'home' ? updated.away : updated.home;
-            if (other.code !== 'TBD') updated.status = 'open';
-            return updated;
-          }
-          if (entry.loser && f.id === entry.loser.matchId) {
-            const updated = { ...f, [entry.loser.slot]: loser };
-            const other: Team = entry.loser.slot === 'home' ? updated.away : updated.home;
-            if (other.code !== 'TBD') updated.status = 'open';
-            return updated;
-          }
-          return f;
-        });
+        const result = advanceKnockout(prev, id, ms);
+        if (result.eliminated) setEliminatedTeams(prevSet => new Set([...prevSet, result.eliminated!.code]));
+        return result.fixtures;
       });
     });
-  }, [matchStates, engineOnline, viewMode]);
+  }, [matchStates, viewMode]);
 
-  // Detect Final finish → champion phase
+  // Detect Final finish -> champion phase
   useEffect(() => {
-    if (engineOnline || viewMode !== 'simulated' || phase !== 'playing') return;
+    if (viewMode !== 'simulated' || phase !== 'playing') return;
     const ms = matchStates['f-1'];
     if (ms?.status !== 'finished') return;
     if (championTriggeredRef.current) return;
@@ -289,76 +459,124 @@ export default function App() {
     const winner = ms.homeScore >= ms.awayScore ? fx.home : fx.away;
     setChampion(winner);
     setPhase('champion');
+    setPhaseEndsAt(Date.now() + 10 * 1000);
     setPhaseTimer(10);
-  }, [matchStates, engineOnline, viewMode, phase, fixtures]);
+  }, [matchStates, viewMode, phase, fixtures]);
 
   const handleStake    = useCallback((fixtureId: string, outcome: Outcome) => setStakeTarget({ fixtureId, outcome }), []);
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
   const handleWatch    = useCallback((fixtureId: string) => setWatchingId(fixtureId), []);
+
+  useEffect(() => {
+    watchedStateRef.current = { ...watchedStateRef.current, ...matchStates };
+  }, [matchStates]);
+
   const activeFixture  = stakeTarget ? fixtures.find(f => f.id === stakeTarget.fixtureId) ?? null : null;
   const watchingFixture = watchingFixtureId ? fixtures.find(f => f.id === watchingFixtureId) ?? null : null;
+  const watchingMatchState = watchingFixtureId
+    ? matchStates[watchingFixtureId] ?? watchedStateRef.current[watchingFixtureId] ?? null
+    : null;
 
   const simFixtures    = viewMode === 'simulated' ? fixtures : REALTIME_FIXTURES;
   const rtGroups       = ['all', ...Array.from(new Set(REALTIME_FIXTURES.map(f => f.group))).sort()];
+  const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
   const visibleFixtures = viewMode === 'simulated'
-    ? (roundFilter === 'all' ? simFixtures : simFixtures.filter(f => f.round === roundFilter))
+    ? (roundFilter === 'all'
+      ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === activeGroupMatchday)
+      : roundFilter.startsWith('md')
+        ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === Number(roundFilter.replace('md', '')))
+      : roundFilter === 'knockouts'
+        ? simFixtures.filter(f => !!f.round)
+        : SEASON_GROUPS.includes(roundFilter)
+          ? simFixtures.filter(f => f.group === roundFilter && isGroupStageFixture(f))
+          : simFixtures)
     : (groupFilter === 'all' ? REALTIME_FIXTURES : REALTIME_FIXTURES.filter(f => f.group === groupFilter));
+  const selectedGroupFixtures = viewMode === 'realtime' && groupFilter !== 'all'
+    ? REALTIME_FIXTURES.filter(f => f.group === groupFilter)
+    : [];
+  const selectedGroupResults = selectedGroupFixtures.filter(f => matchStates[f.id]?.status === 'finished');
+  const simulatedFixtureSectionLabel = viewMode === 'simulated'
+    ? roundFilter === 'all'
+      ? `Matchday ${activeGroupMatchday} Fixtures`
+      : roundFilter.startsWith('md')
+        ? `Matchday ${roundFilter.replace('md', '')} Fixtures`
+        : roundFilter === 'knockouts'
+          ? 'Knockout Fixtures'
+          : SEASON_GROUPS.includes(roundFilter)
+            ? `Group ${roundFilter} Fixtures`
+            : 'Season Fixtures'
+    : '';
 
   const healthColor = metabolism.isRefuelNeeded
     ? 'dark:text-red-400 text-red-600'
     : metabolism.healthPercent < 40
-    ? 'dark:text-amber-400 text-amber-600'
+    ? 'dark:text-blue-300 text-blue-600'
     : 'dark:text-emerald-400 text-emerald-600';
 
   const seasonLabel = `FanVibe Season ${seasonNumber}`;
+  const seasonStartsAt = new Date(Date.now() + phaseTimer * 1000).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+  const seasonStartedAt = phase === 'playing' ? phaseEndsAt : Date.now() + phaseTimer * 1000;
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b dark:border-zinc-900 border-zinc-200 dark:bg-black/98 bg-white/95 backdrop-blur-sm">
+      {/* -- Header ----------------------------------------------------------- */}
+      <header className="sticky top-0 z-40 border-b dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/95 bg-white/95 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between gap-4">
 
           {/* Brand */}
-          <div className="flex items-center gap-3">
-            <span className="text-base font-bold tracking-tight dark:text-white text-zinc-900">X Cup FanVibe</span>
+          <div className="flex min-w-0 items-center gap-3">
+            <img
+              src={FANVIBE_HERO_LOGO}
+              alt="X Cup FanVibe"
+              className="h-8 w-8 rounded-md object-cover ring-1 ring-black/10 dark:ring-white/10"
+            />
+            <span className="truncate text-sm sm:text-base font-semibold tracking-tight dark:text-white text-zinc-950">X Cup FanVibe</span>
             {viewMode === 'simulated' && (
-              <span className="hidden sm:inline text-[11px] font-mono dark:text-zinc-500 text-zinc-400">
+              <span className="hidden sm:inline text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
                 {seasonLabel}
               </span>
             )}
-            <span className="hidden sm:flex badge-live text-[10px]">
-              <span className="dot-live" /> X Layer · 196
+            <span className="hidden lg:inline text-[11px] font-medium dark:text-zinc-600 text-zinc-400">
+              X Layer 196
             </span>
           </div>
 
           {/* Status strip */}
-          <div className="hidden md:flex items-center gap-4 text-xs font-mono dark:text-zinc-300 text-zinc-600">
+          <div className="hidden lg:flex items-center gap-5 text-[11px] dark:text-zinc-500 text-zinc-500">
             {lastBlock > 0 && (
-              <span className="flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${wsConnected || engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-600 bg-zinc-400'}`} />
-                #{lastBlock.toLocaleString()}
+              <span className="whitespace-nowrap">
+                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Block</span>
+                <span className="font-medium tabular-nums dark:text-zinc-300 text-zinc-700">{lastBlock.toLocaleString()}</span>
               </span>
             )}
             {refereeAddress && (
               <a href={explorerAddr(refereeAddress)} target="_blank" rel="noopener noreferrer"
-                className="dark:hover:text-white hover:text-zinc-900 transition-colors">
-                {shortAddr(refereeAddress)}
+                className="whitespace-nowrap transition-colors dark:hover:text-white hover:text-zinc-950">
+                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Wallet</span>
+                <span className="font-medium dark:text-zinc-300 text-zinc-700">{shortAddr(refereeAddress)}</span>
               </a>
             )}
-            <span className={`font-semibold ${healthColor}`}>
-              {metabolism.okbBalanceFormatted} OKB
+            <span className="whitespace-nowrap">
+              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Balance</span>
+              <span className={`font-medium tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</span>
             </span>
-            <div className="w-20">
+            <div className="w-16 opacity-80">
               <FuelBar percent={metabolism.healthPercent} okbFormatted="" isRefuelNeeded={metabolism.isRefuelNeeded} compact />
             </div>
+            <span className="whitespace-nowrap">
+              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Engine</span>
+              <span className={`font-medium ${wsConnected || engineOnline ? 'dark:text-zinc-300 text-zinc-700' : 'dark:text-zinc-600 text-zinc-400'}`}>
+                {wsConnected || engineOnline ? 'Online' : 'Offline'}
+              </span>
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`hidden sm:flex items-center gap-1.5 text-xs font-mono font-semibold
-              ${engineOnline ? 'dark:text-emerald-400 text-emerald-600' : 'dark:text-zinc-600 text-zinc-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
-              {engineOnline ? 'Connected' : 'Standby'}
+            <span className="hidden sm:inline lg:hidden text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
+              {wsConnected || engineOnline ? 'Online' : 'Offline'}
             </span>
             <ThemeSwitcher dark={dark} onToggle={() => setDark(d => !d)} />
           </div>
@@ -367,17 +585,16 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-        {/* ── Mode toggle ───────────────────────────────────────────────── */}
+        {/* -- Mode toggle ------------------------------------------------- */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
             <button
               onClick={() => setViewMode('simulated')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
                 ${viewMode === 'simulated'
-                  ? 'bg-amber-500 text-black shadow-sm'
+                  ? 'bg-emerald-500 text-black shadow-sm'
                   : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
             >
-              <Zap size={13} className={viewMode === 'simulated' ? 'text-black' : ''} />
               Season Play
             </button>
             <button
@@ -396,80 +613,62 @@ export default function App() {
             {viewMode === 'simulated' ? (
               phase === 'preseason' ? (
                 <>
-                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                  {seasonLabel} starts in {fmtDuration(phaseTimer)} · staking open
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />
+                  World Cup Season starts in {fmtDuration(phaseTimer)} - fixtures open in broadcast waves
                 </>
               ) : phase === 'interseason' ? (
                 <>
-                  <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500/70" />
                   Season {seasonNumber + 1} starts in {fmtDuration(phaseTimer)}
                 </>
               ) : (
                 <>
-                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                  {seasonLabel} · matches live now
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />
+                  World Cup Season - group matches live now
                 </>
               )
             ) : (
               <>
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-                Real WC · staking open · first kick-off Jun 11 2026
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400/80" />
+                Real WC - staking open - first kick-off Jun 11 2026
               </>
             )}
           </div>
         </div>
 
-        {/* ── Pre-season banner ─────────────────────────────────────────── */}
+        {/* -- Pre-season banner ------------------------------------------- */}
         {viewMode === 'simulated' && phase === 'preseason' && (
-          <div className="dark:bg-amber-500/8 bg-amber-50 border dark:border-amber-500/20 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <div className="text-sm font-bold dark:text-amber-300 text-amber-700 mb-0.5">{seasonLabel} — Staking Open</div>
-              <div className="text-xs dark:text-zinc-400 text-zinc-600">
-                Predict the champion and stake on opening fixtures before kick-off.
+          <div
+            className="fanvibe-live-panel rounded-lg border border-white/10 p-4 flex items-center justify-between gap-4 flex-wrap shadow-sm"
+            style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
+          >
+            <div className="relative z-10">
+              <div className="text-sm font-semibold text-white mb-0.5 drop-shadow-sm">World Cup Season - Staking Open</div>
+              <div className="text-xs text-zinc-200/90">
+                First fixture window begins at {seasonStartsAt}. More group matches follow in shared broadcast waves.
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <div className="font-serif text-3xl dark:text-amber-300 text-amber-600 tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
-                <div className="text-[10px] font-mono dark:text-zinc-500 text-zinc-400 uppercase mt-0.5">until kick-off</div>
-              </div>
-              <button
-                onClick={() => setPhase('playing')}
-                className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-amber-500 text-black hover:bg-amber-400 active:scale-95 transition-all"
-              >
-                Start Now →
-              </button>
+            <div className="relative z-10 rounded-md border border-white/10 bg-black/35 px-4 py-2 text-center backdrop-blur-[2px]">
+              <div className="text-3xl font-semibold text-white tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
+              <div className="text-[10px] font-mono text-zinc-300 uppercase mt-0.5">until kick-off</div>
             </div>
           </div>
         )}
 
-        {/* ── Inter-season banner ───────────────────────────────────────── */}
+        {/* -- Inter-season banner ----------------------------------------- */}
         {viewMode === 'simulated' && phase === 'interseason' && (
           <div className="dark:bg-zinc-900/80 bg-zinc-100 border dark:border-zinc-700 border-zinc-300 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
               <div className="text-sm font-bold dark:text-zinc-200 text-zinc-700 mb-0.5">
-                Season {seasonNumber + 1} — Coming Soon
+                Season {seasonNumber + 1} - Coming Soon
               </div>
               <div className="text-xs dark:text-zinc-400 text-zinc-600">
                 A new tournament is being prepared. Stake positions for the next season.
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <div className="font-serif text-3xl dark:text-zinc-300 text-zinc-600 tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
-                <div className="text-[10px] font-mono dark:text-zinc-500 text-zinc-400 uppercase mt-0.5">until next season</div>
-              </div>
-              <button
-                onClick={() => {
-                  setSeasonNumber(n => n + 1);
-                  doRestart();
-                  setPhase('preseason');
-                  setPhaseTimer(5 * 60);
-                }}
-                className="px-4 py-2 rounded-lg text-xs font-mono font-bold dark:bg-zinc-700 bg-zinc-200 dark:text-zinc-100 text-zinc-800 dark:hover:bg-zinc-600 hover:bg-zinc-300 active:scale-95 transition-all"
-              >
-                Start Early →
-              </button>
+            <div className="text-center">
+              <div className="text-3xl font-semibold dark:text-zinc-300 text-zinc-600 tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
+              <div className="text-[10px] font-mono dark:text-zinc-500 text-zinc-400 uppercase mt-0.5">until next season</div>
             </div>
           </div>
         )}
@@ -491,18 +690,17 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Round / group filter tabs ─────────────────────────────────── */}
+        {/* -- Round / group filter tabs ----------------------------------- */}
         {viewMode === 'simulated' ? (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {[
-              { id: 'all',     label: 'All' },
-              { id: 'R32',     label: 'R32' },
-              { id: 'R16',     label: 'R16' },
-              { id: 'QF',      label: 'QF' },
-              { id: 'SF',      label: 'SF' },
-              { id: '3PL',     label: '3rd Place' },
-              { id: 'F',       label: 'Final' },
-              { id: 'bracket', label: '🏆 Bracket' },
+              { id: 'all', label: `Live MD${activeGroupMatchday}` },
+              { id: 'md1', label: 'Matchday 1' },
+              { id: 'md2', label: 'Matchday 2' },
+              { id: 'md3', label: 'Matchday 3' },
+              ...SEASON_GROUPS.map(g => ({ id: g, label: `Group ${g}` })),
+              { id: 'knockouts', label: 'Knockouts' },
+              { id: 'bracket', label: 'Bracket' },
             ].map(t => (
               <button key={t.id} onClick={() => setRoundFilter(t.id)}
                 className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-150
@@ -527,8 +725,8 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Simulation running indicator ──────────────────────────────── */}
-        {viewMode === 'simulated' && phase === 'playing' && !engineOnline && Object.keys(matchStates).length > 0 && (() => {
+        {/* -- Simulation running indicator -------------------------------- */}
+        {viewMode === 'simulated' && phase === 'playing' && Object.keys(matchStates).length > 0 && (() => {
           const liveEntries   = Object.entries(matchStates).filter(([, ms]) => ms.status === 'live');
           const finishedCount = Object.values(matchStates).filter(ms => ms.status === 'finished').length;
           return (
@@ -536,14 +734,14 @@ export default function App() {
               <div className="shrink-0 flex items-center gap-1.5 text-xs font-mono font-semibold">
                 {liveEntries.length > 0 ? (
                   <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                    <span className="dark:text-amber-400 text-amber-600">{liveEntries.length} LIVE</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="dark:text-emerald-400 text-emerald-600">{liveEntries.length} LIVE</span>
                   </>
                 ) : (
                   <span className="dark:text-zinc-500 text-zinc-400">Season complete</span>
                 )}
                 {finishedCount > 0 && (
-                  <span className="dark:text-zinc-600 text-zinc-400">· {finishedCount} done</span>
+                  <span className="dark:text-zinc-600 text-zinc-400">- {finishedCount} done</span>
                 )}
               </div>
               {liveEntries.map(([id, ms]) => {
@@ -553,13 +751,13 @@ export default function App() {
                   <button
                     key={id}
                     onClick={() => setWatchingId(id)}
-                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-amber-500/30 border-amber-200
-                      dark:bg-amber-500/8 bg-amber-50 dark:hover:border-amber-400/50 hover:border-amber-300
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border dark:border-emerald-500/30 border-emerald-200
+                      dark:bg-emerald-500/8 bg-emerald-50 dark:hover:border-emerald-400/50 hover:border-emerald-300
                       transition-all active:scale-95 text-[11px] font-mono font-semibold"
                   >
-                    <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                    <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                     <span className="dark:text-zinc-200 text-zinc-700">{fx.home.flag} {ms.homeScore}</span>
-                    <span className="dark:text-zinc-600 text-zinc-400">–</span>
+                    <span className="dark:text-zinc-600 text-zinc-400">-</span>
                     <span className="dark:text-zinc-200 text-zinc-700">{ms.awayScore} {fx.away.flag}</span>
                     <span className="dark:text-zinc-500 text-zinc-400">{ms.minute}&apos;</span>
                   </button>
@@ -569,22 +767,25 @@ export default function App() {
           );
         })()}
 
-        {/* ── Realtime mode notice ──────────────────────────────────────── */}
+        {/* -- Realtime mode notice ---------------------------------------- */}
         {viewMode === 'realtime' && (
-          <div className="dark:bg-blue-500/8 bg-blue-50 border dark:border-blue-500/20 border-blue-200 rounded-xl p-4 flex items-start gap-3">
-            <Globe size={18} className="dark:text-blue-400 text-blue-600 shrink-0 mt-0.5" />
-            <div>
-              <div className="text-sm font-bold dark:text-blue-300 text-blue-700 mb-1">FIFA World Cup 2026 — All 12 Groups</div>
-              <div className="text-xs dark:text-zinc-400 text-zinc-600 leading-relaxed">
+          <div
+            className="fanvibe-live-panel rounded-xl border border-white/10 p-4 flex items-start gap-3 shadow-sm"
+            style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
+          >
+            <Globe size={18} className="relative z-10 text-blue-200 shrink-0 mt-0.5" />
+            <div className="relative z-10">
+              <div className="text-sm font-bold text-white mb-1 drop-shadow-sm">FIFA World Cup 2026 - All 12 Groups</div>
+              <div className="text-xs text-zinc-200/90 leading-relaxed">
                 Official WC 2026 group stage fixtures (MD1 + MD2). Staking is open now for all 48 matches.
-                First kick-off <span className="font-semibold dark:text-zinc-200 text-zinc-800">June 11, 2026</span>.
+                First kick-off <span className="font-semibold text-white">June 11, 2026</span>.
                 Switch to Season Play to watch live simulated matches running right now.
               </div>
             </div>
           </div>
         )}
 
-        {/* ── Champion prediction market ───────────────────────────────── */}
+        {/* -- Champion prediction market --------------------------------- */}
         {viewMode === 'simulated' && (
           <ChampionPick
             key={tournamentGen}
@@ -595,7 +796,65 @@ export default function App() {
           />
         )}
 
-        {/* ── Bracket view OR fixture grid ──────────────────────────────── */}
+        {viewMode === 'realtime' && groupFilter !== 'all' && (
+          <section className="space-y-4">
+            <div className="flex items-end justify-between gap-4 border-b dark:border-zinc-900 border-zinc-200 pb-3">
+              <div>
+                <div className="text-[11px] font-mono font-semibold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                  World Cup Group
+                </div>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight dark:text-zinc-100 text-zinc-900">
+                  Group {groupFilter}
+                </h2>
+              </div>
+              <div className="text-right text-xs font-mono dark:text-zinc-500 text-zinc-400">
+                {selectedGroupFixtures.length} fixtures
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4">
+              <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-900 border-zinc-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b dark:border-zinc-900 border-zinc-100">
+                  <div className="text-xs font-mono font-bold uppercase tracking-widest dark:text-zinc-400 text-zinc-500">
+                    Previously Played
+                  </div>
+                </div>
+                <div className="divide-y dark:divide-zinc-900 divide-zinc-100">
+                  {selectedGroupResults.length > 0 ? selectedGroupResults.map(fixture => {
+                    const ms = matchStates[fixture.id];
+                    return (
+                      <div key={fixture.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                        <div className="min-w-0">
+                          <div className="font-semibold dark:text-zinc-200 text-zinc-800 truncate">
+                            {fixture.home.code} vs {fixture.away.code}
+                          </div>
+                          <div className="mt-0.5 text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
+                            {fixture.venue}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-lg font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">
+                          {ms.homeScore} - {ms.awayScore}
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <div className="px-4 py-5 text-sm dark:text-zinc-500 text-zinc-500">
+                      No completed matches in Group {groupFilter} yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <GroupTable
+                fixtures={REALTIME_FIXTURES}
+                matchStates={matchStates}
+                selectedGroup={groupFilter}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* -- Bracket view OR fixture grid -------------------------------- */}
         {viewMode === 'simulated' && roundFilter === 'bracket' ? (
           <BracketView
             fixtures={fixtures}
@@ -603,26 +862,44 @@ export default function App() {
             onWatch={handleWatch}
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {visibleFixtures.map(fixture => (
-              <FixtureCard
-                key={fixture.id}
-                fixture={fixture}
-                pool={pools[fixture.id]}
-                matchState={viewMode === 'simulated' ? matchStates[fixture.id] : undefined}
-                onStake={handleStake}
-                onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
-              />
-            ))}
-          </div>
+          <section className="space-y-3">
+            {viewMode === 'simulated' && roundFilter !== 'bracket' && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-mono font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                  {simulatedFixtureSectionLabel}
+                </div>
+                {phase === 'playing' && (
+                  <div className="text-[11px] font-mono dark:text-zinc-500 text-zinc-400">
+                    MD1 {'->'} MD2 {'->'} MD3 {'->'} Knockouts {'->'} Final
+                  </div>
+                )}
+              </div>
+            )}
+            {viewMode === 'realtime' && groupFilter !== 'all' && (
+              <div className="text-xs font-mono font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                Group {groupFilter} Fixtures
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {visibleFixtures.map(fixture => (
+                <FixtureCard
+                  key={fixture.id}
+                  fixture={fixture}
+                  pool={pools[fixture.id]}
+                  matchState={viewMode === 'simulated' ? matchStates[fixture.id] : undefined}
+                  seasonPhase={viewMode === 'simulated' ? phase : undefined}
+                  seasonTimer={viewMode === 'simulated' ? phaseTimer : undefined}
+                  seasonKickoffDelayMs={viewMode === 'simulated' ? seasonFixtureKickoffDelayMs(fixtures, fixture.id) : undefined}
+                  seasonStartedAt={viewMode === 'simulated' ? seasonStartedAt : undefined}
+                  onStake={handleStake}
+                  onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
-        {/* ── Group standings (realtime mode) ───────────────────────────── */}
-        {viewMode === 'realtime' && (
-          <GroupTable fixtures={REALTIME_FIXTURES} matchStates={matchStates} />
-        )}
-
-        {/* ── Activity feed toggle ──────────────────────────────────────── */}
+        {/* -- Activity feed toggle ---------------------------------------- */}
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setLogOpen(o => !o)}
@@ -630,14 +907,14 @@ export default function App() {
           >
             <span className="flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${engineOnline ? 'bg-emerald-400 animate-pulse' : 'dark:bg-zinc-700 bg-zinc-300'}`} />
-              Activity Feed · {logs.length} entries
+              Activity Feed - {logs.length} entries
             </span>
             {logOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
           {logOpen && <LogStream logs={logs} daemonOnline={engineOnline} />}
         </div>
 
-        {/* ── How it works ─────────────────────────────────────────────── */}
+        {/* -- How it works ----------------------------------------------- */}
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setHowOpen(o => !o)}
@@ -651,18 +928,15 @@ export default function App() {
           </button>
           {howOpen && (
             <div className="px-4 pb-4 pt-1 space-y-2 text-xs dark:text-zinc-400 text-zinc-600 border-t dark:border-zinc-800 border-zinc-100">
-              <p>· Send OKB to the Settlement Wallet with ABI-encoded calldata specifying your fixture and outcome.</p>
-              <p>· When the match settles, the winning pool is distributed pro-rata to all backers of the correct outcome.</p>
-              <p>· The Champion market pays out proportionally to all stakers who backed the tournament winner after the Final.</p>
+              <p>- Send OKB to the Settlement Wallet with ABI-encoded calldata specifying your fixture and outcome.</p>
+              <p>- When the match settles, the winning pool is distributed pro-rata to all backers of the correct outcome.</p>
+              <p>- The Champion market pays out proportionally to all stakers who backed the tournament winner after the Final.</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
-          <div className="text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
-            Built on OKX X Layer · Settlement Wallet · O2 Autonomous Metabolism
-          </div>
           <div className="flex items-center justify-center gap-4">
             <a
               href="https://x.com/xcupfanvibe"
@@ -670,15 +944,11 @@ export default function App() {
               rel="noopener noreferrer"
               className="text-xs font-mono dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
             >
-              𝕏 / Twitter
+              X / Twitter
             </a>
-            <span className="dark:text-zinc-800 text-zinc-200">·</span>
-            <button
-              onClick={() => setHowOpen(true)}
-              className="text-xs font-mono dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
-            >
-              How it works
-            </button>
+          </div>
+          <div className="text-[11px] font-mono dark:text-zinc-600 text-zinc-400">
+            Built on OKX X Layer - Settlement Wallet - O2 Autonomous Metabolism
           </div>
         </div>
       </main>
@@ -692,16 +962,16 @@ export default function App() {
         <SettlementToast key={`${s.fixtureId}-${s.blockNumber}`} settlement={s} onDismiss={() => dismissToast(s)} />
       ))}
 
-      {watchingFixture && matchStates[watchingFixture.id] && (
+      {watchingFixture && watchingMatchState && (
         <MatchViewer
           fixture={watchingFixture}
-          matchState={matchStates[watchingFixture.id]}
+          matchState={watchingMatchState}
           onClose={() => setWatchingId(null)}
         />
       )}
 
-      {/* ── Champion overlay ─────────────────────────────────────────────── */}
-      {champion && phase === 'champion' && viewMode === 'simulated' && !engineOnline && (
+      {/* -- Champion overlay ----------------------------------------------- */}
+      {champion && phase === 'champion' && viewMode === 'simulated' && (
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 backdrop-blur-md"
           style={{ animation: 'overlayIn 0.4s ease both' }}
@@ -713,17 +983,17 @@ export default function App() {
             >
               {champion.flag}
             </div>
-            <div className="font-serif text-3xl text-white tracking-tight mb-1">
+            <div className="text-3xl font-semibold text-white tracking-tight mb-1">
               {champion.name}
             </div>
-            <div className="text-base font-bold text-amber-400 mb-5 tracking-widest uppercase">
-              🏆 {seasonLabel} Champions
+            <div className="text-base font-bold text-emerald-400 mb-5 tracking-widest uppercase">
+              {seasonLabel} Champions
             </div>
 
             {/* Countdown bar */}
             <div className="w-full h-1 dark:bg-zinc-800 bg-zinc-700 rounded-full overflow-hidden mb-3">
               <div
-                className="h-full bg-amber-400 rounded-full transition-all duration-1000 ease-linear"
+                className="h-full bg-emerald-400 rounded-full transition-all duration-1000 ease-linear"
                 style={{ width: `${(phaseTimer / 10) * 100}%` }}
               />
             </div>
@@ -731,16 +1001,10 @@ export default function App() {
               Next season in <span className="font-bold text-white tabular-nums">{phaseTimer}s</span>
             </p>
 
-            <button
-              onClick={() => { setChampion(null); setPhase('interseason'); setPhaseTimer(20 * 60); }}
-              className="px-6 py-2.5 rounded-xl bg-amber-500 text-black font-bold text-sm
-                hover:bg-amber-400 active:scale-95 transition-all"
-            >
-              Continue →
-            </button>
           </div>
         </div>
       )}
     </div>
   );
 }
+

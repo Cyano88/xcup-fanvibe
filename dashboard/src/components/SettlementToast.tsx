@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { CheckCircle, ExternalLink, X } from 'lucide-react';
+﻿import { useEffect, useState } from 'react';
+import { CheckCircle, ExternalLink, Minus, X } from 'lucide-react';
 import type { SettlementResult } from '../types';
 import { formatOKB } from '../lib/encode';
 
@@ -7,12 +7,6 @@ interface Props {
   settlement: SettlementResult;
   onDismiss: () => void;
 }
-
-const OUTCOME_EMOJI: Record<string, string> = {
-  home: '🏠',
-  draw: '🤝',
-  away: '✈️',
-};
 
 export function SettlementToast({ settlement, onDismiss }: Props) {
   const [visible, setVisible] = useState(false);
@@ -36,9 +30,9 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
         opacity: visible ? 1 : 0,
       }}
     >
-      <div className="bg-zinc-900 border border-emerald-500/30 rounded-xl shadow-2xl overflow-hidden">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
         {/* Accent bar */}
-        <div className="h-0.5 bg-gradient-to-r from-emerald-500 to-emerald-400" />
+        <div className="h-0.5 bg-emerald-500" />
 
         <div className="p-4 space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -55,11 +49,11 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
           </div>
 
           <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-zinc-800/60 text-sm">
-            <span className="text-lg">{OUTCOME_EMOJI[settlement.outcome] ?? '⚽'}</span>
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-zinc-900 text-zinc-400 ring-1 ring-zinc-700"><Minus size={13} /></span>
             <div>
               <div className="text-zinc-100 font-medium capitalize">{settlement.outcome} wins</div>
               <div className="text-xs text-zinc-500">
-                {settlement.winnerCount} winner{settlement.winnerCount !== 1 ? 's' : ''} · {totalOKB} OKB distributed
+                {settlement.winnerCount} winner{settlement.winnerCount !== 1 ? 's' : ''}  - {totalOKB} OKB distributed
               </div>
             </div>
           </div>
@@ -72,8 +66,8 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
               className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
             >
               <ExternalLink size={11} />
-              <span className="font-mono">{settlement.payouts[0].txHash.slice(0, 18)}…</span>
-              Verify on-chain ↗
+              <span className="font-mono">{settlement.payouts[0].txHash.slice(0, 18)}...</span>
+              Verify on-chain open
             </a>
           )}
         </div>
@@ -81,3 +75,6 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
     </div>
   );
 }
+
+
+

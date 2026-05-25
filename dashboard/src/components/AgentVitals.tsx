@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 import { Copy, CheckCheck, ExternalLink, Zap, Activity } from 'lucide-react';
 import { FuelBar } from './FuelBar';
 import type { MetabolicState } from '../types';
@@ -45,7 +45,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
       {/* Wallet address capsule */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 dark:bg-zinc-800/50 border border-zinc-700/50">
         <span className="font-mono text-xs text-zinc-300 flex-1 truncate">
-          {refereeAddress || '0x0000…0000'}
+          {refereeAddress || '0x0000...0000'}
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -83,8 +83,8 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
             <Zap size={11} />
             O2 Metabolism
           </span>
-          <span className={`font-mono font-medium ${metabolism.isRefuelNeeded ? 'text-amber-400' : 'text-emerald-400'}`}>
-            {metabolism.isRefuelNeeded ? 'REFUELING' : '● Active · 60s'}
+          <span className={`font-mono font-medium ${metabolism.isRefuelNeeded ? 'text-blue-400' : 'text-emerald-400'}`}>
+            {metabolism.isRefuelNeeded ? 'REFUELING' : 'Active - 60s'}
           </span>
         </div>
 
@@ -104,7 +104,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
               rel="noopener noreferrer"
               className="font-mono text-emerald-500 hover:text-emerald-400 transition-colors"
             >
-              {shortAddr(metabolism.lastTxHash)} ↗
+              {shortAddr(metabolism.lastTxHash)} open
             </a>
           </div>
         )}
@@ -120,7 +120,7 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
           <div className="text-zinc-600">Latest Block</div>
           <div className="font-mono text-zinc-300 mt-0.5 flex items-center gap-1">
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${wsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-            {lastBlock > 0 ? `#${lastBlock.toLocaleString()}` : '—'}
+            {lastBlock > 0 ? `#${lastBlock.toLocaleString()}` : '--'}
           </div>
         </div>
         <div>
@@ -135,3 +135,5 @@ export function AgentVitals({ refereeAddress, metabolism, lastBlock, wsConnected
     </div>
   );
 }
+
+

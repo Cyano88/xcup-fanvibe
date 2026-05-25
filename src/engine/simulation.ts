@@ -56,10 +56,13 @@ const TEMPLATES: Record<string, string[]> = {
   yellow_away: ['{player} ({away}) picks up a yellow card. Referee clamps down.', '{player} is cautioned — {away} playing on the edge.'],
   corner_home: ['{home} win a corner after good pressing from {player}.', 'Corner for {home} — set piece danger coming up.'],
   corner_away: ['{away} earn a corner kick. {player} driven wide.', 'Corner flag given to {away}. Dangerous delivery expected.'],
+  safe_home:   ['Ball safe with {home}. {player} recycles possession.', '{home} settle the ball and reset the shape.'],
+  safe_away:   ['Ball safe with {away}. {player} slows the tempo.', '{away} hold possession and reset from deep.'],
   foul_home:   ['{player} ({home}) brings down the attacker — free kick awarded.', 'Foul from {player} — {away} free kick in a good position.'],
   foul_away:   ['{player} ({away}) is penalised for a late tackle.', 'Dangerous challenge from {player} — free kick to {home}.'],
   half_time:   ['HALF TIME — {home} {hs}–{as} {away}. Teams head in at the break.', 'The referee brings the first half to an end. {home} {hs}–{as} {away}.'],
   full_time:   ['FULL TIME — {home} {hs}–{as} {away}. That is the final whistle!', 'Game over! Final score: {home} {hs}–{as} {away}.', 'What a match! {home} {hs}–{as} {away} at full time.'],
+  second_half: ['Second half underway. {home} {hs}–{as} {away}.'],
   var_goal:    ['VAR review underway... the goal stands! {hs}–{as}!'],
 };
 
@@ -98,6 +101,7 @@ function getEventCoords(type: string, team: 'home' | 'away' | 'neutral'): { lx: 
   if (type.includes('goal'))   return { lx: sign * (84 + r1 * 12),  ly: (r2 - 0.5) * 28 };
   if (type.includes('shot'))   return { lx: sign * (68 + r1 * 20),  ly: (r2 - 0.5) * 46 };
   if (type.includes('corner')) return { lx: sign * 97,               ly: (r2 > 0.5 ? 1 : -1) * (42 + r1 * 6) };
+  if (type.includes('safe'))   return { lx: -sign * (34 + r1 * 30),  ly: (r2 - 0.5) * 54 };
   if (type === 'kickoff' || type === 'half_time' || type === 'full_time') return { lx: 0, ly: 0 };
   if (type.includes('foul') || type.includes('yellow') || type.includes('red'))
     return { lx: sign * (25 + r1 * 55), ly: (r2 - 0.5) * 80 };
@@ -112,8 +116,10 @@ type SettleFn = (fixtureId: string, outcome: Outcome) => Promise<void>;
 
 export class MatchSimulator {
   private states  = new Map<string, MatchState>();
-  private timers  = new Map<string, ReturnType<typeof setInterval>>();
+  private timers  = new Map<string, ReturnType<typeof setTimeout>>();
   private eventId = 0;
+  private readonly minuteMs = Number(process.env.SIM_MINUTE_MS ?? '6667');
+  private readonly halfTimeBreakMs = Number(process.env.SIM_HALFTIME_BREAK_MS ?? '15000');
 
   constructor(
     private readonly onEvent:  EventFn,
@@ -130,7 +136,7 @@ export class MatchSimulator {
       fixture.simulatedKickoff = new Date(kickoffMs).toISOString();
 
       if (kickoffMs <= now) {
-        const elapsed = Math.floor((now - kickoffMs) / 20_000);
+        const elapsed = Math.floor((now - kickoffMs) / this.minuteMs);
         if (elapsed < 90) { fixture.status = 'locked'; this.runMatch(fixture, elapsed); }
       } else {
         fixture.status = stakingOpenMs <= now ? 'open' : 'upcoming';
@@ -205,11 +211,18 @@ export class MatchSimulator {
     const awayStr = SQUAD_STRENGTH[fixture.away.code] ?? 70;
 
     const interval = setInterval(async () => {
+      if (state.status === 'half_time') return;
       state.minute++;
 
       if (state.minute === 45) {
+        state.status = 'half_time';
         this.addEvent(state, 'half_time', fixture, 'neutral');
         this.onEvent(fixture.id, state);
+        setTimeout(() => {
+          state.status = 'live';
+          this.addEvent(state, 'second_half', fixture, 'neutral');
+          this.onEvent(fixture.id, state);
+        }, this.halfTimeBreakMs);
         return;
       }
       if (state.minute >= 90) {
@@ -227,7 +240,7 @@ export class MatchSimulator {
 
       this.simulateMinute(state, fixture, homeStr, awayStr);
       this.onEvent(fixture.id, state);
-    }, 20_000);
+    }, this.minuteMs);
 
     this.timers.set(fixture.id, interval);
   }
@@ -271,6 +284,9 @@ export class MatchSimulator {
     } else if (rng() < 0.08) {
       const team = rng() < homePossProb ? 'home' : 'away';
       this.addEvent(state, `corner_${team}`, fixture, team);
+    } else if (rng() < 0.12) {
+      const team = rng() < homePossProb ? 'home' : 'away';
+      this.addEvent(state, `safe_${team}`, fixture, team);
     } else if (rng() < 0.06) {
       const team = rng() < 0.5 ? 'home' : 'away';
       this.addEvent(state, `foul_${team}`, fixture, team);

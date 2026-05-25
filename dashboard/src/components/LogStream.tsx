@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+﻿import { useEffect, useRef } from 'react';
 import { Terminal } from 'lucide-react';
 import type { DaemonLog, LogPrefix, LogLevel } from '../types';
 import { explorerTx } from '../lib/chain';
@@ -12,13 +12,13 @@ const PREFIX_STYLE: Record<LogPrefix, string> = {
   SYSTEM:     'text-zinc-400 bg-zinc-800',
   RPC:        'text-blue-400 bg-blue-500/10',
   STAKE:      'text-emerald-400 bg-emerald-500/10',
-  ORACLE:     'text-purple-400 bg-purple-500/10',
-  METABOLISM: 'text-amber-400 bg-amber-500/10',
+  ORACLE:     'text-zinc-300 bg-zinc-700/60',
+  METABOLISM: 'text-zinc-300 bg-zinc-700/60',
 };
 
 const LEVEL_TEXT: Record<LogLevel, string> = {
   info:    'dark:text-zinc-300 text-zinc-600',
-  warn:    'dark:text-amber-300 text-amber-600',
+  warn:    'dark:text-zinc-300 text-zinc-600',
   error:   'dark:text-red-400 text-red-500',
   success: 'dark:text-emerald-300 text-emerald-600',
 };
@@ -54,7 +54,7 @@ export function LogStream({ logs, daemonOnline }: Props) {
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {logs.length === 0 && (
           <div className="flex items-center justify-center h-20 text-xs dark:text-zinc-700 text-zinc-400">
-            {daemonOnline ? 'Waiting for engine events…' : 'Connect market engine to see live activity'}
+            {daemonOnline ? 'Waiting for engine events...' : 'Connect market engine to see live activity'}
           </div>
         )}
 
@@ -74,7 +74,7 @@ export function LogStream({ logs, daemonOnline }: Props) {
                   className="ml-2 dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
                   title={log.txHash}
                 >
-                  [{log.txHash.slice(0, 8)}…] ↗
+                  [{log.txHash.slice(0, 8)}...] open
                 </a>
               )}
             </span>
@@ -85,3 +85,5 @@ export function LogStream({ logs, daemonOnline }: Props) {
     </div>
   );
 }
+
+

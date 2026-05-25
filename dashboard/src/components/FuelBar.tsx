@@ -1,4 +1,4 @@
-interface Props {
+﻿interface Props {
   percent: number;
   okbFormatted: string;
   isRefuelNeeded: boolean;
@@ -9,13 +9,13 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Prop
   const color = isRefuelNeeded
     ? 'bg-red-500'
     : percent < 40
-    ? 'bg-amber-500'
+    ? 'bg-blue-500'
     : 'bg-emerald-500';
 
   const textColor = isRefuelNeeded
     ? 'text-red-400'
     : percent < 40
-    ? 'text-amber-400'
+    ? 'text-blue-400'
     : 'text-emerald-400';
 
   if (compact) {
@@ -61,3 +61,4 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Prop
     </div>
   );
 }
+
