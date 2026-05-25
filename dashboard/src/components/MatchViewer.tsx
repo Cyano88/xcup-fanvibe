@@ -4,7 +4,7 @@ import type { Fixture, MatchState, MatchEvent } from '../types';
 import { getSquad } from '../lib/squadData';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
-const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
+const BROADCAST_FONT = 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 interface Comment { id: number; name: string; text: string; ts: string; fixtureId: string; }
 interface Props { fixture: Fixture; matchState: MatchState; onClose: () => void; }
@@ -972,6 +972,14 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
     : null;
   const homeCards = matchState.events.filter(ev => ev.team === 'home' && (ev.type.startsWith('yellow') || ev.type.startsWith('red')));
   const awayCards = matchState.events.filter(ev => ev.team === 'away' && (ev.type.startsWith('yellow') || ev.type.startsWith('red')));
+  const homeScorers = matchState.events
+    .filter(ev => ev.type === 'goal_home' && ev.player)
+    .map(ev => `${ev.player} ${ev.minute}'`)
+    .slice(-3);
+  const awayScorers = matchState.events
+    .filter(ev => ev.type === 'goal_away' && ev.player)
+    .map(ev => `${ev.player} ${ev.minute}'`)
+    .slice(-3);
   const CardBadges = ({ cards }: { cards: MatchEvent[] }) => (
     <div className="mt-1 flex min-h-[16px] justify-center gap-1">
       {cards.slice(-4).map(card => (
@@ -1014,6 +1022,15 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
         <div className="flex items-center justify-center gap-8 py-4">
           <div className="text-center min-w-[68px]">
             <TeamFlag iso={fixture.home.iso} fallback={fixture.home.flag} className="mx-auto mb-2 h-8 w-12" />
+            {homeScorers.length > 0 && (
+              <div className="mx-auto mb-1 max-w-[116px] space-y-0.5">
+                {homeScorers.map((name, idx) => (
+                  <div key={`${name}-${idx}`} className="truncate text-[10px] font-bold text-emerald-600 dark:text-emerald-300">
+                    {name}
+                  </div>
+                ))}
+              </div>
+            )}
             <CardBadges cards={homeCards} />
             <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.home.name}</div>
           </div>
@@ -1034,6 +1051,15 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
           </div>
           <div className="text-center min-w-[68px]">
             <TeamFlag iso={fixture.away.iso} fallback={fixture.away.flag} className="mx-auto mb-2 h-8 w-12" />
+            {awayScorers.length > 0 && (
+              <div className="mx-auto mb-1 max-w-[116px] space-y-0.5">
+                {awayScorers.map((name, idx) => (
+                  <div key={`${name}-${idx}`} className="truncate text-[10px] font-bold text-blue-600 dark:text-blue-300">
+                    {name}
+                  </div>
+                ))}
+              </div>
+            )}
             <CardBadges cards={awayCards} />
             <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.away.name}</div>
           </div>

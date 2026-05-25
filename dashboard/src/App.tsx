@@ -37,8 +37,7 @@ const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP  ?? 'http://localhost:300
 const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
-const BRAND_E_IMAGE_1 = '/assets/brand-e-1.png';
-const BRAND_E_IMAGE_2 = '/assets/brand-e-2.png';
+const BRAND_E_IMAGE = '/assets/brand-e.png';
 
 const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
 
@@ -186,6 +185,7 @@ export default function App() {
   const bracketProcessedRef    = useRef<Set<string>>(new Set());
   const championTriggeredRef   = useRef(false);
   const watchedStateRef        = useRef<Record<string, MatchState>>({});
+  const watchedFixtureRef      = useRef<Record<string, Fixture>>({});
   const seasonHydratedRef      = useRef(false);
   const seasonSaveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -475,10 +475,17 @@ export default function App() {
   }, [matchStates]);
 
   const activeFixture  = stakeTarget ? fixtures.find(f => f.id === stakeTarget.fixtureId) ?? null : null;
-  const watchingFixture = watchingFixtureId ? fixtures.find(f => f.id === watchingFixtureId) ?? null : null;
+  const watchingFixture = watchingFixtureId
+    ? fixtures.find(f => f.id === watchingFixtureId) ?? watchedFixtureRef.current[watchingFixtureId] ?? null
+    : null;
   const watchingMatchState = watchingFixtureId
     ? matchStates[watchingFixtureId] ?? watchedStateRef.current[watchingFixtureId] ?? null
     : null;
+
+  useEffect(() => {
+    if (!watchingFixtureId || !watchingFixture) return;
+    watchedFixtureRef.current[watchingFixtureId] = watchingFixture;
+  }, [watchingFixtureId, watchingFixture]);
 
   const simFixtures    = viewMode === 'simulated' ? fixtures : REALTIME_FIXTURES;
   const rtGroups       = ['all', ...Array.from(new Set(REALTIME_FIXTURES.map(f => f.group))).sort()];
@@ -576,8 +583,7 @@ export default function App() {
                 Vib
                 <span className="brand-e-cycle" aria-label="e">
                   <span className="brand-e-letter">e</span>
-                  <img src={BRAND_E_IMAGE_1} alt="" aria-hidden="true" />
-                  <img src={BRAND_E_IMAGE_2} alt="" aria-hidden="true" />
+                  <img src={BRAND_E_IMAGE} alt="" aria-hidden="true" />
                 </span>
               </span>
             </span>
