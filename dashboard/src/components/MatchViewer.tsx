@@ -4,7 +4,7 @@ import type { Fixture, MatchState, MatchEvent } from '../types';
 import { getSquad } from '../lib/squadData';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
-const BROADCAST_FONT = 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
 
 interface Comment { id: number; name: string; text: string; ts: string; fixtureId: string; }
 interface Props { fixture: Fixture; matchState: MatchState; onClose: () => void; }
@@ -513,8 +513,7 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
           return (
             <g key={bannerEv.key} style={{ animation: 'bannerFade 2.8s ease-out forwards' }}>
               <text x={bx} y={by - 1} textAnchor="middle" fill="white"
-                fontSize="7.8" fontFamily={BROADCAST_FONT} fontWeight="800"
-                stroke="rgba(2,6,23,0.86)" strokeWidth="2.8" paintOrder="stroke">
+                fontSize="7" fontFamily={BROADCAST_FONT} fontWeight="700">
                 {bannerEv.text.toUpperCase()}
               </text>
             </g>
@@ -538,19 +537,16 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
                 strokeDasharray="2 3"
               />
               <text x={bx} y={by - 1} textAnchor="middle"
-                fill="rgba(255,255,255,0.98)" fontSize="7.8" fontFamily={BROADCAST_FONT} fontWeight="800"
-                stroke="rgba(2,6,23,0.88)" strokeWidth="2.9" paintOrder="stroke">
+                fill="rgba(255,255,255,0.96)" fontSize="7" fontFamily={BROADCAST_FONT} fontWeight="700">
                 {parts[0]}
               </text>
               <text x={bx} y={by + 9} textAnchor="middle"
-                fill="rgba(255,255,255,0.86)" fontSize="6.8" fontFamily={BROADCAST_FONT} fontWeight="600"
-                stroke="rgba(2,6,23,0.82)" strokeWidth="2.4" paintOrder="stroke">
+                fill="rgba(255,255,255,0.82)" fontSize="6.2" fontFamily={BROADCAST_FONT} fontWeight="600">
                 {(parts[1] ?? 'In Possession').toUpperCase()}
               </text>
               {parts[2] && (
                 <text x={bx} y={by + 18} textAnchor="middle"
-                  fill="rgba(255,255,255,0.74)" fontSize="6.1" fontFamily={BROADCAST_FONT} fontWeight="600"
-                  stroke="rgba(2,6,23,0.76)" strokeWidth="2.1" paintOrder="stroke">
+                  fill="rgba(255,255,255,0.72)" fontSize="5.7" fontFamily={BROADCAST_FONT} fontWeight="600">
                   {parts[2].toUpperCase()}
                 </text>
               )}
@@ -571,10 +567,10 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
         )}
 
         {/* Team labels */}
-        <text x="40" y="8" textAnchor="middle" fill="rgba(74,222,128,0.85)" fontSize="9" fontFamily={BROADCAST_FONT} fontWeight="800">
+        <text x="40" y="8" textAnchor="middle" fill="rgba(255,255,255,0.92)" fontSize="7.5" fontFamily={BROADCAST_FONT} fontWeight="700">
           {fixture.home.code}
         </text>
-        <text x="360" y="8" textAnchor="middle" fill="rgba(125,211,252,0.9)" fontSize="9" fontFamily={BROADCAST_FONT} fontWeight="800">
+        <text x="360" y="8" textAnchor="middle" fill="rgba(255,255,255,0.92)" fontSize="7.5" fontFamily={BROADCAST_FONT} fontWeight="700">
           {fixture.away.code}
         </text>
 
