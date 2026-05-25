@@ -20,9 +20,9 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
 };
 
 const OUTCOME_COLOR: Record<Outcome, string> = {
-  home: 'border-emerald-500/50 bg-emerald-500/5 text-emerald-400',
-  draw: 'border-zinc-500/50 bg-zinc-500/5 text-zinc-400',
-  away: 'border-blue-500/50 bg-blue-500/5 text-blue-400',
+  home: 'border-emerald-400/60 bg-emerald-500/14 text-emerald-100',
+  draw: 'border-zinc-300/50 bg-white/10 text-white',
+  away: 'border-blue-400/60 bg-blue-500/14 text-blue-100',
 };
 
 export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }: Props) {
@@ -114,33 +114,38 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl animate-slide-in">
+      <div
+        className="relative z-10 w-full max-w-sm overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 bg-cover bg-center shadow-2xl animate-slide-in"
+        style={{ backgroundImage: "url('/assets/stake-modal-bg.jpeg')" }}
+      >
+        <div className="absolute inset-0 bg-zinc-950/90" />
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-950/18 via-black/28 to-zinc-950/70" />
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-800">
+        <div className="relative flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/10">
           <div>
-            <div className="text-sm font-semibold text-zinc-100">Place Stake</div>
-            <div className="text-xs text-zinc-500 mt-0.5">
+            <div className="text-sm font-semibold text-white">Place Stake</div>
+            <div className="text-xs font-medium text-zinc-300 mt-0.5">
               {fixture.home.flag} {fixture.home.code} vs {fixture.away.flag} {fixture.away.code}
             </div>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors">
+          <button onClick={onClose} className="p-1 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10 transition-colors">
             <X size={16} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="relative p-5 space-y-4">
           {step === 'configure' && (
             <>
               {/* Outcome selector */}
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-500">Predict</label>
+                <label className="text-xs font-semibold text-zinc-200">Predict</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['home', 'draw', 'away'] as Outcome[]).map((o) => (
                     <button
                       key={o}
                       onClick={() => setOutcome(o)}
                       className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all duration-150 ${
-                        outcome === o ? OUTCOME_COLOR[o] : 'border-zinc-700 text-zinc-500 hover:border-zinc-600'
+                        outcome === o ? OUTCOME_COLOR[o] : 'border-white/10 bg-zinc-950/72 text-zinc-300 hover:border-white/20 hover:bg-zinc-900/84'
                       }`}
                     >
                       <div>{o === 'home' ? fixture.home.flag : o === 'away' ? fixture.away.flag : '—'}</div>
@@ -152,7 +157,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
 
               {/* Amount */}
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-500">Stake Amount (OKB)</label>
+                <label className="text-xs font-semibold text-zinc-200">Stake Amount (OKB)</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -160,15 +165,15 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
                     onChange={(e) => setAmount(e.target.value)}
                     min="0.001"
                     step="0.01"
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100
-                      focus:outline-none focus:border-emerald-500/50 transition-colors"
+                    className="flex-1 bg-zinc-950/78 border border-white/10 rounded-lg px-3 py-2 text-sm font-semibold text-white
+                      focus:outline-none focus:border-blue-400/70 transition-colors"
                   />
-                  <span className="text-xs text-zinc-500 shrink-0">OKB</span>
+                  <span className="text-xs font-semibold text-zinc-300 shrink-0">OKB</span>
                 </div>
                 <div className="flex gap-2">
                   {['0.01', '0.05', '0.1', '0.5'].map((v) => (
                     <button key={v} onClick={() => setAmount(v)}
-                      className="text-xs px-2 py-1 rounded bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors">
+                      className="text-xs px-2 py-1 rounded border border-white/10 bg-zinc-950/70 text-zinc-300 hover:text-white hover:bg-white/10 transition-colors">
                       {v}
                     </button>
                   ))}
@@ -176,7 +181,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
               </div>
 
               {/* Protocol fee note */}
-              <p className="text-xs text-zinc-700">0.5% protocol fee · Payouts sent autonomously on settlement</p>
+              <p className="text-xs font-medium text-zinc-300">0.5% protocol fee - Payouts sent autonomously on settlement</p>
 
               <button onClick={handleStake} className="btn-primary w-full">
                 <Wallet size={14} />
