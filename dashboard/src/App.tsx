@@ -181,6 +181,17 @@ function fixtureStageCode(fixture?: Fixture | null, fallbackMatchday = 1): strin
   return `MD${fixture.matchday}`;
 }
 
+function liveStageRank(fixture?: Fixture | null): number {
+  if (!fixture) return 0;
+  if (fixture.round === 'F') return 6;
+  if (fixture.round === '3PL') return 5;
+  if (fixture.round === 'SF') return 4;
+  if (fixture.round === 'QF') return 3;
+  if (fixture.round === 'R16') return 2;
+  if (fixture.round === 'R32') return 1;
+  return 0;
+}
+
 export default function App() {
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
   if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
@@ -835,8 +846,13 @@ export default function App() {
     ? Object.entries(matchStates).filter(([id, ms]) => ms.status === 'live' && isResolvedFixture(fixtures.find(f => f.id === id)))
     : [];
   const primaryLiveFixture = liveEntries.length > 0
-    ? fixtures.find(f => f.id === liveEntries[0][0]) ?? null
-    : fixtures.find(f => (f.status === 'locked' || f.status === 'open') && isResolvedFixture(f)) ?? null;
+    ? [...liveEntries]
+      .map(([id]) => fixtures.find(f => f.id === id) ?? null)
+      .filter((fixture): fixture is Fixture => !!fixture)
+      .sort((a, b) => liveStageRank(b) - liveStageRank(a) || b.matchday - a.matchday || b.id.localeCompare(a.id))[0] ?? null
+    : [...fixtures]
+      .filter(f => (f.status === 'locked' || f.status === 'open') && isResolvedFixture(f))
+      .sort((a, b) => liveStageRank(b) - liveStageRank(a) || a.matchday - b.matchday || a.id.localeCompare(b.id))[0] ?? null;
   const liveSeasonStageLabel = fixtureStageLabel(primaryLiveFixture, activeGroupMatchday);
   const liveSeasonStageCode = fixtureStageCode(primaryLiveFixture, activeGroupMatchday);
   const finishedSeasonEntries = viewMode === 'simulated'

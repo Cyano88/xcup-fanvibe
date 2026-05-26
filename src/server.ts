@@ -36,6 +36,17 @@ function broadcast(type: string, data: unknown): void {
   }
 }
 
+function compactSeasonState(state: PersistedSeasonState | null): PersistedSeasonState | null {
+  if (!state) return null;
+  return {
+    ...state,
+    matchStates: Object.fromEntries(Object.entries(state.matchStates ?? {}).map(([fixtureId, matchState]) => [
+      fixtureId,
+      { ...matchState, events: [] },
+    ])),
+  };
+}
+
 engine.onLog = (log: DaemonLog) => broadcast('log', log);
 engine.onUpdate = () => broadcast('state', engine.getState());
 
@@ -49,11 +60,11 @@ seasonController = new SeasonController(engine, (prefix, level, message, txHash)
     txHash,
   } satisfies DaemonLog);
 });
-seasonController.onUpdate = state => broadcast('season', state);
+seasonController.onUpdate = state => broadcast('season', compactSeasonState(state));
 
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'state', data: engine.getState(), ts: Date.now() }));
-  ws.send(JSON.stringify({ type: 'season', data: seasonController.getState(), ts: Date.now() }));
+  ws.send(JSON.stringify({ type: 'season', data: compactSeasonState(seasonController.getState()), ts: Date.now() }));
 });
 
 // ── REST API ──────────────────────────────────────────────────────────────────
@@ -213,7 +224,7 @@ app.get('/season/snapshot', async (req, res) => {
   const state = parsed.data.mode === 'prod'
     ? seasonController.getState()
     : await readSeasonState(parsed.data.mode as SeasonStorageMode);
-  res.json({ state, durable: !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN });
+  res.json({ state: compactSeasonState(state), durable: !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN });
 });
 
 app.get('/season/match/:fixtureId', async (req, res) => {
