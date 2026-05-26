@@ -951,6 +951,68 @@ const NEXT_KNOCKOUT_MATCH: Record<string, string> = {
   'sf-2': 'f-1',
 };
 
+function FinalResultPanel({
+  fixture,
+  state,
+  outcome,
+  advancedTeam,
+}: {
+  fixture: Fixture;
+  state: MatchState;
+  outcome: 'home' | 'away' | 'draw' | null;
+  advancedTeam: Fixture['home'] | null;
+}) {
+  const stats = computeStats(state.events);
+  const resultLabel = state.penaltyWinner
+    ? `${advancedTeam?.name ?? (state.penaltyWinner === 'home' ? fixture.home.name : fixture.away.name)} won on penalties`
+    : outcome === 'draw'
+      ? 'Draw after full time'
+      : `${advancedTeam?.name ?? (outcome === 'home' ? fixture.home.name : fixture.away.name)} won after full time`;
+  const statTiles = [
+    { label: 'Possession', home: `${state.possession}%`, away: `${100 - state.possession}%` },
+    { label: 'Shots on target', home: stats.shotsOn.home, away: stats.shotsOn.away },
+    { label: 'Total shots', home: stats.totalShots.home, away: stats.totalShots.away },
+    { label: 'Corners', home: stats.corners.home, away: stats.corners.away },
+    { label: 'Cards', home: stats.cards.home, away: stats.cards.away },
+  ];
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/80">
+      <div className="text-center">
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Final Result</div>
+        <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{resultLabel}</div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+        <div className="min-w-0 text-center">
+          <TeamFlag iso={fixture.home.iso} fallback={fixture.home.flag} className="mx-auto mb-2 h-10 w-16" />
+          <div className="truncate text-xs font-bold text-zinc-800 dark:text-zinc-200">{fixture.home.name}</div>
+        </div>
+        <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 text-center dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="text-4xl font-black tabular-nums tracking-tight text-zinc-950 dark:text-white">
+            {state.homeScore} - {state.awayScore}
+          </div>
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">FT</div>
+        </div>
+        <div className="min-w-0 text-center">
+          <TeamFlag iso={fixture.away.iso} fallback={fixture.away.flag} className="mx-auto mb-2 h-10 w-16" />
+          <div className="truncate text-xs font-bold text-zinc-800 dark:text-zinc-200">{fixture.away.name}</div>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-2">
+        {statTiles.map(tile => (
+          <div key={tile.label} className="grid grid-cols-[52px_1fr_52px] items-center gap-3 rounded-md border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/70">
+            <div className="text-right text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{tile.home}</div>
+            <div className="text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{tile.label}</div>
+            <div className="text-left text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{tile.away}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Props) {
   const isLive     = matchState.status === 'live';
   const isHalfTime = matchState.status === 'half_time';
@@ -1195,8 +1257,12 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
 
         <div className="grid gap-4 px-4 sm:px-5 pb-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.9fr)]">
           <div className="relative overflow-hidden rounded-lg">
-            <Pitch fixture={fixture} state={matchState} freeze={!isLive} />
-            {goalOverlay && (
+            {isFinished ? (
+              <FinalResultPanel fixture={fixture} state={matchState} outcome={outcome} advancedTeam={advancedTeam} />
+            ) : (
+              <Pitch fixture={fixture} state={matchState} freeze={!isLive} />
+            )}
+            {!isFinished && goalOverlay && (
               <div
                 className="absolute inset-x-0 top-0 z-20 aspect-[400/224] overflow-hidden rounded-lg bg-black/28"
                 style={{ animation: 'goalReplayFade 3.2s ease-out forwards' }}
@@ -1238,23 +1304,36 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
           </div>
 
           <div className="rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950/80 bg-white overflow-hidden">
-            <div className="flex border-b dark:border-zinc-800 border-zinc-200">
-              {tabs.map(t => (
-                <button key={t.id} onClick={() => setTab(t.id)}
-                  className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px
-                    ${tab === t.id
-                      ? 'dark:text-zinc-100 text-zinc-900 border-emerald-500'
-                      : 'dark:text-zinc-500 text-zinc-400 border-transparent dark:hover:text-zinc-300 hover:text-zinc-600'}`}>
-                  {t.icon}{t.label}
-                </button>
-              ))}
-            </div>
-            <div className="p-4">
-              {tab === 'stats'      && <StatsPanel fixture={fixture} state={matchState} />}
-              {tab === 'commentary' && <CommentaryFeed state={matchState} />}
-              {tab === 'squad'      && <SquadPanel fixture={fixture} state={matchState} />}
-              {tab === 'chat'       && <MatchChat fixtureId={fixture.id} />}
-            </div>
+            {isFinished ? (
+              <>
+                <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+                  <div className="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Match Stats</div>
+                </div>
+                <div className="p-4">
+                  <StatsPanel fixture={fixture} state={matchState} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex border-b dark:border-zinc-800 border-zinc-200">
+                  {tabs.map(t => (
+                    <button key={t.id} onClick={() => setTab(t.id)}
+                      className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px
+                        ${tab === t.id
+                          ? 'dark:text-zinc-100 text-zinc-900 border-emerald-500'
+                          : 'dark:text-zinc-500 text-zinc-400 border-transparent dark:hover:text-zinc-300 hover:text-zinc-600'}`}>
+                      {t.icon}{t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="p-4">
+                  {tab === 'stats'      && <StatsPanel fixture={fixture} state={matchState} />}
+                  {tab === 'commentary' && <CommentaryFeed state={matchState} />}
+                  {tab === 'squad'      && <SquadPanel fixture={fixture} state={matchState} />}
+                  {tab === 'chat'       && <MatchChat fixtureId={fixture.id} />}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

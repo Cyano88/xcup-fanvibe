@@ -1581,12 +1581,10 @@ export default function App() {
                   ))
                 ) : (
                   <>
-                    <span><strong>S01 winner</strong> - appears after the Final</span>
-                    <span><strong>Season archive</strong> - champions append automatically</span>
-                    <span><strong>Next winner</strong> - shown after settlement</span>
-                    <span><strong>S01 winner</strong> - appears after the Final</span>
-                    <span><strong>Season archive</strong> - champions append automatically</span>
-                    <span><strong>Next winner</strong> - shown after settlement</span>
+                    <span><strong>S01 winner</strong> - RSA</span>
+                    <span><strong>S01 winner</strong> - RSA</span>
+                    <span><strong>S01 winner</strong> - RSA</span>
+                    <span><strong>S01 winner</strong> - RSA</span>
                   </>
                 )}
                 </span>
