@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ExternalLink, RefreshCw, Wallet } from 'lucide-react';
-import type { UserPosition } from '../types';
+import type { Fixture, MatchState, UserPosition } from '../types';
 import { explorerTx } from '../lib/chain';
+import { seasonFixtureStartAtMs } from '../lib/seasonTournament';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 
@@ -30,6 +31,13 @@ function formatTime(ts?: number | string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(ms));
+}
+
+function fmtCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function statusTone(status: string): string {
@@ -69,11 +77,19 @@ function pickTone(pick: string): string {
   return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300';
 }
 
-export function MyPositions() {
+interface Props {
+  fixtures?: Fixture[];
+  matchStates?: Record<string, MatchState>;
+  seasonStartedAt?: number;
+  onWatch?: (fixtureId: string) => void;
+}
+
+export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, onWatch }: Props) {
   const [address, setAddress] = useState<string | null>(null);
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
 
   const connect = useCallback(async () => {
     const provider = (window as typeof window & { ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
@@ -117,6 +133,11 @@ export function MyPositions() {
     return () => clearInterval(timer);
   }, [refresh]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const summary = useMemo(() => {
     const active = positions.filter(p => statusLabel(p).toLowerCase().includes('active')).length;
     const paid = positions.filter(p => ['paid', 'refunded', 'settled_winner'].includes(p.status)).length;
@@ -157,16 +178,46 @@ export function MyPositions() {
             const txHash = position.type === 'refund' ? position.refund.txHash : position.stake.txHash;
             const actionHash = position.type === 'refund' ? position.refund.refundTxHash : position.type === 'match' ? position.payout?.txHash : undefined;
             const amount = position.type === 'refund' ? position.refund.amountWei : position.stake.amountWei;
+            const liveFixture = position.type === 'match'
+              ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
+              : position.type === 'refund'
+                ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
+                : undefined;
+            const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
+            const canOpenMatch = position.type === 'match'
+              && !!liveFixture
+              && !!liveState
+              && ['live', 'half_time', 'finished'].includes(liveState.status);
+            const startsAt = position.type === 'match' && liveFixture && seasonStartedAt
+              ? seasonFixtureStartAtMs(fixtures, liveFixture, seasonStartedAt, matchStates)
+              : liveFixture?.simulatedKickoff
+                ? Date.parse(liveFixture.simulatedKickoff)
+                : undefined;
+            const matchBadge = liveState?.status === 'finished'
+              ? `FT ${liveState.homeScore}-${liveState.awayScore}`
+              : liveState?.status === 'half_time'
+                ? `HT ${liveState.homeScore}-${liveState.awayScore}`
+                : liveState?.status === 'live'
+                  ? `${liveState.minute}' ${liveState.homeScore}-${liveState.awayScore}`
+                  : startsAt && startsAt > nowTick
+                    ? `Starts ${fmtCountdown(startsAt - nowTick)}`
+                    : liveFixture?.status === 'settled'
+                      ? 'FT'
+                      : liveFixture?.status === 'locked'
+                        ? 'Live soon'
+                        : liveFixture?.status === 'open'
+                          ? 'Staking open'
+                          : undefined;
             const title = position.type === 'champion'
               ? `Champion - ${position.stake.teamCode}`
               : position.type === 'refund'
                 ? `${position.refund.fixtureId} - ${position.refund.outcome.toUpperCase()}`
-                : `${position.fixture?.home.code ?? position.stake.fixtureId} vs ${position.fixture?.away.code ?? ''}`;
+                : `${liveFixture?.home.code ?? position.stake.fixtureId} vs ${liveFixture?.away.code ?? ''}`;
             const meta = position.type === 'match'
               ? [
-                position.fixture?.round ? position.fixture.round : position.fixture?.group ? `Group ${position.fixture.group}` : undefined,
-                position.fixture?.matchday ? `MD${position.fixture.matchday}` : undefined,
-                position.fixture?.kickoff ? `Kickoff ${formatTime(position.fixture.kickoff)}` : undefined,
+                liveFixture?.round ? liveFixture.round : liveFixture?.group ? `Group ${liveFixture.group}` : undefined,
+                liveFixture?.matchday ? `MD${liveFixture.matchday}` : undefined,
+                liveFixture?.kickoff ? `Kickoff ${formatTime(liveFixture.kickoff)}` : undefined,
                 position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
                 position.settlement ? `Result ${position.settlement.outcome.toUpperCase()}` : undefined,
               ].filter(Boolean).join(' - ')
@@ -175,9 +226,21 @@ export function MyPositions() {
                 : `Placed ${formatTime(position.stake.timestamp)}${position.winner ? ` - Winner ${position.winner}` : ''}`;
 
             return (
-              <div key={`${position.type}-${txHash}`} className="flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2.5">
+              <div
+                key={`${position.type}-${txHash}`}
+                role={canOpenMatch ? 'button' : undefined}
+                tabIndex={canOpenMatch ? 0 : undefined}
+                onClick={canOpenMatch && liveFixture ? () => onWatch?.(liveFixture.id) : undefined}
+                onKeyDown={canOpenMatch && liveFixture ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onWatch?.(liveFixture.id);
+                  }
+                } : undefined}
+                className={`flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2.5 ${canOpenMatch ? 'cursor-pointer transition-colors dark:hover:border-blue-500/40 hover:border-blue-300' : ''}`}
+              >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-semibold dark:text-zinc-100 text-zinc-900">{title}</span>
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${pickTone(pickLabel(position))}`}>
                       {pickLabel(position)}
@@ -185,6 +248,11 @@ export function MyPositions() {
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${statusTone(position.status)}`}>
                       {statusLabel(position)}
                     </span>
+                    {matchBadge && (
+                      <span className="shrink-0 rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums text-zinc-600 dark:text-zinc-300">
+                        {matchBadge}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
                     {formatOKB(amount)} - Stake {shortHash(txHash)}
@@ -194,11 +262,11 @@ export function MyPositions() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold dark:text-zinc-400 text-zinc-500 hover:text-blue-500">
+                  <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="text-xs font-semibold dark:text-zinc-400 text-zinc-500 hover:text-blue-500">
                     Stake
                   </a>
                   {actionHash && (
-                    <a href={explorerTx(actionHash)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-600 dark:text-blue-300">
+                    <a href={explorerTx(actionHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-600 dark:text-blue-300">
                       <ExternalLink size={11} />
                       {position.type === 'refund' ? 'Refund' : 'Payout'}
                     </a>

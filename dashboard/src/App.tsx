@@ -1433,7 +1433,14 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'portfolio' && <MyPositions />}
+        {activeTab === 'portfolio' && (
+          <MyPositions
+            fixtures={fixtures}
+            matchStates={displayMatchStates}
+            seasonStartedAt={viewMode === 'simulated' ? seasonStartedAt : undefined}
+            onWatch={handleWatch}
+          />
+        )}
 
         {activeTab === 'search' && viewMode === 'realtime' && groupFilter !== 'all' && (
           <section className="space-y-4">
