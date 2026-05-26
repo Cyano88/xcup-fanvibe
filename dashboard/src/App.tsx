@@ -617,17 +617,19 @@ export default function App() {
   const simFixtures    = viewMode === 'simulated' ? fixtures : realtimeFixtures;
   const rtGroups       = ['all', ...Array.from(new Set(realtimeFixtures.map(f => f.group))).sort()];
   const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
+  const fixtureRoundFilter = activeTab === 'search' ? roundFilter : 'all';
+  const fixtureGroupFilter = activeTab === 'search' ? groupFilter : 'all';
   const baseVisibleFixtures = viewMode === 'simulated'
-    ? (roundFilter === 'all'
+    ? (fixtureRoundFilter === 'all'
       ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === activeGroupMatchday)
-      : roundFilter.startsWith('md')
-        ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === Number(roundFilter.replace('md', '')))
-      : roundFilter === 'knockouts'
+      : fixtureRoundFilter.startsWith('md')
+        ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === Number(fixtureRoundFilter.replace('md', '')))
+      : fixtureRoundFilter === 'knockouts'
         ? simFixtures.filter(f => !!f.round)
-        : SEASON_GROUPS.includes(roundFilter)
-          ? simFixtures.filter(f => f.group === roundFilter && isGroupStageFixture(f))
+        : SEASON_GROUPS.includes(fixtureRoundFilter)
+          ? simFixtures.filter(f => f.group === fixtureRoundFilter && isGroupStageFixture(f))
           : simFixtures)
-    : (groupFilter === 'all' ? realtimeFixtures : realtimeFixtures.filter(f => f.group === groupFilter));
+    : (fixtureGroupFilter === 'all' ? realtimeFixtures : realtimeFixtures.filter(f => f.group === fixtureGroupFilter));
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const visibleFixtures = activeTab === 'search' && normalizedSearchQuery
     ? baseVisibleFixtures.filter(fixture => [
@@ -640,19 +642,19 @@ export default function App() {
         fixture.venue,
       ].some(value => value.toLowerCase().includes(normalizedSearchQuery)))
     : baseVisibleFixtures;
-  const selectedGroupFixtures = viewMode === 'realtime' && groupFilter !== 'all'
-    ? realtimeFixtures.filter(f => f.group === groupFilter)
+  const selectedGroupFixtures = activeTab === 'search' && viewMode === 'realtime' && fixtureGroupFilter !== 'all'
+    ? realtimeFixtures.filter(f => f.group === fixtureGroupFilter)
     : [];
   const selectedGroupResults = selectedGroupFixtures.filter(f => matchStates[f.id]?.status === 'finished');
   const simulatedFixtureSectionLabel = viewMode === 'simulated'
-    ? roundFilter === 'all'
+    ? fixtureRoundFilter === 'all'
       ? `Matchday ${activeGroupMatchday} Fixtures`
-      : roundFilter.startsWith('md')
-        ? `Matchday ${roundFilter.replace('md', '')} Fixtures`
-        : roundFilter === 'knockouts'
+      : fixtureRoundFilter.startsWith('md')
+        ? `Matchday ${fixtureRoundFilter.replace('md', '')} Fixtures`
+        : fixtureRoundFilter === 'knockouts'
           ? 'Knockout Fixtures'
-          : SEASON_GROUPS.includes(roundFilter)
-            ? `Group ${roundFilter} Fixtures`
+          : SEASON_GROUPS.includes(fixtureRoundFilter)
+            ? `Group ${fixtureRoundFilter} Fixtures`
             : 'Season Fixtures'
     : '';
 
@@ -1201,14 +1203,14 @@ export default function App() {
               <GroupTable
                 fixtures={realtimeFixtures}
                 matchStates={matchStates}
-                selectedGroup={groupFilter}
+                selectedGroup={fixtureGroupFilter}
               />
             </div>
           </section>
         )}
 
         {/* -- Bracket view OR fixture grid -------------------------------- */}
-        {(activeTab === 'home' || activeTab === 'search') && (viewMode !== 'simulated' || seasonHydrated) && (viewMode === 'simulated' && roundFilter === 'bracket' ? (
+        {(activeTab === 'home' || activeTab === 'search') && (viewMode !== 'simulated' || seasonHydrated) && (viewMode === 'simulated' && fixtureRoundFilter === 'bracket' ? (
           <BracketView
             fixtures={fixtures}
             matchStates={matchStates}
@@ -1216,7 +1218,7 @@ export default function App() {
           />
         ) : (
           <section className="space-y-3">
-            {viewMode === 'simulated' && roundFilter !== 'bracket' && (
+            {viewMode === 'simulated' && fixtureRoundFilter !== 'bracket' && (
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
                   {simulatedFixtureSectionLabel}
@@ -1228,9 +1230,9 @@ export default function App() {
                 )}
               </div>
             )}
-            {viewMode === 'realtime' && groupFilter !== 'all' && (
+            {viewMode === 'realtime' && fixtureGroupFilter !== 'all' && (
               <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
-                Group {groupFilter} Fixtures
+                Group {fixtureGroupFilter} Fixtures
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
