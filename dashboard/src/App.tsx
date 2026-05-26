@@ -990,6 +990,13 @@ export default function App() {
     .filter(payout => !!payout.txHash)
     .slice(-5)
     .reverse();
+  const payoutSettlementCount = settlements.filter(settlement => {
+    try {
+      return BigInt(settlement.totalPool) > 0n || settlement.payouts.length > 0;
+    } catch {
+      return settlement.payouts.length > 0;
+    }
+  }).length;
   const displayedSeasonWinners = seasonWinners;
   const worldCupSourceLabel = worldCupFeed?.source === 'zafronix'
     ? 'Zafronix'
@@ -1697,8 +1704,8 @@ export default function App() {
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fixtures.filter(f => f.status === 'open').length}</div>
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Settlements</div>
-                  <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{settlements.length}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Payout Settlements</div>
+                  <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{payoutSettlementCount}</div>
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Persistence</div>
