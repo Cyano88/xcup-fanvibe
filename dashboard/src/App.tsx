@@ -645,8 +645,15 @@ export default function App() {
   const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
   const fixtureRoundFilter = activeTab === 'search' ? roundFilter : 'all';
   const fixtureGroupFilter = activeTab === 'search' ? groupFilter : 'all';
+  const homeSeasonFixtures = simFixtures.filter(f =>
+    f.home.code !== 'TBD' &&
+    f.away.code !== 'TBD' &&
+    (isGroupStageFixture(f) || !!f.round)
+  );
   const baseVisibleFixtures = viewMode === 'simulated'
-    ? (fixtureRoundFilter === 'all'
+    ? (activeTab === 'home'
+      ? homeSeasonFixtures
+      : fixtureRoundFilter === 'all'
       ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === activeGroupMatchday)
       : fixtureRoundFilter.startsWith('md')
         ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === Number(fixtureRoundFilter.replace('md', '')))
@@ -670,6 +677,10 @@ export default function App() {
     : baseVisibleFixtures;
   const orderedVisibleFixtures = activeTab === 'home' && viewMode === 'simulated'
     ? [...visibleFixtures].sort((a, b) => {
+      const latestEventMinute = (fixture: Fixture) => {
+        const events = matchStates[fixture.id]?.events ?? [];
+        return events.length ? Math.max(...events.map(event => event.minute ?? 0)) : matchStates[fixture.id]?.minute ?? 0;
+      };
       const stateRank = (fixture: Fixture) => {
         const state = matchStates[fixture.id];
         if (state?.status === 'live' || state?.status === 'half_time' || fixture.status === 'locked') return 0;
@@ -681,8 +692,11 @@ export default function App() {
       if (rankDiff !== 0) return rankDiff;
       const aState = matchStates[a.id];
       const bState = matchStates[b.id];
+      if ((aState?.status === 'live' || aState?.status === 'half_time' || a.status === 'locked') && (bState?.status === 'live' || bState?.status === 'half_time' || b.status === 'locked')) {
+        return latestEventMinute(b) - latestEventMinute(a) || b.matchday - a.matchday || b.id.localeCompare(a.id);
+      }
       if ((aState?.status === 'finished' || a.status === 'settled') && (bState?.status === 'finished' || b.status === 'settled')) {
-        return (bState?.minute ?? 90) - (aState?.minute ?? 90) || b.matchday - a.matchday;
+        return b.matchday - a.matchday || b.id.localeCompare(a.id);
       }
       return a.matchday - b.matchday || a.id.localeCompare(b.id);
     })

@@ -999,9 +999,13 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
         return (
           <div key={ev.id} className="flex w-full max-w-[118px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700 sm:max-w-[150px]">
             {isGoal ? (
-              <span className="grid h-3 w-3 shrink-0 place-items-center rounded-full border border-zinc-400/50 bg-white text-[7px] leading-none text-zinc-950 shadow-sm">
-                &#9679;
-              </span>
+              <span
+                className="h-3 w-3 shrink-0 rounded-full shadow-sm"
+                style={{
+                  background: 'radial-gradient(circle at 35% 32%, #ffffff 0%, #f4f4f5 62%, #a1a1aa 100%)',
+                  border: '1px solid rgba(0, 0, 0, 0.45)',
+                }}
+              />
             ) : (
               <span className={`h-3.5 w-2.5 shrink-0 rounded-[2px] border border-black/20 ${isRed ? 'bg-red-500' : 'bg-yellow-400'}`} />
             )}
