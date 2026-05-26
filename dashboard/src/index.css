@@ -171,6 +171,17 @@
   100% { opacity: 1; }
 }
 
+@keyframes fanvibeLoadPulse {
+  0%, 100% {
+    transform: scale(0.94);
+    box-shadow: 0 22px 70px rgba(14, 165, 233, 0.16), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 30px 90px rgba(16, 185, 129, 0.22), 0 0 0 10px rgba(255, 255, 255, 0.035);
+  }
+}
+
 /* TBD card shimmer sweep */
 @keyframes shimmer {
   0%   { transform: translateX(-100%); }

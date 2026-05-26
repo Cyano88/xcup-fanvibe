@@ -1459,19 +1459,23 @@ export default function App() {
           className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 px-6"
           style={{ animation: 'overlayIn 0.25s ease both' }}
         >
-          <div
-            className="relative w-full max-w-sm overflow-hidden rounded-xl border border-white/10 px-6 py-7 text-center shadow-2xl"
-            style={{
-              backgroundImage: `linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(2, 6, 23, 0.9)), url(${FANVIBE_SEASON_BG})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          >
-            <div className="relative z-10 mx-auto mb-4 h-12 w-12 overflow-hidden rounded-lg ring-1 ring-white/15">
-              <img src={FANVIBE_HERO_LOGO} alt="" className="h-full w-full object-cover" />
+          <div className="flex flex-col items-center gap-5 text-center">
+            <div
+              className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/10 shadow-2xl sm:h-36 sm:w-36"
+              style={{
+                animation: 'fanvibeLoadPulse 1.65s ease-in-out infinite',
+                backgroundImage: `linear-gradient(180deg, rgba(2, 6, 23, 0.24), rgba(2, 6, 23, 0.72)), url(${FANVIBE_SEASON_BG})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              <div className="absolute inset-3 rounded-full border border-white/10 bg-black/18" />
+              <div className="relative z-10 h-16 w-16 overflow-hidden rounded-full ring-1 ring-white/20 sm:h-20 sm:w-20">
+                <img src={FANVIBE_HERO_LOGO} alt="" className="h-full w-full object-cover" />
+              </div>
             </div>
-            <div className="relative z-10 text-base font-semibold tracking-tight text-white">
-              Loading FanVibe Live Season
+            <div className="text-base font-semibold tracking-tight text-white">
+              Loading FanVibe
             </div>
           </div>
         </div>
