@@ -48,10 +48,12 @@ const FALLBACK_NEWS: NewsItem[] = [
 
 export function WorldCupNews() {
   const [active, setActive] = useState(0);
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const [feed, setFeed] = useState<NewsFeed | null>(null);
   const items = useMemo(() => feed?.articles?.length ? feed.articles : FALLBACK_NEWS, [feed]);
   const lead = items[active % items.length];
   const hasLeadUrl = !!lead.url && lead.url !== '#';
+  const leadImage = brokenImages[lead.image] ? '/assets/fanvibe-season-bg.jpeg' : lead.image;
 
   useEffect(() => {
     fetch(`${BACKEND_HTTP}/worldcup/news`)
@@ -91,8 +93,9 @@ export function WorldCupNews() {
       >
         {hasLeadUrl && <a href={lead.url} target="_blank" rel="noopener noreferrer" className="absolute inset-0 z-20" aria-label={`Read ${lead.title}`} />}
         <img
-          src={lead.image}
+          src={leadImage}
           alt=""
+          onError={() => setBrokenImages(prev => ({ ...prev, [lead.image]: true }))}
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/10" />
@@ -124,32 +127,49 @@ export function WorldCupNews() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="overflow-hidden rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white">
         {items.map((item, index) => {
           const hasUrl = !!item.url && item.url !== '#';
+          const image = brokenImages[item.image] ? '/assets/fanvibe-season-bg.jpeg' : item.image;
           return (
           <button
             key={item.title}
             onClick={() => setActive(index)}
-            className={`overflow-hidden rounded-lg border text-left transition-colors ${
+            className={`flex w-full items-center gap-3 border-b px-3 py-3 text-left last:border-b-0 dark:border-zinc-900 border-zinc-100 transition-colors ${
               active === index
-                ? 'dark:border-blue-500/60 border-blue-300 dark:bg-blue-500/10 bg-blue-50'
-                : 'dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white dark:hover:border-zinc-700 hover:border-zinc-300'
+                ? 'dark:bg-blue-500/10 bg-blue-50'
+                : 'dark:hover:bg-zinc-900/60 hover:bg-zinc-50'
             }`}
           >
-            <div className="aspect-[16/9] overflow-hidden">
-              <img src={item.image} alt="" className="h-full w-full object-cover" />
+            <div className="w-7 shrink-0 text-center text-sm font-black tabular-nums dark:text-zinc-500 text-zinc-400">
+              {index + 1}
             </div>
-            <div className="p-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
-                {item.source}
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-900 bg-zinc-100">
+              <img
+                src={image}
+                alt=""
+                onError={() => setBrokenImages(prev => ({ ...prev, [item.image]: true }))}
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase dark:text-blue-300 text-blue-600">
+                  {item.tag}
+                </span>
+                <span className="truncate text-[10px] font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                  {item.source}
+                </span>
               </div>
-              <div className="mt-1 line-clamp-2 text-sm font-semibold dark:text-zinc-100 text-zinc-900">
+              <div className="mt-1 line-clamp-2 text-sm font-semibold leading-5 dark:text-zinc-100 text-zinc-900">
                 {item.title}
               </div>
-              <div className="mt-2 text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
-                {hasUrl ? 'Tap lead image to open source' : 'Full source restricted'}
+              <div className="mt-1 line-clamp-1 text-[11px] dark:text-zinc-500 text-zinc-500">
+                {item.description || (hasUrl ? 'Open the lead card for the full source.' : 'Full source restricted.')}
               </div>
+            </div>
+            <div className="hidden shrink-0 text-[11px] font-bold dark:text-zinc-600 text-zinc-400 sm:block">
+              {hasUrl ? 'Open' : 'Restricted'}
             </div>
           </button>
         );})}
