@@ -9,6 +9,7 @@ import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.j
 import { clearSeasonState, readSeasonState, writeSeasonState, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
 import { getWorldCupFeed } from './sportsData.js';
+import { getWorldCupNews } from './newsData.js';
 
 // ── App bootstrap ─────────────────────────────────────────────────────────────
 
@@ -91,6 +92,12 @@ app.get('/worldcup/feed', async (req, res) => {
     const result = await engine.settleSyncedFixture(matchState.fixtureId, outcomeFromMatchState(matchState));
     if (result) broadcast('settlement', result);
   }
+  res.json(feed);
+});
+
+app.get('/worldcup/news', async (req, res) => {
+  const force = req.query.force === '1';
+  const feed = await getWorldCupNews(force);
   res.json(feed);
 });
 

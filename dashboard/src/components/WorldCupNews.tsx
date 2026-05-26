@@ -3,11 +3,24 @@ import { ExternalLink, Newspaper } from 'lucide-react';
 
 interface NewsItem {
   title: string;
+  description?: string;
   source: string;
   image: string;
   url: string;
   tag: string;
+  publishedAt?: string;
 }
+
+interface NewsFeed {
+  articles: NewsItem[];
+  source: 'gnews' | 'fallback';
+  mode: 'live' | 'fallback';
+  freshnessSeconds: number;
+  providerConfigured: boolean;
+  error?: string;
+}
+
+const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 
 const FALLBACK_NEWS: NewsItem[] = [
   {
@@ -35,13 +48,25 @@ const FALLBACK_NEWS: NewsItem[] = [
 
 export function WorldCupNews() {
   const [active, setActive] = useState(0);
-  const items = useMemo(() => FALLBACK_NEWS, []);
+  const [feed, setFeed] = useState<NewsFeed | null>(null);
+  const items = useMemo(() => feed?.articles?.length ? feed.articles : FALLBACK_NEWS, [feed]);
   const lead = items[active % items.length];
+
+  useEffect(() => {
+    fetch(`${BACKEND_HTTP}/worldcup/news`)
+      .then(res => res.json())
+      .then((data: NewsFeed) => setFeed(data))
+      .catch(() => setFeed(null));
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setActive(index => (index + 1) % items.length), 6500);
     return () => clearInterval(timer);
   }, [items.length]);
+
+  useEffect(() => {
+    setActive(0);
+  }, [items]);
 
   return (
     <section className="space-y-4">
@@ -56,7 +81,7 @@ export function WorldCupNews() {
           </h2>
         </div>
         <div className="hidden sm:block text-right text-xs dark:text-zinc-500 text-zinc-500">
-          Live feed ready for news API
+          {feed?.mode === 'live' ? `GNews - synced ${feed.freshnessSeconds}s ago` : feed?.error ?? 'Fallback desk feed'}
         </div>
       </div>
 
@@ -79,6 +104,11 @@ export function WorldCupNews() {
           <h3 className="max-w-3xl text-2xl font-semibold tracking-tight text-white sm:text-4xl">
             {lead.title}
           </h3>
+          {lead.description && (
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-zinc-200 line-clamp-2">
+              {lead.description}
+            </p>
+          )}
           <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-zinc-200">
             <span>{lead.source}</span>
             <span className="inline-flex items-center gap-1">
