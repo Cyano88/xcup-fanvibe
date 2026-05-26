@@ -302,6 +302,28 @@
   color: inherit;
 }
 
+.season-winners-mask {
+  width: min(520px, 48vw);
+  overflow: hidden;
+}
+
+.season-winners-track {
+  display: inline-flex;
+  min-width: max-content;
+  gap: 22px;
+  animation: seasonWinnersSlide 24s linear infinite;
+  white-space: nowrap;
+}
+
+.season-winners-track strong {
+  color: inherit;
+}
+
+@keyframes seasonWinnersSlide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
 .season-filter-tab {
   letter-spacing: 0;
 }

@@ -69,6 +69,16 @@ interface InitialSeasonState {
   matchStates: Record<string, MatchState>;
   eliminatedTeams: string[];
   champion: Team | null;
+  previousKnockoutResults?: {
+    seasonNumber: number;
+    champion: Team | null;
+    fixtures: Fixture[];
+    matchStates: Record<string, MatchState>;
+  } | null;
+  seasonWinners?: Array<{
+    seasonNumber: number;
+    team: Team;
+  }>;
   tournamentGen: number;
   timings?: SeasonTiming;
   updatedAt?: number;
@@ -130,6 +140,8 @@ function freshSeasonState(
     matchStates: {},
     eliminatedTeams: [],
     champion: null,
+    previousKnockoutResults: null,
+    seasonWinners: [],
     tournamentGen: 0,
     timings,
     updatedAt: now,
@@ -192,6 +204,15 @@ function liveStageRank(fixture?: Fixture | null): number {
   return 0;
 }
 
+function preseasonArchiveRank(fixture: Fixture): number {
+  if (fixture.round === 'F') return 5;
+  if (fixture.round === '3PL') return 4;
+  if (fixture.round === 'SF') return 3;
+  if (fixture.round === 'QF') return 2;
+  if (fixture.round === 'R16') return 1;
+  return 0;
+}
+
 export default function App() {
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
   if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
@@ -235,6 +256,8 @@ export default function App() {
   const [seasonHydrated, setSeasonHydrated]     = useState(false);
   const [eliminatedTeams, setEliminatedTeams]   = useState<Set<string>>(() => new Set(initialSeason.eliminatedTeams));
   const [champion, setChampion]                 = useState<Team | null>(initialSeason.champion);
+  const [previousKnockoutResults, setPreviousKnockoutResults] = useState(initialSeason.previousKnockoutResults ?? null);
+  const [seasonWinners, setSeasonWinners]       = useState(initialSeason.seasonWinners ?? []);
   const [tournamentGen, setTournamentGen]       = useState(initialSeason.tournamentGen);
 
   // Season / phase system
@@ -307,6 +330,8 @@ export default function App() {
     setMatchStates(prev => preserveWatching ? mergeLiveMatchStates(prev, snapshot.matchStates ?? {}) : snapshot.matchStates ?? {});
     setEliminatedTeams(new Set(snapshot.eliminatedTeams ?? []));
     setChampion(snapshot.champion ?? null);
+    setPreviousKnockoutResults(snapshot.previousKnockoutResults ?? null);
+    setSeasonWinners(snapshot.seasonWinners ?? []);
     setTournamentGen(snapshot.tournamentGen ?? 0);
     if (!preserveWatching) setWatchingId(null);
   }, []);
@@ -324,6 +349,8 @@ export default function App() {
       matchStates,
       eliminatedTeams: [...eliminatedTeams],
       champion,
+      previousKnockoutResults,
+      seasonWinners,
       tournamentGen,
       timings: seasonTiming,
       updatedAt: Date.now(),
@@ -333,7 +360,7 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode, state: payload }),
     }).catch(() => {});
-  }, [champion, eliminatedTeams, fixtures, matchStates, phase, phaseEndsAt, phaseTimer, seasonMode, seasonNumber, seasonTiming, tournamentGen]);
+  }, [champion, eliminatedTeams, fixtures, matchStates, phase, phaseEndsAt, phaseTimer, previousKnockoutResults, seasonMode, seasonNumber, seasonTiming, seasonWinners, tournamentGen]);
 
   const loadSeasonSnapshot = useCallback((preserveWatching = false, showLoading = true) => {
     if (showLoading) setSeasonHydrated(false);
@@ -525,6 +552,22 @@ export default function App() {
 
   // -- Tournament phase transitions --------------------------------------------
   const startPreseason = useCallback((nextSeasonNumber = seasonNumber) => {
+    const archiveFixtures = fixtures
+      .filter(fixture => ['R16', 'QF', 'SF', '3PL', 'F'].includes(fixture.round ?? ''))
+      .sort((a, b) => preseasonArchiveRank(b) - preseasonArchiveRank(a) || a.id.localeCompare(b.id));
+    const nextArchive = champion && archiveFixtures.length > 0
+      ? {
+        seasonNumber,
+        champion,
+        fixtures: archiveFixtures,
+        matchStates: Object.fromEntries(
+          Object.entries(matchStates).filter(([fixtureId]) => archiveFixtures.some(fixture => fixture.id === fixtureId))
+        ),
+      }
+      : previousKnockoutResults;
+    const nextWinners = champion
+      ? [...seasonWinners.filter(item => item.seasonNumber !== seasonNumber), { seasonNumber, team: champion }].slice(-12)
+      : seasonWinners;
     resetRuntimeTournamentRefs();
     const endsAt = Date.now() + seasonTiming.preseasonSeconds * 1000;
     setSeasonNumber(nextSeasonNumber);
@@ -532,23 +575,15 @@ export default function App() {
     setFixtures(createSeasonFixtures(nextSeasonNumber));
     setEliminatedTeams(new Set());
     setChampion(null);
+    setPreviousKnockoutResults(nextArchive);
+    setSeasonWinners(nextWinners);
     setTournamentGen(g => g + 1);
     setRoundFilter('all');
     setWatchingId(null);
     setPhase('preseason');
     setPhaseEndsAt(endsAt);
     setPhaseTimer(seasonTiming.preseasonSeconds);
-  }, [resetRuntimeTournamentRefs, seasonNumber, seasonTiming]);
-
-  const startInterseason = useCallback(() => {
-    resetRuntimeTournamentRefs();
-    const endsAt = Date.now() + seasonTiming.interseasonSeconds * 1000;
-    setChampion(null);
-    setWatchingId(null);
-    setPhase('interseason');
-    setPhaseEndsAt(endsAt);
-    setPhaseTimer(seasonTiming.interseasonSeconds);
-  }, [resetRuntimeTournamentRefs, seasonTiming]);
+  }, [champion, fixtures, matchStates, previousKnockoutResults, resetRuntimeTournamentRefs, seasonNumber, seasonTiming, seasonWinners]);
 
   // -- Phase / season timer -----------------------------------------------------
   useEffect(() => {
@@ -567,19 +602,20 @@ export default function App() {
       }
 
       if (phase === 'champion') {
-        startInterseason();
+        startPreseason(seasonNumber + 1);
         return;
       }
 
       if (phase === 'interseason') {
-        startPreseason(seasonNumber + 1);
+        setPhase('playing');
+        setPhaseTimer(0);
       }
     };
 
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [phase, phaseEndsAt, seasonMode, seasonNumber, startInterseason, startPreseason]);
+  }, [phase, phaseEndsAt, seasonMode, seasonNumber, startPreseason]);
 
   useEffect(() => {
     if (phase !== 'playing' || viewMode !== 'simulated') return;
@@ -762,6 +798,17 @@ export default function App() {
   const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
   const fixtureRoundFilter = activeTab === 'search' ? roundFilter : 'all';
   const fixtureGroupFilter = activeTab === 'search' ? groupFilter : 'all';
+  const archivedPreseasonFixtures = viewMode === 'simulated' && phase === 'preseason' && previousKnockoutResults
+    ? previousKnockoutResults.fixtures
+      .filter(fixture => ['R16', 'QF', 'SF', '3PL', 'F'].includes(fixture.round ?? ''))
+      .sort((a, b) => preseasonArchiveRank(b) - preseasonArchiveRank(a) || a.id.localeCompare(b.id))
+    : [];
+  const archivedPreseasonMatchStates = viewMode === 'simulated' && phase === 'preseason' && previousKnockoutResults
+    ? previousKnockoutResults.matchStates
+    : {};
+  const visibleMatchStates = activeTab === 'home' && archivedPreseasonFixtures.length > 0
+    ? archivedPreseasonMatchStates
+    : displayMatchStates;
   const homeSeasonFixtures = simFixtures.filter(f =>
     f.home.code !== 'TBD' &&
     f.away.code !== 'TBD' &&
@@ -769,9 +816,9 @@ export default function App() {
   );
   const baseVisibleFixtures = viewMode === 'simulated'
     ? (activeTab === 'home'
-      ? homeSeasonFixtures
+      ? (phase === 'preseason' && archivedPreseasonFixtures.length > 0 ? archivedPreseasonFixtures : homeSeasonFixtures)
       : fixtureRoundFilter === 'all'
-      ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === activeGroupMatchday)
+      ? (phase === 'preseason' ? [] : simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === activeGroupMatchday))
       : fixtureRoundFilter.startsWith('md')
         ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === Number(fixtureRoundFilter.replace('md', '')))
       : fixtureRoundFilter === 'knockouts'
@@ -795,11 +842,11 @@ export default function App() {
   const orderedVisibleFixtures = activeTab === 'home' && viewMode === 'simulated'
     ? [...visibleFixtures].sort((a, b) => {
       const latestEventMinute = (fixture: Fixture) => {
-        const events = displayMatchStates[fixture.id]?.events ?? [];
-        return events.length ? Math.max(...events.map(event => event.minute ?? 0)) : displayMatchStates[fixture.id]?.minute ?? 0;
+        const events = visibleMatchStates[fixture.id]?.events ?? [];
+        return events.length ? Math.max(...events.map(event => event.minute ?? 0)) : visibleMatchStates[fixture.id]?.minute ?? 0;
       };
       const stateRank = (fixture: Fixture) => {
-        const state = displayMatchStates[fixture.id];
+        const state = visibleMatchStates[fixture.id];
         if (state?.status === 'live' || state?.status === 'half_time' || fixture.status === 'locked') return 0;
         if (state?.status === 'finished' || fixture.status === 'settled') return 1;
         if (fixture.status === 'open') return 2;
@@ -807,8 +854,8 @@ export default function App() {
       };
       const rankDiff = stateRank(a) - stateRank(b);
       if (rankDiff !== 0) return rankDiff;
-      const aState = displayMatchStates[a.id];
-      const bState = displayMatchStates[b.id];
+      const aState = visibleMatchStates[a.id];
+      const bState = visibleMatchStates[b.id];
       if ((aState?.status === 'live' || aState?.status === 'half_time' || a.status === 'locked') && (bState?.status === 'live' || bState?.status === 'half_time' || b.status === 'locked')) {
         return latestEventMinute(b) - latestEventMinute(a) || b.matchday - a.matchday || b.id.localeCompare(a.id);
       }
@@ -824,7 +871,9 @@ export default function App() {
   const selectedGroupResults = selectedGroupFixtures.filter(f => matchStates[f.id]?.status === 'finished');
   const simulatedFixtureSectionLabel = viewMode === 'simulated'
     ? fixtureRoundFilter === 'all'
-      ? `Matchday ${activeGroupMatchday} Fixtures`
+      ? (phase === 'preseason' && activeTab === 'home' && archivedPreseasonFixtures.length > 0
+        ? `Season ${previousKnockoutResults?.seasonNumber ?? Math.max(1, seasonNumber - 1)} Knockout Results`
+        : `Matchday ${activeGroupMatchday} Fixtures`)
       : fixtureRoundFilter.startsWith('md')
         ? `Matchday ${fixtureRoundFilter.replace('md', '')} Fixtures`
         : fixtureRoundFilter === 'knockouts'
@@ -833,6 +882,10 @@ export default function App() {
             ? `Group ${fixtureRoundFilter} Fixtures`
             : 'Season Fixtures'
     : '';
+  const showPreseasonSearchLiveEmpty = activeTab === 'search'
+    && viewMode === 'simulated'
+    && phase === 'preseason'
+    && fixtureRoundFilter === 'all';
 
   const healthColor = metabolism.isRefuelNeeded
     ? 'dark:text-red-400 text-red-600'
@@ -840,7 +893,7 @@ export default function App() {
     ? 'dark:text-blue-300 text-blue-600'
     : 'dark:text-emerald-400 text-emerald-600';
 
-  const seasonLabel = `FanVibe Season ${seasonNumber}`;
+  const seasonLabel = `World Cup Season ${seasonNumber}`;
   const seasonStartsAt = new Date(Date.now() + phaseTimer * 1000).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
@@ -1090,7 +1143,7 @@ export default function App() {
             {viewMode === 'simulated' ? (
               seasonHydrated ? (
               <>
-                <span className="text-[11px] font-bold tracking-tight dark:text-white text-zinc-950">World Cup Season</span>
+                <span className="text-[11px] font-bold tracking-tight dark:text-white text-zinc-950">{seasonLabel}</span>
                 <span className="season-status-rotate text-[11px] font-semibold dark:text-zinc-300 text-zinc-600">
                   <span>{seasonStatusDetail}</span>
                   <span>{seasonStatusAccent}</span>
@@ -1140,10 +1193,23 @@ export default function App() {
             {phase === 'preseason' ? (
               <div className="relative z-10 flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                  <div className="text-sm font-semibold text-white mb-0.5 drop-shadow-sm">World Cup Season - Staking Open</div>
+                  <div className="text-sm font-semibold text-white mb-0.5 drop-shadow-sm">{seasonLabel} - Staking Open</div>
                   <div className="text-xs text-zinc-200/90">
-                    First fixture window begins at {seasonStartsAt}. More group matches follow in shared broadcast waves.
+                    First fixture window begins at {seasonStartsAt}. Open match groups to stake before kick-off.
                   </div>
+                  {previousKnockoutResults?.champion && (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 backdrop-blur-[2px]">
+                      {flagUrl(previousKnockoutResults.champion.iso) ? (
+                        <img src={flagUrl(previousKnockoutResults.champion.iso)} alt="" className="h-6 w-9 rounded-[3px] object-cover ring-1 ring-white/15" />
+                      ) : (
+                        <span className="text-xl">{previousKnockoutResults.champion.flag}</span>
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-white">{previousKnockoutResults.champion.name}</div>
+                        <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-blue-100">World Cup Champions</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-md border border-white/10 bg-black/35 px-4 py-2 text-center backdrop-blur-[2px]">
                   <div className="text-3xl font-semibold text-white tabular-nums leading-none">{fmtDuration(phaseTimer)}</div>
@@ -1160,7 +1226,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="rounded-md border border-white/10 bg-black/35 px-3 py-1.5 text-right backdrop-blur-[2px]">
-                    <div className="text-[10px] font-bold uppercase text-zinc-300">World Cup Season</div>
+                    <div className="text-[10px] font-bold uppercase text-zinc-300">{seasonLabel}</div>
                     <div className="text-lg font-semibold tabular-nums text-white">{liveSeasonStageCode}</div>
                   </div>
                 </div>
@@ -1395,8 +1461,24 @@ export default function App() {
           </section>
         )}
 
+        {showPreseasonSearchLiveEmpty && (
+          <div
+            className="relative overflow-hidden rounded-xl border border-white/10 bg-zinc-950 px-5 py-8 text-center shadow-sm"
+            style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
+          >
+            <div className="absolute inset-0 bg-cover bg-center opacity-35 blur-[1px]" style={{ backgroundImage: `var(--fanvibe-bg)` }} />
+            <div className="absolute inset-0 bg-black/55" />
+            <div className="relative z-10 mx-auto max-w-md">
+              <div className="text-sm font-semibold text-white">Next season kickstarts soon</div>
+              <div className="mt-1 text-xs leading-relaxed text-zinc-300">
+                Visit match groups to stake on favourites before the first live fixture window opens.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* -- Bracket view OR fixture grid -------------------------------- */}
-        {(activeTab === 'home' || activeTab === 'search') && (viewMode !== 'simulated' || seasonHydrated) && (viewMode === 'simulated' && fixtureRoundFilter === 'bracket' ? (
+        {(activeTab === 'home' || activeTab === 'search') && !showPreseasonSearchLiveEmpty && (viewMode !== 'simulated' || seasonHydrated) && (viewMode === 'simulated' && fixtureRoundFilter === 'bracket' ? (
           <BracketView
             fixtures={fixtures}
             matchStates={matchStates}
@@ -1427,7 +1509,7 @@ export default function App() {
                   key={fixture.id}
                   fixture={fixture}
                   pool={pools[fixture.id]}
-                  matchState={displayMatchStates[fixture.id]}
+                  matchState={visibleMatchStates[fixture.id]}
                   seasonPhase={viewMode === 'simulated' ? phase : undefined}
                   seasonTimer={viewMode === 'simulated' ? phaseTimer : undefined}
                   seasonKickoffDelayMs={viewMode === 'simulated' ? seasonFixtureKickoffDelayMs(fixtures, fixture.id) : undefined}
@@ -1478,6 +1560,25 @@ export default function App() {
                 <span><strong>Step 1</strong> Choose a fixture or champion market</span>
                 <span><strong>Step 2</strong> Stake OKB from your connected wallet</span>
                 <span><strong>Step 3</strong> Winners split payouts after settlement</span>
+              </span>
+            </span>
+          </div>
+        </div>
+        )}
+
+        {activeTab === 'home' && seasonWinners.length > 0 && (
+        <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
+          <div className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:bg-transparent bg-white">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Season Winners</span>
+              <span className="season-winners-mask block">
+                <span className="season-winners-track text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
+                {[...seasonWinners, ...seasonWinners].map((winner, index) => (
+                  <span key={`${winner.seasonNumber}-${winner.team.code}-${index}`}>
+                    <strong>S{String(winner.seasonNumber).padStart(2, '0')} winner</strong> - {winner.team.name}
+                  </span>
+                ))}
+                </span>
               </span>
             </span>
           </div>

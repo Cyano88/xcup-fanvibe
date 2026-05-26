@@ -37,6 +37,8 @@ function freshSeasonState(seasonNumber = 1, now = Date.now(), timings: SeasonTim
     matchStates: {},
     eliminatedTeams: [],
     champion: null,
+    previousKnockoutResults: null,
+    seasonWinners: [],
     tournamentGen: 0,
     timings,
     updatedAt: now,
@@ -122,18 +124,53 @@ export class SeasonController {
       matchStates: stored.matchStates ?? {},
       eliminatedTeams: stored.eliminatedTeams ?? [],
       champion: stored.champion ?? null,
+      previousKnockoutResults: stored.previousKnockoutResults ?? null,
+      seasonWinners: stored.seasonWinners ?? [],
       updatedAt: Date.now(),
     };
   }
 
   private startPreseason(nextSeasonNumber: number): void {
     const now = Date.now();
+    const previousKnockoutResults = this.archiveCurrentSeason();
+    const seasonWinners = this.nextWinnerHistory(previousKnockoutResults?.champion ?? null);
     this.scheduled.clear();
     this.processed.clear();
     this.championTriggered = false;
     this.state = freshSeasonState(nextSeasonNumber, now, this.timing);
+    this.state.previousKnockoutResults = previousKnockoutResults;
+    this.state.seasonWinners = seasonWinners;
     this.log('SYSTEM', 'info', `Season ${nextSeasonNumber} preseason started`);
     this.emit();
+  }
+
+  private archiveCurrentSeason(): PersistedSeasonState['previousKnockoutResults'] {
+    const champion = this.state.champion;
+    const fixtures = this.state.fixtures.filter(fixture =>
+      fixture.round === 'R16' ||
+      fixture.round === 'QF' ||
+      fixture.round === 'SF' ||
+      fixture.round === '3PL' ||
+      fixture.round === 'F'
+    );
+    if (!champion || fixtures.length === 0) return null;
+    const fixtureIds = new Set(fixtures.map(fixture => fixture.id));
+    const matchStates = Object.fromEntries(
+      Object.entries(this.state.matchStates).filter(([fixtureId]) => fixtureIds.has(fixtureId))
+    );
+    return {
+      seasonNumber: this.state.seasonNumber,
+      champion,
+      fixtures,
+      matchStates,
+    };
+  }
+
+  private nextWinnerHistory(champion: Team | null): NonNullable<PersistedSeasonState['seasonWinners']> {
+    const existing = this.state.seasonWinners ?? [];
+    if (!champion) return existing;
+    const withoutCurrent = existing.filter(item => item.seasonNumber !== this.state.seasonNumber);
+    return [...withoutCurrent, { seasonNumber: this.state.seasonNumber, team: champion }].slice(-12);
   }
 
   private startPlaying(): void {
@@ -165,12 +202,12 @@ export class SeasonController {
     }
 
     if (this.state.phase === 'champion' && this.state.phaseTimer <= 0) {
-      this.startInterseason();
+      this.startPreseason(this.state.seasonNumber + 1);
       return;
     }
 
     if (this.state.phase === 'interseason' && this.state.phaseTimer <= 0) {
-      this.startPreseason(this.state.seasonNumber + 1);
+      this.startPlaying();
       return;
     }
 

@@ -38,12 +38,20 @@ function broadcast(type: string, data: unknown): void {
 
 function compactSeasonState(state: PersistedSeasonState | null): PersistedSeasonState | null {
   if (!state) return null;
-  return {
-    ...state,
-    matchStates: Object.fromEntries(Object.entries(state.matchStates ?? {}).map(([fixtureId, matchState]) => [
+  const compactMatchStates = (matchStates: Record<string, MatchState> = {}) =>
+    Object.fromEntries(Object.entries(matchStates).map(([fixtureId, matchState]) => [
       fixtureId,
       { ...matchState, events: [] },
-    ])),
+    ]));
+  return {
+    ...state,
+    matchStates: compactMatchStates(state.matchStates),
+    previousKnockoutResults: state.previousKnockoutResults
+      ? {
+        ...state.previousKnockoutResults,
+        matchStates: compactMatchStates(state.previousKnockoutResults.matchStates),
+      }
+      : null,
   };
 }
 

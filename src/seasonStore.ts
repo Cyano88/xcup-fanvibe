@@ -24,6 +24,16 @@ export interface PersistedSeasonState {
   matchStates: Record<string, MatchState>;
   eliminatedTeams: string[];
   champion: Team | null;
+  previousKnockoutResults?: {
+    seasonNumber: number;
+    champion: Team | null;
+    fixtures: Fixture[];
+    matchStates: Record<string, MatchState>;
+  } | null;
+  seasonWinners?: Array<{
+    seasonNumber: number;
+    team: Team;
+  }>;
   tournamentGen: number;
   timings: SeasonTiming;
   updatedAt: number;
