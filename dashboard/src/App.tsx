@@ -1581,10 +1581,10 @@ export default function App() {
                   ))
                 ) : (
                   <>
-                    <span><strong>S01 winner</strong> - RSA</span>
-                    <span><strong>S01 winner</strong> - RSA</span>
-                    <span><strong>S01 winner</strong> - RSA</span>
-                    <span><strong>S01 winner</strong> - RSA</span>
+                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
+                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
+                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
+                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
                   </>
                 )}
                 </span>
