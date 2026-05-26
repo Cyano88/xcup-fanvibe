@@ -395,6 +395,19 @@ export default function App() {
   }, [connectWS, loadSeasonSnapshot, viewMode]);
 
   useEffect(() => {
+    if (viewMode !== 'simulated' || !seasonHydrated) return;
+    const syncLiveState = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED || wsRef.current.readyState === WebSocket.CLOSING) {
+        connectWS();
+      }
+      loadSeasonSnapshot(true, false);
+    };
+    const timer = setInterval(syncLiveState, 5000);
+    return () => clearInterval(timer);
+  }, [connectWS, loadSeasonSnapshot, seasonHydrated, viewMode]);
+
+  useEffect(() => {
     const loadWorldCupFeed = () => {
       fetch(`${BACKEND_HTTP}/worldcup/feed`)
         .then(r => r.json())
