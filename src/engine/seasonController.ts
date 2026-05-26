@@ -140,6 +140,7 @@ export class SeasonController {
     const now = Date.now();
     const previousKnockoutResults = this.archiveCurrentSeason();
     const seasonWinners = this.nextWinnerHistory(previousKnockoutResults?.champion ?? null);
+    this.simulator.cancelAll();
     this.scheduled.clear();
     this.processed.clear();
     this.championTriggered = false;
@@ -258,6 +259,7 @@ export class SeasonController {
   }
 
   private handleMatchUpdate(fixtureId: string, matchState: MatchState): void {
+    if (this.state.phase !== 'playing') return;
     this.state.matchStates[fixtureId] = matchState;
     const fixture = this.state.fixtures.find(f => f.id === fixtureId);
     if (fixture && matchState.status !== 'finished') {
@@ -267,12 +269,18 @@ export class SeasonController {
   }
 
   private async handleSettle(fixtureId: string, outcome: Outcome): Promise<void> {
+    if (this.state.phase !== 'playing') return;
     const fixture = this.state.fixtures.find(f => f.id === fixtureId);
     if (!fixture || fixture.status === 'settled') return;
     fixture.status = 'settled';
     fixture.result = outcome;
-    await this.referee.settleSyncedFixture(fixtureId, outcome);
     this.processFinishedFixture(fixtureId);
+    this.emit();
+    try {
+      await this.referee.settleSyncedFixture(fixtureId, outcome);
+    } catch (err) {
+      this.log('SYSTEM', 'warn', `Settlement sync failed for ${fixtureId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
     this.emit();
   }
 
@@ -305,10 +313,16 @@ export class SeasonController {
       this.championTriggered = true;
       const final = this.state.fixtures.find(f => f.id === 'f-1');
       if (final) {
-        this.state.champion = outcomeFromState(matchState) === 'away' ? final.away : final.home;
+        const winner = outcomeFromState(matchState) === 'away' ? final.away : final.home;
+        if (winner.code === 'TBD' || winner.iso === 'tbd') {
+          this.championTriggered = false;
+          this.log('SYSTEM', 'warn', 'Final finished before qualifiers were resolved; champion phase skipped');
+          return;
+        }
+        this.state.champion = winner;
         this.state.phase = 'champion';
-        this.state.phaseEndsAt = Date.now() + 10_000;
-        this.state.phaseTimer = 10;
+        this.state.phaseEndsAt = Date.now() + 5_000;
+        this.state.phaseTimer = 5;
         this.log('SYSTEM', 'success', `${this.state.champion.code} win Season ${this.state.seasonNumber}`);
       }
     }

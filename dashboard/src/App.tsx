@@ -162,6 +162,10 @@ function mergeLiveMatchStates(
     if (!incomingState) continue;
     const currentEvents = currentState.events?.length ?? 0;
     const incomingEvents = incomingState.events?.length ?? 0;
+    if (currentEvents > 0 && incomingEvents === 0) {
+      merged[fixtureId] = { ...incomingState, events: currentState.events };
+      continue;
+    }
     const currentFreshness = (currentState.minute * 1000) + currentEvents;
     const incomingFreshness = (incomingState.minute * 1000) + incomingEvents;
     if (
@@ -173,6 +177,17 @@ function mergeLiveMatchStates(
     }
   }
   return merged;
+}
+
+function richerMatchState(primary?: MatchState | null, fallback?: MatchState | null): MatchState | null {
+  if (!primary) return fallback ?? null;
+  if (!fallback) return primary;
+  const primaryEvents = primary.events?.length ?? 0;
+  const fallbackEvents = fallback.events?.length ?? 0;
+  if (fallbackEvents > primaryEvents && primaryEvents === 0) {
+    return { ...primary, events: fallback.events };
+  }
+  return primary;
 }
 
 function fixtureStageLabel(fixture?: Fixture | null, fallbackMatchday = 1): string {
@@ -282,6 +297,7 @@ export default function App() {
   const watchedFixtureRef      = useRef<Record<string, Fixture>>({});
   const themeAudioRef          = useRef<HTMLAudioElement | null>(null);
   const seasonPersistTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seasonSnapshotUpdatedAtRef = useRef(0);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -318,6 +334,9 @@ export default function App() {
   }, []);
 
   const applySeasonSnapshot = useCallback((snapshot: InitialSeasonState, mode: SeasonStorageMode, preserveWatching = false) => {
+    const snapshotUpdatedAt = snapshot.updatedAt ?? Date.now();
+    if (preserveWatching && snapshotUpdatedAt + 1000 < seasonSnapshotUpdatedAtRef.current) return;
+    seasonSnapshotUpdatedAtRef.current = snapshotUpdatedAt;
     if (!preserveWatching) {
       simCleanupRef.current.forEach(c => c());
       simCleanupRef.current.clear();
@@ -331,13 +350,14 @@ export default function App() {
     setPhaseEndsAt(snapshot.phaseEndsAt);
     setPhaseTimer(Math.max(0, Math.ceil((snapshot.phaseEndsAt - Date.now()) / 1000)));
     setFixtures(seasonFixturesFromState(snapshot.fixtures));
-    setMatchStates(prev => preserveWatching ? mergeLiveMatchStates(prev, snapshot.matchStates ?? {}) : snapshot.matchStates ?? {});
+    const incomingMatchStates = snapshot.phase === 'preseason' ? {} : snapshot.matchStates ?? {};
+    setMatchStates(prev => preserveWatching && snapshot.phase === 'playing' ? mergeLiveMatchStates(prev, incomingMatchStates) : incomingMatchStates);
     setEliminatedTeams(new Set(snapshot.eliminatedTeams ?? []));
     setChampion(snapshot.champion ?? null);
     setPreviousKnockoutResults(snapshot.previousKnockoutResults ?? null);
     setSeasonWinners(snapshot.seasonWinners ?? []);
     setTournamentGen(snapshot.tournamentGen ?? 0);
-    if (!preserveWatching) setWatchingId(null);
+    if (!preserveWatching || snapshot.phase !== 'playing') setWatchingId(null);
   }, []);
 
   const persistSeasonSnapshot = useCallback((mode = seasonMode) => {
@@ -496,9 +516,9 @@ export default function App() {
       }
       loadSeasonSnapshot(true, false);
     };
-    const timer = setInterval(syncLiveState, 5000);
+    const timer = setInterval(syncLiveState, phase === 'playing' || phase === 'champion' ? 1500 : 5000);
     return () => clearInterval(timer);
-  }, [connectWS, loadSeasonSnapshot, seasonHydrated, viewMode]);
+  }, [connectWS, loadSeasonSnapshot, phase, seasonHydrated, viewMode]);
 
   useEffect(() => {
     const loadWorldCupFeed = () => {
@@ -688,10 +708,14 @@ export default function App() {
       : ms.penaltyWinner === 'away' ? fx.away
       : ms.homeScore >= ms.awayScore ? fx.home
       : fx.away;
+    if (winner.code === 'TBD' || winner.iso === 'tbd') {
+      championTriggeredRef.current = false;
+      return;
+    }
     setChampion(winner);
     setPhase('champion');
-    setPhaseEndsAt(Date.now() + 10 * 1000);
-    setPhaseTimer(10);
+    setPhaseEndsAt(Date.now() + 5 * 1000);
+    setPhaseTimer(5);
   }, [matchStates, viewMode, phase, fixtures, seasonMode]);
 
   const showStakeClosedNotice = useCallback((fixtureId: string, reason?: string) => {
@@ -750,7 +774,7 @@ export default function App() {
     ? fixtures.find(f => f.id === watchingFixtureId) ?? watchedFixtureRef.current[watchingFixtureId] ?? null
     : null;
   const watchingMatchState = watchingFixtureId
-    ? matchStates[watchingFixtureId] ?? watchedStateRef.current[watchingFixtureId] ?? null
+    ? richerMatchState(matchStates[watchingFixtureId], watchedStateRef.current[watchingFixtureId])
     : null;
 
   useEffect(() => {
@@ -792,7 +816,7 @@ export default function App() {
     const kickoffMs = Date.parse(state.simulatedKickoff);
     if (!Number.isFinite(kickoffMs)) return state;
     const minuteMs = Math.max(1000, Math.round(seasonTiming.matchMs / 90));
-    const projectedMinute = Math.min(89, Math.max(state.minute, Math.floor((Date.now() - kickoffMs) / minuteMs)));
+    const projectedMinute = Math.min(90, Math.max(state.minute, Math.floor((Date.now() - kickoffMs) / minuteMs)));
     return projectedMinute === state.minute ? state : { ...state, minute: projectedMinute };
   }, [liveUiTick, seasonTiming.matchMs]);
   const displayMatchStates = Object.fromEntries(
@@ -1813,7 +1837,7 @@ export default function App() {
             <div className="w-full h-1 dark:bg-zinc-800 bg-zinc-700 rounded-full overflow-hidden mb-3">
               <div
                 className="h-full bg-emerald-400 rounded-full transition-all duration-1000 ease-linear"
-                style={{ width: `${(phaseTimer / 10) * 100}%` }}
+                style={{ width: `${(phaseTimer / 5) * 100}%` }}
               />
             </div>
             <p className="text-xs dark:text-zinc-400 text-zinc-400 mb-5">
