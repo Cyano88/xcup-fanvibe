@@ -686,11 +686,10 @@ export class RefereeEngine {
 
     let job = existingJob;
     if (!job) {
-      const payingStakes = winPool === 0n && this.champStakes.length > 0 ? this.champStakes : winners;
-      const payouts = payingStakes.map((s, idx) => {
+      const payouts = winners.map((s, idx) => {
         const stake = BigInt(s.amountWei);
         const net = stake - (stake * PROTOCOL_FEE_BPS) / 10_000n;
-        const amount = winPool > 0n ? (net * totalPool) / winPool : net;
+        const amount = winPool > 0n ? (net * totalPool) / winPool : 0n;
         return {
           id: `${s.txHash}:${idx}`,
           address: s.staker,
@@ -713,7 +712,10 @@ export class RefereeEngine {
       await this.saveSettlementJob(job);
     }
 
-    await this.processSettlementJob(job, winPool > 0n ? 'Champion payout' : 'Champion refund');
+    if (winPool === 0n && this.champStakes.length > 0) {
+      this.log('ORACLE', 'warn', `No stakes on champion winner (${winner}) - settled pool retained by treasury`);
+    }
+    await this.processSettlementJob(job, 'Champion payout');
     this.onUpdate?.();
   }
 
@@ -759,12 +761,11 @@ export class RefereeEngine {
     const jobId = `match:${fixtureId}`;
     let job = this.settlementJobs.get(jobId);
     if (!job) {
-      const payingStakes = winPool === 0n && allFixtureStakes.length > 0 ? allFixtureStakes : winners;
-      const payoutPlan = payingStakes.map((stake, idx) => {
+      const payoutPlan = winners.map((stake, idx) => {
         const gross = BigInt(stake.amountWei);
         const fee = (gross * PROTOCOL_FEE_BPS) / 10_000n;
         const net = gross - fee;
-        const amount = winPool > 0n ? (net * totalPool) / winPool : net;
+        const amount = winPool > 0n ? (net * totalPool) / winPool : 0n;
         return {
           id: `${stake.txHash}:${idx}`,
           address: stake.staker,
@@ -789,9 +790,9 @@ export class RefereeEngine {
     }
 
     if (winPool === 0n && allFixtureStakes.length > 0) {
-      this.log('ORACLE', 'warn', `No stakes on winning outcome (${outcome}) - refunding ${allFixtureStakes.length} stakers`);
+      this.log('ORACLE', 'warn', `No stakes on winning outcome (${outcome}) - settled pool retained by treasury`);
     }
-    await this.processSettlementJob(job, winPool > 0n ? 'Payout' : 'Refund');
+    await this.processSettlementJob(job, 'Payout');
 
     fixture.status = 'settled';
     fixture.result = outcome;
