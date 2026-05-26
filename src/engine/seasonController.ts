@@ -97,6 +97,19 @@ export class SeasonController {
     if (this.saveTimer) clearTimeout(this.saveTimer);
   }
 
+  async resetToFreshSeason(seasonNumber = 1): Promise<PersistedSeasonState> {
+    this.simulator.cancelAll();
+    this.scheduled.clear();
+    this.processed.clear();
+    this.championTriggered = false;
+    this.state = freshSeasonState(seasonNumber, Date.now(), this.timing);
+    this.referee.syncFixtures(this.state.fixtures);
+    await writeSeasonState('prod', this.getState());
+    this.log('SYSTEM', 'success', `Production season reset to fresh preseason - Season ${seasonNumber}`);
+    this.emit(false);
+    return this.getState();
+  }
+
   private normalizeStoredState(stored: PersistedSeasonState): PersistedSeasonState {
     const timings = stored.timings?.waveGapMs === undefined ? this.timing : stored.timings;
     return {

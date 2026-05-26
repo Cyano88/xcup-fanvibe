@@ -392,6 +392,26 @@ export class RefereeEngine {
     await writeRefereeMarket(this.marketSnapshot());
   }
 
+  async resetMarketState(fixtures = this.fixtures): Promise<void> {
+    this.simulator.cancelAll();
+    this.fixtures = structuredClone(fixtures);
+    this.stakes.clear();
+    this.rejectedStakeRefunds.clear();
+    this.pools.clear();
+    for (const fixture of this.fixtures) {
+      this.pools.set(fixture.id, { fixtureId: fixture.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 });
+    }
+    this.settlements = [];
+    this.settlementJobs.clear();
+    this.champStakes = [];
+    this.champPool = new Map(CHAMP_TEAMS.map(team => [team, 0n]));
+    this.champSettled = false;
+    this.champWinner = undefined;
+    this.log('SYSTEM', 'success', 'Referee market state reset to a clean slate');
+    await this.persistMarketStateNow();
+    this.onUpdate?.();
+  }
+
   private persistMarketState(): void {
     if (this.saveQueued) return;
     this.saveQueued = true;

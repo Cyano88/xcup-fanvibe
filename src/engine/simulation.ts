@@ -333,7 +333,7 @@ function shouldPause(type: string): boolean {
 
 export class MatchSimulator {
   private states = new Map<string, MatchState>();
-  private timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private timers = new Map<string, ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>>();
   private pauseUntil = new Map<string, number>();
   private eventId = 0;
   private readonly minuteMs = Number(process.env.SIM_MINUTE_MS ?? '6667');
@@ -363,23 +363,35 @@ export class MatchSimulator {
       } else {
         fixture.status = stakingOpenMs <= now ? 'open' : 'upcoming';
         if (stakingOpenMs > now) {
-          setTimeout(() => {
+          const openTimer = setTimeout(() => {
             fixture.status = 'open';
             this.onEvent(fixture.id, this.states.get(fixture.id) ?? this.blankState(fixture, kickoffMs));
           }, stakingOpenMs - now);
+          this.timers.set(`${fixture.id}:open`, openTimer);
         }
-        setTimeout(() => {
+        const kickoffTimer = setTimeout(() => {
           if (fixture.status === 'settled') return;
           fixture.status = 'locked';
           this.log('SYSTEM', 'info', `Match locked - ${fixture.home.code} vs ${fixture.away.code} kicks off now`);
           this.runMatch(fixture, 0);
         }, kickoffMs - now);
+        this.timers.set(`${fixture.id}:kickoff`, kickoffTimer);
       }
     });
   }
 
   getStates(): Record<string, MatchState> {
     return Object.fromEntries(this.states);
+  }
+
+  cancelAll(): void {
+    for (const timer of this.timers.values()) {
+      clearTimeout(timer);
+      clearInterval(timer);
+    }
+    this.timers.clear();
+    this.pauseUntil.clear();
+    this.states.clear();
   }
 
   private blankState(fixture: Fixture, kickoffMs: number): MatchState {
@@ -426,6 +438,13 @@ export class MatchSimulator {
   }
 
   private runMatch(fixture: Fixture, startMinute: number): void {
+    const openTimer = this.timers.get(`${fixture.id}:open`);
+    const kickoffTimer = this.timers.get(`${fixture.id}:kickoff`);
+    if (openTimer) clearTimeout(openTimer);
+    if (kickoffTimer) clearTimeout(kickoffTimer);
+    this.timers.delete(`${fixture.id}:open`);
+    this.timers.delete(`${fixture.id}:kickoff`);
+
     const state: MatchState = {
       fixtureId: fixture.id,
       status: 'live',
@@ -461,7 +480,7 @@ export class MatchSimulator {
 
       if (state.minute >= 90) {
         clearInterval(interval);
-        this.timers.delete(fixture.id);
+        this.timers.delete(`${fixture.id}:interval`);
         this.addEvent(state, 'full_time', fixture, 'neutral');
         state.status = 'finished';
         state.finishedAt = Date.now();
@@ -476,7 +495,7 @@ export class MatchSimulator {
       this.onEvent(fixture.id, state);
     }, this.minuteMs);
 
-    this.timers.set(fixture.id, interval);
+    this.timers.set(`${fixture.id}:interval`, interval);
   }
 
   private simulateMinute(state: MatchState, fixture: Fixture, calibration: CalibratedStrength): void {

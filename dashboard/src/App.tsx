@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Newspaper, Search, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
+import { BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Newspaper, Search, Volume2, VolumeX } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
 import { StakeModal } from './components/StakeModal';
 import { SettlementToast } from './components/SettlementToast';
 import { MyPositions } from './components/MyPositions';
-import { FuelBar } from './components/FuelBar';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
 import { WorldCupNews } from './components/WorldCupNews';
@@ -80,7 +79,7 @@ type SeasonStorageMode = 'prod' | 'test';
 interface WorldCupFeed {
   fixtures: Fixture[];
   matchStates: Record<string, MatchState>;
-  source: 'wc2026api' | 'static';
+  source: 'wc2026api' | 'balldontlie' | 'zafronix' | 'static';
   mode: 'live' | 'fallback';
   updatedAt: number;
   freshnessSeconds: number;
@@ -161,6 +160,7 @@ export default function App() {
   const [proofOpen, setProofOpen]               = useState(false);
   const [roundFilter, setRoundFilter]           = useState<string>('all');
   const [groupFilter, setGroupFilter]           = useState<string>('all');
+  const [searchQuery, setSearchQuery]           = useState('');
   const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>(initialSeason.matchStates);
   const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
   const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
@@ -617,7 +617,7 @@ export default function App() {
   const simFixtures    = viewMode === 'simulated' ? fixtures : realtimeFixtures;
   const rtGroups       = ['all', ...Array.from(new Set(realtimeFixtures.map(f => f.group))).sort()];
   const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
-  const visibleFixtures = viewMode === 'simulated'
+  const baseVisibleFixtures = viewMode === 'simulated'
     ? (roundFilter === 'all'
       ? simFixtures.filter(f => isGroupStageFixture(f) && f.matchday === activeGroupMatchday)
       : roundFilter.startsWith('md')
@@ -628,6 +628,18 @@ export default function App() {
           ? simFixtures.filter(f => f.group === roundFilter && isGroupStageFixture(f))
           : simFixtures)
     : (groupFilter === 'all' ? realtimeFixtures : realtimeFixtures.filter(f => f.group === groupFilter));
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const visibleFixtures = activeTab === 'search' && normalizedSearchQuery
+    ? baseVisibleFixtures.filter(fixture => [
+        fixture.home.name,
+        fixture.home.code,
+        fixture.away.name,
+        fixture.away.code,
+        fixture.group,
+        fixture.round ?? '',
+        fixture.venue,
+      ].some(value => value.toLowerCase().includes(normalizedSearchQuery)))
+    : baseVisibleFixtures;
   const selectedGroupFixtures = viewMode === 'realtime' && groupFilter !== 'all'
     ? realtimeFixtures.filter(f => f.group === groupFilter)
     : [];
@@ -713,11 +725,15 @@ export default function App() {
     .filter(payout => !!payout.txHash)
     .slice(-5)
     .reverse();
-  const worldCupSourceLabel = worldCupFeed?.source === 'wc2026api'
-    ? 'WC2026 API'
-    : worldCupFeed?.providerConfigured
-      ? 'Static fallback'
-      : 'Static schedule';
+  const worldCupSourceLabel = worldCupFeed?.source === 'zafronix'
+    ? 'Zafronix'
+    : worldCupFeed?.source === 'balldontlie'
+      ? 'BallDontLie'
+      : worldCupFeed?.source === 'wc2026api'
+        ? 'WC2026 API'
+        : worldCupFeed?.providerConfigured
+          ? 'Static fallback'
+          : 'Static schedule';
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
       ? `synced ${worldCupFeed.freshnessSeconds}s ago`
@@ -847,7 +863,7 @@ export default function App() {
             </button>
           </div>
 
-          {viewMode === 'simulated' && (
+          {viewMode === 'simulated' && (import.meta.env.VITE_ENABLE_ADMIN_TEST_MODE === 'true' || new URLSearchParams(window.location.search).get('admin') === '1') && (
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
                 <button
@@ -860,18 +876,16 @@ export default function App() {
                 >
                   Persistent
                 </button>
-                {(import.meta.env.VITE_ENABLE_ADMIN_TEST_MODE === 'true' || new URLSearchParams(window.location.search).get('admin') === '1') && (
-                  <button
-                    onClick={() => setSeasonMode('test')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                      seasonMode === 'test'
-                        ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200'
-                        : 'dark:text-zinc-500 text-zinc-500 dark:hover:text-zinc-300 hover:text-zinc-700'
-                    }`}
-                  >
-                    Test
-                  </button>
-                )}
+                <button
+                  onClick={() => setSeasonMode('test')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    seasonMode === 'test'
+                      ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200'
+                      : 'dark:text-zinc-500 text-zinc-500 dark:hover:text-zinc-300 hover:text-zinc-700'
+                  }`}
+                >
+                  Test
+                </button>
               </div>
               {seasonMode === 'test' && (
                 <button
@@ -1037,6 +1051,31 @@ export default function App() {
         )}
 
         {/* -- Round / group filter tabs ----------------------------------- */}
+        {activeTab === 'search' && (
+          <div className="flex flex-col gap-3 rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <label className="relative min-w-0 flex-1">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 dark:text-zinc-600 text-zinc-400" />
+              <input
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Search teams, groups, venues, or match codes"
+                className="h-10 w-full rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-black bg-zinc-50 pl-9 pr-3 text-sm font-medium outline-none transition-colors placeholder:dark:text-zinc-700 placeholder:text-zinc-400 focus:border-blue-500/60 dark:text-zinc-100 text-zinc-900"
+              />
+            </label>
+            <div className="flex items-center gap-2 text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
+              <span>{visibleFixtures.length} matches</span>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1 dark:text-zinc-400 text-zinc-600 dark:hover:text-zinc-100 hover:text-zinc-900"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'search' && (viewMode === 'simulated' ? (
           <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
             {[
@@ -1210,6 +1249,11 @@ export default function App() {
                 />
               ))}
             </div>
+            {visibleFixtures.length === 0 && (
+              <div className="rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white px-4 py-8 text-center text-sm dark:text-zinc-500 text-zinc-500">
+                No matches found. Try a team name, code, group, or venue.
+              </div>
+            )}
           </section>
         ))}
 
@@ -1258,10 +1302,9 @@ export default function App() {
             className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <ShieldCheck size={14} className="shrink-0 dark:text-blue-300 text-blue-600" />
               <span className="font-semibold dark:text-zinc-400 text-zinc-600">X Layer Proof</span>
               <span className="hidden sm:inline-flex min-w-0 text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
-                Chain 196 - {lastBlock > 0 ? `indexed block ${lastBlock.toLocaleString()}` : 'indexing pending'} - {settlements.length} settlements
+                Chain 196 - {lastBlock > 0 ? `block ${lastBlock.toLocaleString()}` : 'indexing pending'} - {wsConnected || engineOnline ? 'engine online' : 'engine offline'}
               </span>
             </span>
             {proofOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -1269,14 +1312,14 @@ export default function App() {
 
           {proofOpen && (
             <div className="border-t dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950/80 bg-white px-4 py-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Network</div>
                   <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">X Layer Mainnet</div>
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Chain ID 196</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Chain ID 196, OKB gas</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Referee Wallet</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Wallet</div>
                   {refereeAddress ? (
                     <a href={explorerAddr(refereeAddress)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900 hover:text-blue-500">
                       {shortAddr(refereeAddress)}
@@ -1285,10 +1328,10 @@ export default function App() {
                   ) : (
                     <div className="mt-1 text-sm font-semibold dark:text-zinc-500 text-zinc-500">Not connected</div>
                   )}
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Receives stakes and sends payouts</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Settlement account controlled by the referee engine</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Indexed Block</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Block</div>
                   {lastBlock > 0 ? (
                     <a href={explorerBlock(lastBlock)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900 hover:text-blue-500">
                       {lastBlock.toLocaleString()}
@@ -1297,13 +1340,24 @@ export default function App() {
                   ) : (
                     <div className="mt-1 text-sm font-semibold dark:text-zinc-500 text-zinc-500">Waiting for RPC</div>
                   )}
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{wsConnected ? 'WebSocket live' : 'HTTP poller active'}</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Latest indexed X Layer block</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Durability</div>
-                  <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{seasonDurable ? 'Upstash Redis' : 'Local fallback'}</div>
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Season and market state persistence</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Balance</div>
+                  <div className={`mt-1 text-sm font-semibold tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{metabolism.healthPercent}% gas health</div>
                 </div>
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Engine</div>
+                  <div className={`mt-1 text-sm font-semibold ${wsConnected || engineOnline ? 'dark:text-emerald-300 text-emerald-600' : 'dark:text-zinc-500 text-zinc-500'}`}>
+                    {wsConnected || engineOnline ? 'Online' : 'Offline'}
+                  </div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{wsConnected ? 'WebSocket connected' : 'HTTP state checks active'}</div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-3 text-xs leading-relaxed dark:text-zinc-400 text-zinc-600">
+                FanVibe keeps the game readable for users and verifiable for judges: fixtures and stakes are tracked by the app, settlement actions are sent from the referee wallet, and every payout transaction links back to X Layer explorer records. Redis persistence keeps season state durable across Railway restarts.
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -1320,9 +1374,9 @@ export default function App() {
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{settlements.length}</div>
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Data Source</div>
-                  <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{worldCupSourceLabel}</div>
-                  <div className="mt-0.5 truncate text-[10px] dark:text-zinc-600 text-zinc-400">{worldCupFreshness}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Persistence</div>
+                  <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{seasonDurable ? 'Redis active' : 'Local fallback'}</div>
+                  <div className="mt-0.5 truncate text-[10px] dark:text-zinc-600 text-zinc-400">{worldCupSourceLabel} - {worldCupFreshness}</div>
                 </div>
               </div>
 
@@ -1364,38 +1418,6 @@ export default function App() {
 
         {/* Footer */}
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
-          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/70 bg-white px-4 py-3 text-[11px] dark:text-zinc-500 text-zinc-500">
-            {lastBlock > 0 && (
-              <span className="whitespace-nowrap">
-                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Block</span>
-                <span className="font-semibold tabular-nums dark:text-zinc-300 text-zinc-700">{lastBlock.toLocaleString()}</span>
-              </span>
-            )}
-            {refereeAddress && (
-              <a
-                href={explorerAddr(refereeAddress)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="whitespace-nowrap transition-colors dark:hover:text-white hover:text-zinc-950"
-              >
-                <span className="mr-1 dark:text-zinc-700 text-zinc-400">Wallet</span>
-                <span className="font-semibold dark:text-zinc-300 text-zinc-700">{shortAddr(refereeAddress)}</span>
-              </a>
-            )}
-            <span className="whitespace-nowrap">
-              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Balance</span>
-              <span className={`font-semibold tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</span>
-            </span>
-            <span className="flex w-16 items-center opacity-80">
-              <FuelBar percent={metabolism.healthPercent} okbFormatted="" isRefuelNeeded={metabolism.isRefuelNeeded} compact />
-            </span>
-            <span className="whitespace-nowrap">
-              <span className="mr-1 dark:text-zinc-700 text-zinc-400">Engine</span>
-              <span className={`font-semibold ${wsConnected || engineOnline ? 'dark:text-zinc-300 text-zinc-700' : 'dark:text-zinc-600 text-zinc-400'}`}>
-                {wsConnected || engineOnline ? 'Online' : 'Offline'}
-              </span>
-            </span>
-          </div>
           <div className="flex items-center justify-center gap-4">
             <a
               href="https://x.com/xcupfanvibe"
@@ -1407,7 +1429,7 @@ export default function App() {
             </a>
           </div>
           <div className="text-[11px] dark:text-zinc-600 text-zinc-400">
-            Built on OKX X Layer - Settlement Wallet - O2 Autonomous Metabolism
+            Built on OKX X Layer - Settlement Wallet - 02
           </div>
         </div>
       </main>
