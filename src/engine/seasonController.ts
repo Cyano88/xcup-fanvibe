@@ -25,6 +25,11 @@ import type { DaemonLog, Fixture, MatchState, Outcome, Team } from '../types.js'
 
 type LogFn = (prefix: DaemonLog['prefix'], level: DaemonLog['level'], message: string, txHash?: string) => void;
 
+const VERIFIED_SEASON_ONE_WINNER: { seasonNumber: number; team: Team } = {
+  seasonNumber: 1,
+  team: { name: 'South Africa', code: 'RSA', flag: '🇿🇦', iso: 'za' },
+};
+
 function freshSeasonState(seasonNumber = 1, now = Date.now(), timings: SeasonTiming = DEFAULT_SEASON_TIMING): PersistedSeasonState {
   return {
     version: 1,
@@ -116,6 +121,7 @@ export class SeasonController {
 
   private normalizeStoredState(stored: PersistedSeasonState): PersistedSeasonState {
     const timings = stored.timings?.waveGapMs === undefined ? this.timing : stored.timings;
+    const seasonWinners = this.withVerifiedSeasonOneWinner(stored.seasonWinners ?? [], stored.seasonNumber ?? 1);
     return {
       ...stored,
       mode: 'prod',
@@ -125,7 +131,7 @@ export class SeasonController {
       eliminatedTeams: stored.eliminatedTeams ?? [],
       champion: stored.champion ?? null,
       previousKnockoutResults: stored.previousKnockoutResults ?? null,
-      seasonWinners: stored.seasonWinners ?? [],
+      seasonWinners,
       updatedAt: Date.now(),
     };
   }
@@ -167,10 +173,18 @@ export class SeasonController {
   }
 
   private nextWinnerHistory(champion: Team | null): NonNullable<PersistedSeasonState['seasonWinners']> {
-    const existing = this.state.seasonWinners ?? [];
+    const existing = this.withVerifiedSeasonOneWinner(this.state.seasonWinners ?? [], this.state.seasonNumber);
     if (!champion) return existing;
     const withoutCurrent = existing.filter(item => item.seasonNumber !== this.state.seasonNumber);
     return [...withoutCurrent, { seasonNumber: this.state.seasonNumber, team: champion }].slice(-12);
+  }
+
+  private withVerifiedSeasonOneWinner(
+    winners: NonNullable<PersistedSeasonState['seasonWinners']>,
+    seasonNumber: number,
+  ): NonNullable<PersistedSeasonState['seasonWinners']> {
+    if (seasonNumber < 2 || winners.some(item => item.seasonNumber === 1)) return winners;
+    return [VERIFIED_SEASON_ONE_WINNER, ...winners].slice(-12);
   }
 
   private startPlaying(): void {
@@ -180,15 +194,6 @@ export class SeasonController {
     this.state.updatedAt = Date.now();
     this.referee.syncFixtures(this.state.fixtures);
     this.log('SYSTEM', 'success', `Season ${this.state.seasonNumber} group stage started`);
-    this.emit();
-  }
-
-  private startInterseason(): void {
-    const now = Date.now();
-    this.state.phase = 'interseason';
-    this.state.phaseEndsAt = now + this.state.timings.interseasonSeconds * 1000;
-    this.state.phaseTimer = this.state.timings.interseasonSeconds;
-    this.state.updatedAt = now;
     this.emit();
   }
 

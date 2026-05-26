@@ -44,6 +44,10 @@ const BRAND_E_IMAGE = '/assets/brand-e.png';
 const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
+const VERIFIED_SEASON_ONE_WINNER: { seasonNumber: number; team: Team } = {
+  seasonNumber: 1,
+  team: { name: 'South Africa', code: 'RSA', flag: '🇿🇦', iso: 'za' },
+};
 const isResolvedFixture = (fixture?: Fixture | null) =>
   !!fixture
   && fixture.home.code !== 'TBD'
@@ -966,6 +970,9 @@ export default function App() {
     .filter(payout => !!payout.txHash)
     .slice(-5)
     .reverse();
+  const displayedSeasonWinners = seasonWinners.some(winner => winner.seasonNumber === 1)
+    ? seasonWinners
+    : [VERIFIED_SEASON_ONE_WINNER, ...seasonWinners].slice(-12);
   const worldCupSourceLabel = worldCupFeed?.source === 'zafronix'
     ? 'Zafronix'
     : worldCupFeed?.source === 'balldontlie'
@@ -1573,8 +1580,8 @@ export default function App() {
               <span className="font-semibold dark:text-zinc-400 text-zinc-600">Season Winners</span>
               <span className="season-winners-mask block">
                 <span className="season-winners-track text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
-                {seasonWinners.length > 0 ? (
-                  [...seasonWinners, ...seasonWinners].map((winner, index) => (
+                {displayedSeasonWinners.length > 0 ? (
+                  [...displayedSeasonWinners, ...displayedSeasonWinners].map((winner, index) => (
                     <span key={`${winner.seasonNumber}-${winner.team.code}-${index}`} className="inline-flex items-center gap-1.5">
                       {flagUrl(winner.team.iso) ? (
                         <img src={flagUrl(winner.team.iso)} alt="" className="h-3.5 w-5 rounded-[2px] object-cover ring-1 ring-black/10 dark:ring-white/10" />
@@ -1586,12 +1593,7 @@ export default function App() {
                   ))
                 ) : (
                   <>
-                    {[0, 1, 2, 3].map(index => (
-                      <span key={`rsa-fallback-${index}`} className="inline-flex items-center gap-1.5">
-                        <img src={flagUrl('za')} alt="" className="h-3.5 w-5 rounded-[2px] object-cover ring-1 ring-black/10 dark:ring-white/10" />
-                        <strong>S01 winner</strong> - South Africa
-                      </span>
-                    ))}
+                    <span><strong>Season archive</strong> - champions append automatically</span>
                   </>
                 )}
                 </span>
