@@ -86,6 +86,11 @@ app.get('/worldcup/feed', async (req, res) => {
   const force = req.query.force === '1';
   const feed = await getWorldCupFeed(force);
   engine.syncFixtures(feed.fixtures);
+  for (const matchState of Object.values(feed.matchStates)) {
+    if (matchState.status !== 'finished') continue;
+    const result = await engine.settleSyncedFixture(matchState.fixtureId, outcomeFromMatchState(matchState));
+    if (result) broadcast('settlement', result);
+  }
   res.json(feed);
 });
 

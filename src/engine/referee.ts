@@ -342,9 +342,15 @@ export class RefereeEngine {
 
     this.log('ORACLE', 'warn', `Resuming ${pendingJobs.length} interrupted settlement job(s)`);
     for (const job of pendingJobs) {
+      if (job.winnerCount === 0 && job.payouts.length > 0) {
+        job.payouts = job.payouts.filter(payout => payout.status === 'sent');
+        if (job.payouts.length === 0) job.status = 'complete';
+        await this.saveSettlementJob(job);
+      }
+
       const verb = job.type === 'champion'
-        ? job.winnerCount > 0 ? 'Champion payout' : 'Champion refund'
-        : job.winnerCount > 0 ? 'Payout' : 'Refund';
+        ? 'Champion payout'
+        : 'Payout';
       await this.processSettlementJob(job, verb);
 
       if (job.type === 'match' && job.fixtureId && job.outcome) {
