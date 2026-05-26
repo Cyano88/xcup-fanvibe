@@ -225,7 +225,7 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
   const targetRef    = useRef({ lx: -30, ly: 0 });
   const possRef      = useRef(state.possession);
   const phaseRef     = useRef<PitchPhase>('neutral');
-  const eventLenRef  = useRef(state.events.length);
+  const eventLenRef  = useRef(0);
   const freezeRef    = useRef(freeze);
   const setPieceHoldRef = useRef(0);
   const holdTimerRef = useRef<number | null>(null);

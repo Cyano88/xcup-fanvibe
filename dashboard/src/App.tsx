@@ -682,6 +682,33 @@ export default function App() {
     watchedFixtureRef.current[watchingFixtureId] = watchingFixture;
   }, [watchingFixtureId, watchingFixture]);
 
+  useEffect(() => {
+    if (!watchingFixtureId || viewMode !== 'simulated') return;
+    let cancelled = false;
+    const loadWatchedMatch = () => {
+      fetch(`${BACKEND_HTTP}/season/match/${encodeURIComponent(watchingFixtureId)}?mode=${seasonMode}`)
+        .then(r => r.ok ? r.json() : null)
+        .then((res: { fixture?: Fixture; matchState?: MatchState | null } | null) => {
+          if (cancelled || !res) return;
+          if (res.fixture) {
+            watchedFixtureRef.current[watchingFixtureId] = res.fixture;
+            setFixtures(prev => prev.map(fixture => fixture.id === res.fixture!.id ? res.fixture! : fixture));
+          }
+          if (res.matchState) {
+            watchedStateRef.current[watchingFixtureId] = res.matchState;
+            setMatchStates(prev => mergeLiveMatchStates(prev, { ...prev, [watchingFixtureId]: res.matchState! }));
+          }
+        })
+        .catch(() => {});
+    };
+    loadWatchedMatch();
+    const timer = setInterval(loadWatchedMatch, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [seasonMode, viewMode, watchingFixtureId]);
+
   const simFixtures    = viewMode === 'simulated' ? fixtures : realtimeFixtures;
   const rtGroups       = ['all', ...Array.from(new Set(realtimeFixtures.map(f => f.group))).sort()];
   const projectMatchState = useCallback((state?: MatchState): MatchState | undefined => {

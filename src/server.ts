@@ -216,6 +216,23 @@ app.get('/season/snapshot', async (req, res) => {
   res.json({ state, durable: !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN });
 });
 
+app.get('/season/match/:fixtureId', async (req, res) => {
+  const parsed = SeasonModeSchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const state = parsed.data.mode === 'prod'
+    ? seasonController.getState()
+    : await readSeasonState(parsed.data.mode as SeasonStorageMode);
+  if (!state) return res.status(404).json({ error: 'season state not found' });
+  const fixture = state.fixtures.find(item => item.id === req.params.fixtureId);
+  if (!fixture) return res.status(404).json({ error: 'fixture not found' });
+  res.json({
+    fixture,
+    matchState: state.matchStates[fixture.id] ?? null,
+    phase: state.phase,
+    updatedAt: state.updatedAt,
+  });
+});
+
 app.post('/season/snapshot', async (req, res) => {
   const schema = z.object({
     mode: z.enum(['prod', 'test']).default('prod'),
