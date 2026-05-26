@@ -1575,16 +1575,23 @@ export default function App() {
                 <span className="season-winners-track text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
                 {seasonWinners.length > 0 ? (
                   [...seasonWinners, ...seasonWinners].map((winner, index) => (
-                    <span key={`${winner.seasonNumber}-${winner.team.code}-${index}`}>
+                    <span key={`${winner.seasonNumber}-${winner.team.code}-${index}`} className="inline-flex items-center gap-1.5">
+                      {flagUrl(winner.team.iso) ? (
+                        <img src={flagUrl(winner.team.iso)} alt="" className="h-3.5 w-5 rounded-[2px] object-cover ring-1 ring-black/10 dark:ring-white/10" />
+                      ) : (
+                        <span>{winner.team.flag}</span>
+                      )}
                       <strong>S{String(winner.seasonNumber).padStart(2, '0')} winner</strong> - {winner.team.name}
                     </span>
                   ))
                 ) : (
                   <>
-                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
-                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
-                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
-                    <span><strong>🇿🇦 S01 winner</strong> - South Africa</span>
+                    {[0, 1, 2, 3].map(index => (
+                      <span key={`rsa-fallback-${index}`} className="inline-flex items-center gap-1.5">
+                        <img src={flagUrl('za')} alt="" className="h-3.5 w-5 rounded-[2px] object-cover ring-1 ring-black/10 dark:ring-white/10" />
+                        <strong>S01 winner</strong> - South Africa
+                      </span>
+                    ))}
                   </>
                 )}
                 </span>
