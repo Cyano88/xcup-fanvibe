@@ -668,6 +668,25 @@ export default function App() {
         fixture.venue,
       ].some(value => value.toLowerCase().includes(normalizedSearchQuery)))
     : baseVisibleFixtures;
+  const orderedVisibleFixtures = activeTab === 'home' && viewMode === 'simulated'
+    ? [...visibleFixtures].sort((a, b) => {
+      const stateRank = (fixture: Fixture) => {
+        const state = matchStates[fixture.id];
+        if (state?.status === 'live' || state?.status === 'half_time' || fixture.status === 'locked') return 0;
+        if (state?.status === 'finished' || fixture.status === 'settled') return 1;
+        if (fixture.status === 'open') return 2;
+        return 3;
+      };
+      const rankDiff = stateRank(a) - stateRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      const aState = matchStates[a.id];
+      const bState = matchStates[b.id];
+      if ((aState?.status === 'finished' || a.status === 'settled') && (bState?.status === 'finished' || b.status === 'settled')) {
+        return (bState?.minute ?? 90) - (aState?.minute ?? 90) || b.matchday - a.matchday;
+      }
+      return a.matchday - b.matchday || a.id.localeCompare(b.id);
+    })
+    : visibleFixtures;
   const selectedGroupFixtures = activeTab === 'search' && viewMode === 'realtime' && fixtureGroupFilter !== 'all'
     ? realtimeFixtures.filter(f => f.group === fixtureGroupFilter)
     : [];
@@ -1262,7 +1281,7 @@ export default function App() {
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {visibleFixtures.map(fixture => (
+              {orderedVisibleFixtures.map(fixture => (
                 <FixtureCard
                   key={fixture.id}
                   fixture={fixture}
@@ -1279,7 +1298,7 @@ export default function App() {
                 />
               ))}
             </div>
-            {visibleFixtures.length === 0 && (
+            {orderedVisibleFixtures.length === 0 && (
               <div className="rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white px-4 py-8 text-center text-sm dark:text-zinc-500 text-zinc-500">
                 No matches found. Try a team name, code, group, or venue.
               </div>

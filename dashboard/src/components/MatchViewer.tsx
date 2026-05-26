@@ -999,7 +999,9 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
         return (
           <div key={ev.id} className="flex w-full max-w-[118px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700 sm:max-w-[150px]">
             {isGoal ? (
-              <span className="shrink-0 text-[10px] leading-none">Goal</span>
+              <span className="grid h-3 w-3 shrink-0 place-items-center rounded-full border border-zinc-400/50 bg-white text-[7px] leading-none text-zinc-950 shadow-sm">
+                &#9679;
+              </span>
             ) : (
               <span className={`h-3.5 w-2.5 shrink-0 rounded-[2px] border border-black/20 ${isRed ? 'bg-red-500' : 'bg-yellow-400'}`} />
             )}
@@ -1085,11 +1087,11 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
 
         {/* Knockout advancement */}
         {isFinished && fixture.round && advancedTeam && (
-          <div className="mx-5 mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-center">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">
+          <div className="mx-5 mb-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-center">
+            <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-emerald-500 dark:text-emerald-300">
               {fixture.id === 'f-1' ? 'Champions' : fixture.id === '3pl-1' ? 'Playoff Winner' : 'Qualified'}
             </div>
-            <div className="mt-0.5 text-sm font-semibold tracking-tight text-zinc-900 dark:text-white">
+            <div className="mt-0.5 text-xs font-semibold tracking-tight text-zinc-900 dark:text-white sm:text-sm">
               {advancedTeam.name}
               {fixture.id !== 'f-1' && fixture.id !== '3pl-1' ? ' advance to the next round' : ''}
             </div>
