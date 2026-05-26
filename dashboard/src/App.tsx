@@ -1454,6 +1454,29 @@ export default function App() {
         />
       )}
 
+      {(activeTab === 'home' || activeTab === 'search') && viewMode === 'simulated' && !seasonHydrated && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 px-6"
+          style={{ animation: 'overlayIn 0.25s ease both' }}
+        >
+          <div
+            className="relative w-full max-w-sm overflow-hidden rounded-xl border border-white/10 px-6 py-7 text-center shadow-2xl"
+            style={{
+              backgroundImage: `linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(2, 6, 23, 0.9)), url(${FANVIBE_SEASON_BG})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            <div className="relative z-10 mx-auto mb-4 h-12 w-12 overflow-hidden rounded-lg ring-1 ring-white/15">
+              <img src={FANVIBE_HERO_LOGO} alt="" className="h-full w-full object-cover" />
+            </div>
+            <div className="relative z-10 text-base font-semibold tracking-tight text-white">
+              Loading FanVibe Live Season
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* -- Champion overlay ----------------------------------------------- */}
       {champion && phase === 'champion' && viewMode === 'simulated' && (
         <div
