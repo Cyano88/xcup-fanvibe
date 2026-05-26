@@ -915,12 +915,7 @@ export default function App() {
                   {seasonDurable ? 'Durable' : 'Local fallback'}
                 </span>
               </>
-              ) : (
-              <>
-                <span className="text-[11px] font-bold tracking-tight dark:text-white text-zinc-950">World Cup Season</span>
-                <span className="text-[11px] font-semibold dark:text-zinc-400 text-zinc-500">Syncing live state</span>
-              </>
-              )
+              ) : null
             ) : (
               <>
                 <span className="text-[11px] font-bold dark:text-white text-zinc-950">World Cup 2026</span>
@@ -945,15 +940,6 @@ export default function App() {
             >
               Refresh Test State
             </button>
-          </div>
-        )}
-
-        {(activeTab === 'home' || activeTab === 'search') && viewMode === 'simulated' && !seasonHydrated && (
-          <div className="rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white px-4 py-8 text-center shadow-sm">
-            <div className="text-sm font-semibold dark:text-zinc-200 text-zinc-800">Syncing live season state</div>
-            <div className="mt-1 text-xs dark:text-zinc-500 text-zinc-500">
-              Loading the server-owned tournament clock from Railway.
-            </div>
           </div>
         )}
 

@@ -148,7 +148,7 @@ export function FixtureCard({
     && matchState?.status !== 'finished'
     && (fixture.status === 'open' || fixture.status === 'upcoming')
     && (!isSeasonPlay || !Number.isFinite(seasonFixtureStartsIn) || seasonFixtureStartsIn > 5);
-  const showStakeClosedNotice = !!stakeClosedNotice || (!isStakeWindowOpen && (isLiveMatch || fixture.status === 'locked'));
+  const showStakeClosedNotice = !!stakeClosedNotice;
 
   // Use live pool shares when stakes exist, otherwise baseOdds
   const homeOdds = hasPool ? Math.round(fmt.homeShare) : fixture.baseOdds.home;
@@ -320,7 +320,7 @@ export function FixtureCard({
         </div>
 
         {showStakeClosedNotice && (
-          <div className="absolute inset-x-4 bottom-4 z-20 rounded-lg border border-blue-300/35 bg-blue-950/78 px-3 py-2 text-center shadow-[0_0_24px_rgba(59,130,246,0.30)] backdrop-blur-md animate-slide-in">
+          <div className="absolute inset-x-4 bottom-4 z-20 rounded-lg border border-blue-300/30 bg-blue-950/80 px-3 py-2 text-center shadow-sm backdrop-blur-md">
             <div className="text-xs font-bold text-blue-100">Match already started</div>
             <div className="mt-0.5 text-[11px] font-medium text-blue-100/75">
               {stakeClosedNotice ?? 'Stake on the next available match.'}
@@ -336,7 +336,7 @@ export function FixtureCard({
             <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
               <Lock size={11} />
               <span>
-                {isLiveMatch ? 'Match live' : isFinishedMatch ? 'Match ended' : `Staking ${isSettled ? 'closed' : 'locked'}`}
+                {isLiveMatch ? 'Match already started' : isFinishedMatch ? 'Match ended' : `Staking ${isSettled ? 'closed' : 'locked'}`}
               </span>
               {isSettled && fixture.result && (
                 <span className="dark:text-zinc-300 text-zinc-600 font-semibold capitalize ml-1"> - {fixture.result}</span>
