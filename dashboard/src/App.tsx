@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { ChevronDown, ChevronUp, ExternalLink, Globe, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
+import { BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Newspaper, Search, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
@@ -10,6 +10,7 @@ import { MyPositions } from './components/MyPositions';
 import { FuelBar } from './components/FuelBar';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
+import { WorldCupNews } from './components/WorldCupNews';
 import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team } from './types';
 import { REALTIME_FIXTURES } from './types';
 import { BracketView } from './components/BracketView';
@@ -56,6 +57,7 @@ const explorerBlock = (blockNumber: number) =>
 const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
 
 type SeasonPhase = 'preseason' | 'playing' | 'champion' | 'interseason';
+type AppTab = 'home' | 'search' | 'news' | 'portfolio';
 
 interface InitialSeasonState {
   version?: 1;
@@ -162,6 +164,7 @@ export default function App() {
   const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>(initialSeason.matchStates);
   const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
   const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
+  const [activeTab, setActiveTab]               = useState<AppTab>('home');
   const [soundMuted, setSoundMuted]             = useState(false);
   const [seasonMode, setSeasonMode]             = useState<SeasonStorageMode>('prod');
   const [seasonTiming, setSeasonTimingState]    = useState<SeasonTiming>(DEFAULT_SEASON_TIMING);
@@ -720,6 +723,12 @@ export default function App() {
       ? `synced ${worldCupFeed.freshnessSeconds}s ago`
       : worldCupFeed.error ?? 'provider not configured'
     : 'sync pending';
+  const appTabs: Array<{ id: AppTab; label: string; icon: typeof Home }> = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'search', label: 'Search', icon: Search },
+    { id: 'news', label: 'News', icon: Newspaper },
+    { id: 'portfolio', label: 'Portfolio', icon: BriefcaseBusiness },
+  ];
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
@@ -764,9 +773,57 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/95 bg-white/95 px-3 py-2 backdrop-blur lg:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
+          {appTabs.map(tab => {
+            const Icon = tab.icon;
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex h-12 flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-bold transition-colors ${
+                  selected
+                    ? 'dark:bg-blue-500/15 bg-blue-50 dark:text-blue-300 text-blue-700'
+                    : 'dark:text-zinc-500 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-900'
+                }`}
+              >
+                <Icon size={18} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <aside className="fixed left-4 top-20 z-30 hidden w-20 rounded-2xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/95 bg-white/95 p-2 shadow-sm backdrop-blur lg:block">
+        <div className="space-y-1">
+          {appTabs.map(tab => {
+            const Icon = tab.icon;
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                title={tab.label}
+                className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 text-[11px] font-bold transition-colors ${
+                  selected
+                    ? 'dark:bg-blue-500/15 bg-blue-50 dark:text-blue-300 text-blue-700'
+                    : 'dark:text-zinc-500 text-zinc-500 dark:hover:bg-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-200 hover:text-zinc-900'
+                }`}
+              >
+                <Icon size={18} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-6 lg:pl-28">
 
         {/* -- Mode toggle ------------------------------------------------- */}
+        {(activeTab === 'home' || activeTab === 'search') && (
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
             <button
@@ -851,8 +908,9 @@ export default function App() {
             )}
           </div>
         </div>
+        )}
 
-        {viewMode === 'simulated' && seasonMode === 'test' && seasonAdminOpen && (
+        {activeTab === 'home' && viewMode === 'simulated' && seasonMode === 'test' && seasonAdminOpen && (
           <div className="rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/60 bg-white px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
             <div>
               <div className="text-xs font-bold dark:text-zinc-200 text-zinc-800">Admin test season</div>
@@ -870,7 +928,7 @@ export default function App() {
         )}
 
         {/* -- Season live dashboard --------------------------------------- */}
-        {viewMode === 'simulated' && (phase === 'preseason' || phase === 'playing') && (
+        {activeTab === 'home' && viewMode === 'simulated' && (phase === 'preseason' || phase === 'playing') && (
           <div
             className="fanvibe-live-panel rounded-lg border border-white/10 p-4 shadow-sm"
             style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
@@ -941,7 +999,7 @@ export default function App() {
         )}
 
         {/* -- Inter-season banner ----------------------------------------- */}
-        {viewMode === 'simulated' && phase === 'interseason' && (
+        {activeTab === 'home' && viewMode === 'simulated' && phase === 'interseason' && (
           <div className="dark:bg-zinc-900/80 bg-zinc-100 border dark:border-zinc-700 border-zinc-300 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
               <div className="text-sm font-bold dark:text-zinc-200 text-zinc-700 mb-0.5">
@@ -959,7 +1017,7 @@ export default function App() {
         )}
 
         {/* Recent settlements strip */}
-        {settledRailItems.length > 0 && (
+        {(activeTab === 'home' || activeTab === 'portfolio') && settledRailItems.length > 0 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-semibold uppercase tracking-[0.18em]">Settled</span>
             {settledRailItems.map(({ settlement: s, fixture: fix }) => {
@@ -979,7 +1037,7 @@ export default function App() {
         )}
 
         {/* -- Round / group filter tabs ----------------------------------- */}
-        {viewMode === 'simulated' ? (
+        {activeTab === 'search' && (viewMode === 'simulated' ? (
           <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
             {[
               { id: 'all', label: `Live MD${activeGroupMatchday}`, tone: 'live' },
@@ -1017,10 +1075,10 @@ export default function App() {
               </button>
             ))}
           </div>
-        )}
+        ))}
 
         {/* -- Realtime mode notice ---------------------------------------- */}
-        {viewMode === 'realtime' && (
+        {activeTab === 'home' && viewMode === 'realtime' && (
           <div
             className="fanvibe-live-panel rounded-xl border border-white/10 p-4 flex items-start gap-3 shadow-sm"
             style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
@@ -1038,7 +1096,7 @@ export default function App() {
         )}
 
         {/* -- Champion prediction market --------------------------------- */}
-        {viewMode === 'simulated' && (
+        {activeTab === 'home' && viewMode === 'simulated' && (
           <ChampionPick
             key={tournamentGen}
             fixtures={fixtures}
@@ -1048,9 +1106,9 @@ export default function App() {
           />
         )}
 
-        <MyPositions />
+        {activeTab === 'portfolio' && <MyPositions />}
 
-        {viewMode === 'realtime' && groupFilter !== 'all' && (
+        {activeTab === 'search' && viewMode === 'realtime' && groupFilter !== 'all' && (
           <section className="space-y-4">
             <div className="flex items-end justify-between gap-4 border-b dark:border-zinc-900 border-zinc-200 pb-3">
               <div>
@@ -1109,7 +1167,7 @@ export default function App() {
         )}
 
         {/* -- Bracket view OR fixture grid -------------------------------- */}
-        {viewMode === 'simulated' && roundFilter === 'bracket' ? (
+        {(activeTab === 'home' || activeTab === 'search') && (viewMode === 'simulated' && roundFilter === 'bracket' ? (
           <BracketView
             fixtures={fixtures}
             matchStates={matchStates}
@@ -1153,9 +1211,10 @@ export default function App() {
               ))}
             </div>
           </section>
-        )}
+        ))}
 
         {/* -- Activity feed toggle ---------------------------------------- */}
+        {activeTab === 'portfolio' && (
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setLogOpen(o => !o)}
@@ -1173,8 +1232,10 @@ export default function App() {
           </button>
           {logOpen && <LogStream logs={logs} daemonOnline={engineOnline} />}
         </div>
+        )}
 
         {/* -- Platform steps --------------------------------------------- */}
+        {activeTab === 'home' && (
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <div className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:bg-transparent bg-white">
             <span className="flex min-w-0 items-center gap-2">
@@ -1187,8 +1248,10 @@ export default function App() {
             </span>
           </div>
         </div>
+        )}
 
         {/* -- Proof panel ------------------------------------------------- */}
+        {activeTab === 'portfolio' && (
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <button
             onClick={() => setProofOpen(o => !o)}
@@ -1295,6 +1358,9 @@ export default function App() {
             </div>
           )}
         </div>
+        )}
+
+        {activeTab === 'news' && <WorldCupNews />}
 
         {/* Footer */}
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
