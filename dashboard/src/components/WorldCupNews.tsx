@@ -51,6 +51,7 @@ export function WorldCupNews() {
   const [feed, setFeed] = useState<NewsFeed | null>(null);
   const items = useMemo(() => feed?.articles?.length ? feed.articles : FALLBACK_NEWS, [feed]);
   const lead = items[active % items.length];
+  const hasLeadUrl = !!lead.url && lead.url !== '#';
 
   useEffect(() => {
     fetch(`${BACKEND_HTTP}/worldcup/news`)
@@ -85,12 +86,10 @@ export function WorldCupNews() {
         </div>
       </div>
 
-      <a
-        href={lead.url}
-        target={lead.url === '#' ? undefined : '_blank'}
-        rel={lead.url === '#' ? undefined : 'noopener noreferrer'}
+      <div
         className="group relative block min-h-[360px] overflow-hidden rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white shadow-sm"
       >
+        {hasLeadUrl && <a href={lead.url} target="_blank" rel="noopener noreferrer" className="absolute inset-0 z-20" aria-label={`Read ${lead.title}`} />}
         <img
           src={lead.image}
           alt=""
@@ -111,16 +110,24 @@ export function WorldCupNews() {
           )}
           <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-zinc-200">
             <span>{lead.source}</span>
-            <span className="inline-flex items-center gap-1">
-              Read story
-              <ExternalLink size={13} />
-            </span>
+            {hasLeadUrl ? (
+              <span className="inline-flex items-center gap-1">
+                Read full story
+                <ExternalLink size={13} />
+              </span>
+            ) : (
+              <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] text-zinc-300">
+                Source access unavailable
+              </span>
+            )}
           </div>
         </div>
-      </a>
+      </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {items.map((item, index) => (
+        {items.map((item, index) => {
+          const hasUrl = !!item.url && item.url !== '#';
+          return (
           <button
             key={item.title}
             onClick={() => setActive(index)}
@@ -140,9 +147,12 @@ export function WorldCupNews() {
               <div className="mt-1 line-clamp-2 text-sm font-semibold dark:text-zinc-100 text-zinc-900">
                 {item.title}
               </div>
+              <div className="mt-2 text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
+                {hasUrl ? 'Tap lead image to open source' : 'Full source restricted'}
+              </div>
             </div>
           </button>
-        ))}
+        );})}
       </div>
     </section>
   );
