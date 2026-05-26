@@ -12,6 +12,49 @@ export const STRENGTH: Record<string, number> = {
   QAT:52, CPV:48, PAN:48, JOR:48, UZB:50, NZL:45, HAI:42, CUW:35,
 };
 
+type CalibratedStrength = {
+  homeRating: number;
+  awayRating: number;
+  ratingGap: number;
+  homeWinProbability: number;
+  drawProbability: number;
+  awayWinProbability: number;
+  homeAttackShare: number;
+  awayAttackShare: number;
+  homeGoalPerMinute: number;
+  awayGoalPerMinute: number;
+};
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+export function calibrateTeamStrength(fixture: Fixture): CalibratedStrength {
+  const homeRating = STRENGTH[fixture.home.code] ?? 62;
+  const awayRating = STRENGTH[fixture.away.code] ?? 62;
+  const ratingGap = homeRating - awayRating;
+  const expectedHome = 1 / (1 + 10 ** (-ratingGap / 42));
+  const drawProbability = clamp(0.30 - Math.abs(ratingGap) * 0.003, 0.18, 0.30);
+  const decisiveProbability = 1 - drawProbability;
+  const homeWinProbability = decisiveProbability * expectedHome;
+  const awayWinProbability = decisiveProbability - homeWinProbability;
+  const homeAttackShare = clamp(homeWinProbability + drawProbability * 0.5, 0.34, 0.66);
+  const awayAttackShare = 1 - homeAttackShare;
+  const averageRating = (homeRating + awayRating) / 2;
+  const totalGoalsPerMatch = clamp(2.18 + (averageRating - 62) * 0.012 + Math.abs(ratingGap) * 0.005, 1.75, 3.15);
+
+  return {
+    homeRating,
+    awayRating,
+    ratingGap,
+    homeWinProbability,
+    drawProbability,
+    awayWinProbability,
+    homeAttackShare,
+    awayAttackShare,
+    homeGoalPerMinute: (totalGoalsPerMatch * homeAttackShare) / 90,
+    awayGoalPerMinute: (totalGoalsPerMatch * awayAttackShare) / 90,
+  };
+}
+
 const PLAYERS: Record<string, string[]> = {
   ARG: ['Messi','Lautaro','Di María','Mac Allister','De Paul','Fernández','Otamendi','Molina'],
   FRA: ['Mbappé','Griezmann','Thuram','Dembélé','Camavinga','Tchouaméni','Saliba','Upamecano'],
@@ -166,15 +209,11 @@ export function simulateMatch(
   tickMs = 6667,
   initialState?: MatchState,
 ): () => void {
-  const hStr = STRENGTH[fixture.home.code] ?? 70;
-  const aStr = STRENGTH[fixture.away.code] ?? 70;
-  const total = hStr + aStr;
-  const diff  = Math.abs(hStr - aStr);
-  const boost = diff > 10 ? 0.12 : 0;
-
-  const chaos = 0.92 + Math.random() * 0.22;
-  const hGoalPerMin = 0.024 * (hStr / total) * (hStr < aStr ? 1 + boost : 1) * chaos;
-  const aGoalPerMin = 0.024 * (aStr / total) * (aStr < hStr ? 1 + boost : 1) * (2 - chaos);
+  const calibration = calibrateTeamStrength(fixture);
+  const hStr = calibration.homeRating;
+  const aStr = calibration.awayRating;
+  const hGoalPerMin = calibration.homeGoalPerMinute * (0.94 + Math.random() * 0.12);
+  const aGoalPerMin = calibration.awayGoalPerMinute * (0.94 + Math.random() * 0.12);
 
   const state: MatchState = initialState
     ? {
@@ -246,7 +285,7 @@ export function simulateMatch(
       });
     }
     if (!incidentStopsPlay && Math.random() < 0.24) {
-      const t = Math.random() < hStr / total ? 'home' : 'away';
+      const t = Math.random() < calibration.homeAttackShare ? 'home' : 'away';
       const onTarget = Math.random() < 0.38;
       state.events.push(shotEvent(minute, t as 'home' | 'away', fixture, onTarget));
       if (!onTarget) {
@@ -263,7 +302,7 @@ export function simulateMatch(
       }
     }
     if (Math.random() < 0.09) {
-      const t = Math.random() < hStr / total ? 'home' : 'away';
+      const t = Math.random() < calibration.homeAttackShare ? 'home' : 'away';
       const code = t === 'home' ? fixture.home.code : fixture.away.code;
       const taker = pickPlayer(code);
       const y = (Math.random() > 0.5 ? 1 : -1) * (42 + Math.random() * 6);
@@ -283,7 +322,7 @@ export function simulateMatch(
       });
     }
     if (Math.random() < 0.07) {
-      const t = Math.random() < hStr / total ? 'home' : 'away';
+      const t = Math.random() < calibration.homeAttackShare ? 'home' : 'away';
       const roll = Math.random();
       const type: LiveStateType = roll < 0.36 ? 'throw' : roll < 0.68 ? 'foul' : roll < 0.88 ? 'free_kick' : 'offside';
       const eventTeam = type === 'foul' ? (Math.random() < 0.5 ? 'home' : 'away') : t;
@@ -331,7 +370,7 @@ export function simulateMatch(
       }
     }
     if (!incidentStopsPlay && Math.random() < 0.12) {
-      const t = Math.random() < hStr / total ? 'home' : 'away';
+      const t = Math.random() < calibration.homeAttackShare ? 'home' : 'away';
       state.events.push(liveStateEvent(minute, t as 'home' | 'away', fixture, 'safe'));
     }
     if (!incidentStopsPlay && state.events.length === eventsBefore) {

@@ -128,6 +128,48 @@ type PlayerRole = 'any' | 'attacker' | 'defender' | 'goalkeeper' | 'outfield';
 type LogFn = (prefix: LogPrefix, level: LogLevel, msg: string) => void;
 type EventFn = (fixtureId: string, state: MatchState) => void;
 type SettleFn = (fixtureId: string, outcome: Outcome) => Promise<void>;
+type CalibratedStrength = {
+  homeRating: number;
+  awayRating: number;
+  ratingGap: number;
+  homeWinProbability: number;
+  drawProbability: number;
+  awayWinProbability: number;
+  homeAttackShare: number;
+  awayAttackShare: number;
+  homeGoalPerMinute: number;
+  awayGoalPerMinute: number;
+};
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+export function calibrateTeamStrength(fixture: Fixture): CalibratedStrength {
+  const homeRating = SQUAD_STRENGTH[fixture.home.code] ?? 62;
+  const awayRating = SQUAD_STRENGTH[fixture.away.code] ?? 62;
+  const ratingGap = homeRating - awayRating;
+  const expectedHome = 1 / (1 + 10 ** (-ratingGap / 42));
+  const drawProbability = clamp(0.30 - Math.abs(ratingGap) * 0.003, 0.18, 0.30);
+  const decisiveProbability = 1 - drawProbability;
+  const homeWinProbability = decisiveProbability * expectedHome;
+  const awayWinProbability = decisiveProbability - homeWinProbability;
+  const homeAttackShare = clamp(homeWinProbability + drawProbability * 0.5, 0.34, 0.66);
+  const awayAttackShare = 1 - homeAttackShare;
+  const averageRating = (homeRating + awayRating) / 2;
+  const totalGoalsPerMatch = clamp(2.18 + (averageRating - 62) * 0.012 + Math.abs(ratingGap) * 0.005, 1.75, 3.15);
+
+  return {
+    homeRating,
+    awayRating,
+    ratingGap,
+    homeWinProbability,
+    drawProbability,
+    awayWinProbability,
+    homeAttackShare,
+    awayAttackShare,
+    homeGoalPerMinute: (totalGoalsPerMatch * homeAttackShare) / 90,
+    awayGoalPerMinute: (totalGoalsPerMatch * awayAttackShare) / 90,
+  };
+}
 
 function playersFor(teamCode: string, role: PlayerRole): string[] {
   const players = TEAM_PLAYERS[teamCode] ?? [];
@@ -309,8 +351,7 @@ export class MatchSimulator {
     if (startMinute === 0) this.addEvent(state, 'kickoff', fixture, 'neutral');
     this.onEvent(fixture.id, state);
 
-    const homeStr = SQUAD_STRENGTH[fixture.home.code] ?? 62;
-    const awayStr = SQUAD_STRENGTH[fixture.away.code] ?? 62;
+    const calibration = calibrateTeamStrength(fixture);
 
     const interval = setInterval(async () => {
       if ((this.pauseUntil.get(fixture.id) ?? 0) > Date.now()) return;
@@ -342,22 +383,20 @@ export class MatchSimulator {
         return;
       }
 
-      this.simulateMinute(state, fixture, homeStr, awayStr);
+      this.simulateMinute(state, fixture, calibration);
       this.onEvent(fixture.id, state);
     }, this.minuteMs);
 
     this.timers.set(fixture.id, interval);
   }
 
-  private simulateMinute(state: MatchState, fixture: Fixture, homeStr: number, awayStr: number): void {
+  private simulateMinute(state: MatchState, fixture: Fixture, calibration: CalibratedStrength): void {
     const rng = Math.random;
-    const diff = homeStr - awayStr;
-    const homeBoost = diff < -10 ? 0.12 : 0;
-    const awayBoost = diff > 10 ? 0.12 : 0;
-    const homeGoalProb = (homeStr / 100) * 0.030 * (1 + homeBoost);
-    const awayGoalProb = (awayStr / 100) * 0.028 * (1 + awayBoost);
-    const totalStr = homeStr + awayStr;
-    const homePossProb = homeStr / totalStr;
+    const chasingHome = state.homeScore < state.awayScore ? 1.08 : state.homeScore > state.awayScore ? 0.94 : 1;
+    const chasingAway = state.awayScore < state.homeScore ? 1.08 : state.awayScore > state.homeScore ? 0.94 : 1;
+    const homeGoalProb = calibration.homeGoalPerMinute * chasingHome;
+    const awayGoalProb = calibration.awayGoalPerMinute * chasingAway;
+    const homePossProb = calibration.homeAttackShare;
     const team = rng() < homePossProb ? 'home' : 'away';
 
     if (rng() < homeGoalProb) {
