@@ -7,7 +7,7 @@ const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001
 const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
 
 interface Comment { id: number; name: string; text: string; ts: string; fixtureId: string; }
-interface Props { fixture: Fixture; matchState: MatchState; onClose: () => void; }
+interface Props { fixture: Fixture; fixtures?: Fixture[]; matchState: MatchState; onClose: () => void; }
 
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w160/${iso.toLowerCase()}.png`;
@@ -914,7 +914,15 @@ type Tab = 'stats' | 'commentary' | 'squad' | 'chat';
 interface GoalBanner { flag: string; iso: string; name: string; isHome: boolean; scorer?: string; }
 interface Ticker { id: number; text: string; isGoal: boolean; isHome: boolean; }
 
-export function MatchViewer({ fixture, matchState, onClose }: Props) {
+const NEXT_KNOCKOUT_MATCH: Record<string, string> = {
+  ...Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`k32-${i + 1}`, `k16-${Math.floor(i / 2) + 1}`])),
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`k16-${i + 1}`, `qf-${Math.floor(i / 2) + 1}`])),
+  ...Object.fromEntries(Array.from({ length: 4 }, (_, i) => [`qf-${i + 1}`, `sf-${Math.floor(i / 2) + 1}`])),
+  'sf-1': 'f-1',
+  'sf-2': 'f-1',
+};
+
+export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Props) {
   const isLive     = matchState.status === 'live';
   const isHalfTime = matchState.status === 'half_time';
   const isFinished = matchState.status === 'finished';
@@ -966,6 +974,15 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
     : matchState.awayScore > matchState.homeScore ? 'away'
     : 'draw'
     : null;
+  const nextKnockoutFixture = fixture.round ? fixtures.find(item => item.id === NEXT_KNOCKOUT_MATCH[fixture.id]) : null;
+  const scoreWinner = outcome === 'home' ? fixture.home : outcome === 'away' ? fixture.away : null;
+  const advancedTeam = fixture.round
+    ? scoreWinner
+      ?? (nextKnockoutFixture && [nextKnockoutFixture.home, nextKnockoutFixture.away].find(team =>
+        team.code === fixture.home.code || team.code === fixture.away.code
+      ))
+      ?? null
+    : null;
   const teamEvents = (team: 'home' | 'away') => matchState.events
     .filter(ev =>
       ev.team === team &&
@@ -975,18 +992,18 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
   const homeMarkers = teamEvents('home');
   const awayMarkers = teamEvents('away');
   const TeamEventMarkers = ({ events, align = 'left' }: { events: MatchEvent[]; align?: 'left' | 'right' }) => (
-    <div className={`flex min-w-0 flex-col gap-0.5 ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
+    <div className={`flex min-w-0 max-w-full flex-col gap-1 ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
       {events.length > 0 ? events.map(ev => {
         const isGoal = ev.type === 'goal_home' || ev.type === 'goal_away';
         const isRed = ev.type.startsWith('red');
         return (
-          <div key={ev.id} className="flex max-w-[138px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700">
+          <div key={ev.id} className="flex w-full max-w-[118px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700 sm:max-w-[150px]">
             {isGoal ? (
-              <span className="text-[10px] leading-none">Goal</span>
+              <span className="shrink-0 text-[10px] leading-none">Goal</span>
             ) : (
-              <span className={`h-3.5 w-2.5 rounded-[2px] border border-black/20 ${isRed ? 'bg-red-500' : 'bg-yellow-400'}`} />
+              <span className={`h-3.5 w-2.5 shrink-0 rounded-[2px] border border-black/20 ${isRed ? 'bg-red-500' : 'bg-yellow-400'}`} />
             )}
-            <span className="truncate">{ev.player}</span>
+            <span className="min-w-0 flex-1 truncate">{ev.player}</span>
             <span className="shrink-0 tabular-nums dark:text-zinc-500 text-zinc-400">{ev.minute}&apos;</span>
           </div>
         );
@@ -1023,31 +1040,31 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
         </div>
 
         {/* ── Score ── */}
-        <div className="flex items-center justify-center gap-8 py-4">
-          <div className="flex min-w-[180px] items-center justify-end gap-2.5">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-4 sm:gap-8">
+          <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-2.5">
             <TeamEventMarkers events={homeMarkers} align="right" />
-            <div className="text-center min-w-[68px]">
+            <div className="w-14 shrink-0 text-center sm:w-[68px]">
               <TeamFlag iso={fixture.home.iso} fallback={fixture.home.flag} className="mx-auto mb-2 h-8 w-12" />
               <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.home.name}</div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <span
-              className="text-5xl font-black tabular-nums leading-none inline-block transition-colors duration-300"
+              className="inline-block text-4xl font-black tabular-nums leading-none transition-colors duration-300 sm:text-5xl"
               style={scorePop === 'home'
                 ? { animation: 'scorePop 0.9s ease-out forwards', color: '#34d399', filter: 'drop-shadow(0 0 14px rgba(52,211,153,0.7))' }
                 : { color: undefined }}
             >{matchState.homeScore}</span>
             <span className="text-xl font-thin dark:text-zinc-600 text-zinc-300">-</span>
             <span
-              className="text-5xl font-black tabular-nums leading-none inline-block transition-colors duration-300"
+              className="inline-block text-4xl font-black tabular-nums leading-none transition-colors duration-300 sm:text-5xl"
               style={scorePop === 'away'
                 ? { animation: 'scorePop 0.9s ease-out forwards', color: '#38bdf8', filter: 'drop-shadow(0 0 14px rgba(56,189,248,0.7))' }
                 : { color: undefined }}
             >{matchState.awayScore}</span>
           </div>
-          <div className="flex min-w-[180px] items-center justify-start gap-2.5">
-            <div className="text-center min-w-[68px]">
+          <div className="flex min-w-0 items-center justify-start gap-2 sm:gap-2.5">
+            <div className="w-14 shrink-0 text-center sm:w-[68px]">
               <TeamFlag iso={fixture.away.iso} fallback={fixture.away.flag} className="mx-auto mb-2 h-8 w-12" />
               <div className="text-xs font-semibold dark:text-zinc-300 text-zinc-700 truncate">{fixture.away.name}</div>
             </div>
@@ -1066,15 +1083,16 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
           </div>
         )}
 
-        {/* Result banner */}
-        {isFinished && outcome && (
-          <div className={`mx-5 mb-3 py-2 px-4 rounded-xl text-center text-sm font-bold
-            ${outcome === 'home' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
-              outcome === 'away' ? 'dark:bg-zinc-800 bg-zinc-100 dark:text-zinc-300 text-zinc-700 border dark:border-zinc-700 border-zinc-200' :
-              'dark:bg-zinc-800/60 bg-zinc-100 dark:text-zinc-300 text-zinc-600 border dark:border-zinc-700 border-zinc-200'}`}>
-            {outcome === 'draw'
-              ? 'Draw - result confirmed'
-              : `${outcome === 'home' ? fixture.home.name : fixture.away.name} win - result confirmed`}
+        {/* Knockout advancement */}
+        {isFinished && fixture.round && advancedTeam && (
+          <div className="mx-5 mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-center">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">
+              {fixture.id === 'f-1' ? 'Champions' : fixture.id === '3pl-1' ? 'Playoff Winner' : 'Qualified'}
+            </div>
+            <div className="mt-0.5 text-sm font-semibold tracking-tight text-zinc-900 dark:text-white">
+              {advancedTeam.name}
+              {fixture.id !== 'f-1' && fixture.id !== '3pl-1' ? ' advance to the next round' : ''}
+            </div>
           </div>
         )}
 

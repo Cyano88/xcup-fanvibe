@@ -141,7 +141,12 @@ export default function App() {
   if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
   const initialSeason = initialSeasonRef.current;
 
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(() => {
+    const saved = window.localStorage.getItem('fanvibe-theme');
+    if (saved === 'light') return false;
+    if (saved === 'dark') return true;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
+  });
   const [engineOnline, setEngineOnline]         = useState(false);
   const [refereeAddress, setRefereeAddress]     = useState(REFEREE_ADDR);
   const [metabolism, setMetabolism]             = useState<MetabolicState>(defaultMetabolism);
@@ -194,7 +199,10 @@ export default function App() {
   const themeAudioRef          = useRef<HTMLAudioElement | null>(null);
   const seasonPersistTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    window.localStorage.setItem('fanvibe-theme', dark ? 'dark' : 'light');
+  }, [dark]);
 
   useEffect(() => {
     setSeasonTiming(seasonTiming);
@@ -265,14 +273,14 @@ export default function App() {
     }).catch(() => {});
   }, [champion, eliminatedTeams, fixtures, matchStates, phase, phaseEndsAt, phaseTimer, seasonMode, seasonNumber, seasonTiming, tournamentGen]);
 
-  useEffect(() => {
-    setSeasonHydrated(false);
+  const loadSeasonSnapshot = useCallback((preserveWatching = false, showLoading = true) => {
+    if (showLoading) setSeasonHydrated(false);
     fetch(`${BACKEND_HTTP}/season/snapshot?mode=${seasonMode}`)
       .then(r => r.json())
       .then((res: { state: InitialSeasonState | null; durable?: boolean }) => {
         setSeasonDurable(!!res.durable);
         if (res.state) {
-          applySeasonSnapshot(res.state, seasonMode);
+          applySeasonSnapshot(res.state, seasonMode, preserveWatching);
           setSeasonHydrated(true);
           return;
         }
@@ -288,6 +296,10 @@ export default function App() {
       })
       .catch(() => {});
   }, [applySeasonSnapshot, seasonMode]);
+
+  useEffect(() => {
+    loadSeasonSnapshot();
+  }, [loadSeasonSnapshot]);
 
   useEffect(() => {
     if (!seasonHydrated) return;
@@ -367,6 +379,20 @@ export default function App() {
 
     return () => { wsRef.current?.close(); if (reconnectRef.current) clearTimeout(reconnectRef.current); };
   }, [connectWS]);
+
+  useEffect(() => {
+    const resyncLiveSeason = () => {
+      if (document.visibilityState === 'hidden') return;
+      connectWS();
+      if (viewMode === 'simulated') loadSeasonSnapshot(true, false);
+    };
+    window.addEventListener('focus', resyncLiveSeason);
+    document.addEventListener('visibilitychange', resyncLiveSeason);
+    return () => {
+      window.removeEventListener('focus', resyncLiveSeason);
+      document.removeEventListener('visibilitychange', resyncLiveSeason);
+    };
+  }, [connectWS, loadSeasonSnapshot, viewMode]);
 
   useEffect(() => {
     const loadWorldCupFeed = () => {
@@ -1429,11 +1455,11 @@ export default function App() {
               rel="noopener noreferrer"
               className="text-xs dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
             >
-              X / Twitter
+              X/Twitter
             </a>
           </div>
           <div className="text-[11px] dark:text-zinc-600 text-zinc-400">
-            Built on OKX X Layer - Settlement Wallet - 02
+            Built on OKX Xlayer . 02
           </div>
         </div>
       </main>
@@ -1451,6 +1477,7 @@ export default function App() {
       {watchingFixture && watchingMatchState && (
         <MatchViewer
           fixture={watchingFixture}
+          fixtures={fixtures}
           matchState={watchingMatchState}
           onClose={() => setWatchingId(null)}
         />
