@@ -900,6 +900,7 @@ export default function App() {
 
           <div className="hidden sm:flex items-center gap-2 rounded-full border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-1.5 shadow-sm">
             {viewMode === 'simulated' ? (
+              seasonHydrated ? (
               <>
                 <span className="text-[11px] font-bold tracking-tight dark:text-white text-zinc-950">World Cup Season</span>
                 <span className="season-status-rotate text-[11px] font-semibold dark:text-zinc-300 text-zinc-600">
@@ -914,6 +915,12 @@ export default function App() {
                   {seasonDurable ? 'Durable' : 'Local fallback'}
                 </span>
               </>
+              ) : (
+              <>
+                <span className="text-[11px] font-bold tracking-tight dark:text-white text-zinc-950">World Cup Season</span>
+                <span className="text-[11px] font-semibold dark:text-zinc-400 text-zinc-500">Syncing live state</span>
+              </>
+              )
             ) : (
               <>
                 <span className="text-[11px] font-bold dark:text-white text-zinc-950">World Cup 2026</span>
@@ -941,8 +948,17 @@ export default function App() {
           </div>
         )}
 
+        {(activeTab === 'home' || activeTab === 'search') && viewMode === 'simulated' && !seasonHydrated && (
+          <div className="rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white px-4 py-8 text-center shadow-sm">
+            <div className="text-sm font-semibold dark:text-zinc-200 text-zinc-800">Syncing live season state</div>
+            <div className="mt-1 text-xs dark:text-zinc-500 text-zinc-500">
+              Loading the server-owned tournament clock from Railway.
+            </div>
+          </div>
+        )}
+
         {/* -- Season live dashboard --------------------------------------- */}
-        {activeTab === 'home' && viewMode === 'simulated' && (phase === 'preseason' || phase === 'playing') && (
+        {activeTab === 'home' && viewMode === 'simulated' && seasonHydrated && (phase === 'preseason' || phase === 'playing') && (
           <div
             className="fanvibe-live-panel rounded-lg border border-white/10 p-4 shadow-sm"
             style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
@@ -1013,7 +1029,7 @@ export default function App() {
         )}
 
         {/* -- Inter-season banner ----------------------------------------- */}
-        {activeTab === 'home' && viewMode === 'simulated' && phase === 'interseason' && (
+        {activeTab === 'home' && viewMode === 'simulated' && seasonHydrated && phase === 'interseason' && (
           <div className="dark:bg-zinc-900/80 bg-zinc-100 border dark:border-zinc-700 border-zinc-300 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
               <div className="text-sm font-bold dark:text-zinc-200 text-zinc-700 mb-0.5">
@@ -1135,7 +1151,7 @@ export default function App() {
         )}
 
         {/* -- Champion prediction market --------------------------------- */}
-        {activeTab === 'home' && viewMode === 'simulated' && (
+        {activeTab === 'home' && viewMode === 'simulated' && seasonHydrated && (
           <ChampionPick
             key={tournamentGen}
             fixtures={fixtures}
@@ -1206,7 +1222,7 @@ export default function App() {
         )}
 
         {/* -- Bracket view OR fixture grid -------------------------------- */}
-        {(activeTab === 'home' || activeTab === 'search') && (viewMode === 'simulated' && roundFilter === 'bracket' ? (
+        {(activeTab === 'home' || activeTab === 'search') && (viewMode !== 'simulated' || seasonHydrated) && (viewMode === 'simulated' && roundFilter === 'bracket' ? (
           <BracketView
             fixtures={fixtures}
             matchStates={matchStates}
