@@ -9,6 +9,72 @@ export const SQUAD_STRENGTH: Record<string, number> = {
   QAT: 52, CPV: 48, PAN: 48, JOR: 48, UZB: 50, NZL: 45, HAI: 42, CUW: 35,
 };
 
+type Confederation = 'UEFA' | 'CONMEBOL' | 'CONCACAF' | 'CAF' | 'AFC' | 'OFC';
+type TeamCalibration = {
+  fifaPoints?: number;
+  recentForm: number;
+  confederation: Confederation;
+};
+
+const TEAM_CALIBRATION: Record<string, TeamCalibration> = {
+  FRA: { fifaPoints: 1877.32, recentForm: 5, confederation: 'UEFA' },
+  ESP: { fifaPoints: 1876.40, recentForm: 5, confederation: 'UEFA' },
+  ARG: { fifaPoints: 1874.81, recentForm: 4, confederation: 'CONMEBOL' },
+  ENG: { fifaPoints: 1816.00, recentForm: 3, confederation: 'UEFA' },
+  POR: { fifaPoints: 1778.00, recentForm: 4, confederation: 'UEFA' },
+  BRA: { fifaPoints: 1776.00, recentForm: 1, confederation: 'CONMEBOL' },
+  NED: { fifaPoints: 1750.00, recentForm: 2, confederation: 'UEFA' },
+  MAR: { fifaPoints: 1710.00, recentForm: 5, confederation: 'CAF' },
+  BEL: { fifaPoints: 1705.00, recentForm: 0, confederation: 'UEFA' },
+  GER: { fifaPoints: 1700.00, recentForm: 2, confederation: 'UEFA' },
+  CRO: { fifaPoints: 1690.00, recentForm: 1, confederation: 'UEFA' },
+  URU: { fifaPoints: 1680.00, recentForm: 4, confederation: 'CONMEBOL' },
+  COL: { fifaPoints: 1665.00, recentForm: 4, confederation: 'CONMEBOL' },
+  MEX: { fifaPoints: 1650.00, recentForm: 1, confederation: 'CONCACAF' },
+  USA: { fifaPoints: 1640.00, recentForm: 1, confederation: 'CONCACAF' },
+  SUI: { fifaPoints: 1635.00, recentForm: 1, confederation: 'UEFA' },
+  SEN: { fifaPoints: 1628.00, recentForm: 4, confederation: 'CAF' },
+  JPN: { fifaPoints: 1620.00, recentForm: 4, confederation: 'AFC' },
+  IRN: { fifaPoints: 1610.00, recentForm: 2, confederation: 'AFC' },
+  KOR: { fifaPoints: 1585.00, recentForm: 2, confederation: 'AFC' },
+  ECU: { fifaPoints: 1580.00, recentForm: 2, confederation: 'CONMEBOL' },
+  AUT: { fifaPoints: 1575.00, recentForm: 3, confederation: 'UEFA' },
+  AUS: { fifaPoints: 1545.00, recentForm: 1, confederation: 'AFC' },
+  ALG: { fifaPoints: 1538.00, recentForm: 1, confederation: 'CAF' },
+  EGY: { fifaPoints: 1535.00, recentForm: 1, confederation: 'CAF' },
+  TUR: { fifaPoints: 1530.00, recentForm: 1, confederation: 'UEFA' },
+  CIV: { fifaPoints: 1525.00, recentForm: 2, confederation: 'CAF' },
+  SWE: { fifaPoints: 1520.00, recentForm: 0, confederation: 'UEFA' },
+  NOR: { fifaPoints: 1515.00, recentForm: 1, confederation: 'UEFA' },
+  CZE: { fifaPoints: 1510.00, recentForm: 0, confederation: 'UEFA' },
+  SCO: { fifaPoints: 1505.00, recentForm: 0, confederation: 'UEFA' },
+  KSA: { fifaPoints: 1450.00, recentForm: 0, confederation: 'AFC' },
+  GHA: { fifaPoints: 1448.00, recentForm: -1, confederation: 'CAF' },
+  PAR: { fifaPoints: 1445.00, recentForm: -1, confederation: 'CONMEBOL' },
+  TUN: { fifaPoints: 1440.00, recentForm: 0, confederation: 'CAF' },
+  RSA: { fifaPoints: 1410.00, recentForm: 2, confederation: 'CAF' },
+  COD: { fifaPoints: 1400.00, recentForm: 1, confederation: 'CAF' },
+  BIH: { fifaPoints: 1395.00, recentForm: -1, confederation: 'UEFA' },
+  IRQ: { fifaPoints: 1388.00, recentForm: 2, confederation: 'AFC' },
+  QAT: { fifaPoints: 1380.00, recentForm: 0, confederation: 'AFC' },
+  UZB: { fifaPoints: 1375.00, recentForm: 3, confederation: 'AFC' },
+  JOR: { fifaPoints: 1355.00, recentForm: 2, confederation: 'AFC' },
+  CPV: { fifaPoints: 1340.00, recentForm: 3, confederation: 'CAF' },
+  PAN: { fifaPoints: 1338.00, recentForm: 2, confederation: 'CONCACAF' },
+  NZL: { fifaPoints: 1295.00, recentForm: 2, confederation: 'OFC' },
+  HAI: { fifaPoints: 1265.00, recentForm: 0, confederation: 'CONCACAF' },
+  CUW: { fifaPoints: 1235.00, recentForm: 1, confederation: 'CONCACAF' },
+};
+
+const CONFEDERATION_ADJUSTMENT: Record<Confederation, number> = {
+  UEFA: 1.4,
+  CONMEBOL: 1.2,
+  CAF: 0.4,
+  CONCACAF: 0.1,
+  AFC: -0.3,
+  OFC: -1.0,
+};
+
 const TEAM_PLAYERS: Record<string, string[]> = {
   ARG: ['Messi', 'Lautaro Martinez', 'Mac Allister', 'De Paul', 'Fernandez', 'Otamendi', 'Molina', 'Dibu Martinez'],
   FRA: ['Mbappe', 'Griezmann', 'Thuram', 'Dembele', 'Camavinga', 'Tchouameni', 'Saliba', 'Maignan'],
@@ -139,23 +205,32 @@ type CalibratedStrength = {
   awayAttackShare: number;
   homeGoalPerMinute: number;
   awayGoalPerMinute: number;
+  upsetVolatility: number;
+  knockoutPressure: number;
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 export function calibrateTeamStrength(fixture: Fixture): CalibratedStrength {
-  const homeRating = SQUAD_STRENGTH[fixture.home.code] ?? 62;
-  const awayRating = SQUAD_STRENGTH[fixture.away.code] ?? 62;
+  const homeRating = calibratedRating(fixture.home.code);
+  const awayRating = calibratedRating(fixture.away.code);
   const ratingGap = homeRating - awayRating;
-  const expectedHome = 1 / (1 + 10 ** (-ratingGap / 42));
-  const drawProbability = clamp(0.30 - Math.abs(ratingGap) * 0.003, 0.18, 0.30);
+  const knockoutPressure = fixture.round && fixture.round !== 'R32' ? 1 : 0;
+  const upsetVolatility = clamp(0.10 + Math.abs(ratingGap) * 0.004 + knockoutPressure * 0.05, 0.10, 0.24);
+  const compressedGap = ratingGap * (1 - upsetVolatility);
+  const expectedHome = 1 / (1 + 10 ** (-compressedGap / 42));
+  const drawProbability = clamp(0.30 - Math.abs(compressedGap) * 0.003 + knockoutPressure * 0.025, 0.18, 0.33);
   const decisiveProbability = 1 - drawProbability;
   const homeWinProbability = decisiveProbability * expectedHome;
   const awayWinProbability = decisiveProbability - homeWinProbability;
-  const homeAttackShare = clamp(homeWinProbability + drawProbability * 0.5, 0.34, 0.66);
+  const homeAttackShare = clamp(homeWinProbability + drawProbability * 0.5, 0.36, 0.64);
   const awayAttackShare = 1 - homeAttackShare;
   const averageRating = (homeRating + awayRating) / 2;
-  const totalGoalsPerMatch = clamp(2.18 + (averageRating - 62) * 0.012 + Math.abs(ratingGap) * 0.005, 1.75, 3.15);
+  const totalGoalsPerMatch = clamp(
+    2.18 + (averageRating - 62) * 0.012 + Math.abs(compressedGap) * 0.005 - knockoutPressure * 0.08,
+    1.75,
+    3.15,
+  );
 
   return {
     homeRating,
@@ -168,7 +243,21 @@ export function calibrateTeamStrength(fixture: Fixture): CalibratedStrength {
     awayAttackShare,
     homeGoalPerMinute: (totalGoalsPerMatch * homeAttackShare) / 90,
     awayGoalPerMinute: (totalGoalsPerMatch * awayAttackShare) / 90,
+    upsetVolatility,
+    knockoutPressure,
   };
+}
+
+function calibratedRating(teamCode: string): number {
+  const baseRating = SQUAD_STRENGTH[teamCode] ?? 62;
+  const context = TEAM_CALIBRATION[teamCode];
+  if (!context) return baseRating;
+
+  const fifaRating = context.fifaPoints
+    ? clamp(42 + (context.fifaPoints - 1230) / 10.2, 36, 96)
+    : baseRating;
+  const confedAdjustment = CONFEDERATION_ADJUSTMENT[context.confederation] ?? 0;
+  return clamp(baseRating * 0.58 + fifaRating * 0.42 + context.recentForm * 0.75 + confedAdjustment, 34, 97);
 }
 
 function playersFor(teamCode: string, role: PlayerRole): string[] {
@@ -392,11 +481,12 @@ export class MatchSimulator {
 
   private simulateMinute(state: MatchState, fixture: Fixture, calibration: CalibratedStrength): void {
     const rng = Math.random;
-    const chasingHome = state.homeScore < state.awayScore ? 1.08 : state.homeScore > state.awayScore ? 0.94 : 1;
-    const chasingAway = state.awayScore < state.homeScore ? 1.08 : state.awayScore > state.homeScore ? 0.94 : 1;
-    const homeGoalProb = calibration.homeGoalPerMinute * chasingHome;
-    const awayGoalProb = calibration.awayGoalPerMinute * chasingAway;
-    const homePossProb = calibration.homeAttackShare;
+    const swing = 1 + (rng() - 0.5) * calibration.upsetVolatility;
+    const chasingHome = state.homeScore < state.awayScore ? 1.10 : state.homeScore > state.awayScore ? 0.94 : 1;
+    const chasingAway = state.awayScore < state.homeScore ? 1.10 : state.awayScore > state.homeScore ? 0.94 : 1;
+    const homeGoalProb = calibration.homeGoalPerMinute * chasingHome * swing;
+    const awayGoalProb = calibration.awayGoalPerMinute * chasingAway * (2 - swing);
+    const homePossProb = clamp(calibration.homeAttackShare + (rng() - 0.5) * calibration.upsetVolatility * 0.18, 0.34, 0.66);
     const team = rng() < homePossProb ? 'home' : 'away';
 
     if (rng() < homeGoalProb) {
