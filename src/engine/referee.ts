@@ -407,6 +407,8 @@ export class RefereeEngine {
     this.champPool = new Map(CHAMP_TEAMS.map(team => [team, 0n]));
     this.champSettled = false;
     this.champWinner = undefined;
+    this.logs = [];
+    this.logId = 0;
     this.log('SYSTEM', 'success', 'Referee market state reset to a clean slate');
     await this.persistMarketStateNow();
     this.onUpdate?.();

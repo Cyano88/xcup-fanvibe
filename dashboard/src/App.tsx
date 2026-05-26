@@ -44,10 +44,6 @@ const BRAND_E_IMAGE = '/assets/brand-e.png';
 const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
-const VERIFIED_SEASON_ONE_WINNER: { seasonNumber: number; team: Team } = {
-  seasonNumber: 1,
-  team: { name: 'South Africa', code: 'RSA', flag: '🇿🇦', iso: 'za' },
-};
 const isResolvedFixture = (fixture?: Fixture | null) =>
   !!fixture
   && fixture.home.code !== 'TBD'
@@ -994,9 +990,7 @@ export default function App() {
     .filter(payout => !!payout.txHash)
     .slice(-5)
     .reverse();
-  const displayedSeasonWinners = seasonWinners.some(winner => winner.seasonNumber === 1)
-    ? seasonWinners
-    : [VERIFIED_SEASON_ONE_WINNER, ...seasonWinners].slice(-12);
+  const displayedSeasonWinners = seasonWinners;
   const worldCupSourceLabel = worldCupFeed?.source === 'zafronix'
     ? 'Zafronix'
     : worldCupFeed?.source === 'balldontlie'

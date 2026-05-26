@@ -25,11 +25,6 @@ import type { DaemonLog, Fixture, MatchState, Outcome, Team } from '../types.js'
 
 type LogFn = (prefix: DaemonLog['prefix'], level: DaemonLog['level'], message: string, txHash?: string) => void;
 
-const VERIFIED_SEASON_ONE_WINNER: { seasonNumber: number; team: Team } = {
-  seasonNumber: 1,
-  team: { name: 'South Africa', code: 'RSA', flag: '🇿🇦', iso: 'za' },
-};
-
 function freshSeasonState(seasonNumber = 1, now = Date.now(), timings: SeasonTiming = DEFAULT_SEASON_TIMING): PersistedSeasonState {
   return {
     version: 1,
@@ -121,7 +116,6 @@ export class SeasonController {
 
   private normalizeStoredState(stored: PersistedSeasonState): PersistedSeasonState {
     const timings = stored.timings?.waveGapMs === undefined ? this.timing : stored.timings;
-    const seasonWinners = this.withVerifiedSeasonOneWinner(stored.seasonWinners ?? [], stored.seasonNumber ?? 1);
     return {
       ...stored,
       mode: 'prod',
@@ -131,7 +125,7 @@ export class SeasonController {
       eliminatedTeams: stored.eliminatedTeams ?? [],
       champion: stored.champion ?? null,
       previousKnockoutResults: stored.previousKnockoutResults ?? null,
-      seasonWinners,
+      seasonWinners: stored.seasonWinners ?? [],
       updatedAt: Date.now(),
     };
   }
@@ -174,18 +168,10 @@ export class SeasonController {
   }
 
   private nextWinnerHistory(champion: Team | null): NonNullable<PersistedSeasonState['seasonWinners']> {
-    const existing = this.withVerifiedSeasonOneWinner(this.state.seasonWinners ?? [], this.state.seasonNumber);
+    const existing = this.state.seasonWinners ?? [];
     if (!champion) return existing;
     const withoutCurrent = existing.filter(item => item.seasonNumber !== this.state.seasonNumber);
     return [...withoutCurrent, { seasonNumber: this.state.seasonNumber, team: champion }].slice(-12);
-  }
-
-  private withVerifiedSeasonOneWinner(
-    winners: NonNullable<PersistedSeasonState['seasonWinners']>,
-    seasonNumber: number,
-  ): NonNullable<PersistedSeasonState['seasonWinners']> {
-    if (seasonNumber < 2 || winners.some(item => item.seasonNumber === 1)) return winners;
-    return [VERIFIED_SEASON_ONE_WINNER, ...winners].slice(-12);
   }
 
   private startPlaying(): void {
