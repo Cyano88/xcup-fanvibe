@@ -4,7 +4,6 @@ import { parseEther } from 'viem';
 import type { Fixture, MatchState, ChampionPool } from '../types';
 import { STRENGTH } from '../lib/clientSim';
 import { encodeChampionStake, CHAMP_TEAM_INDEX } from '../lib/encode';
-import { STATIC_FIXTURES } from '../types';
 
 interface Props {
   fixtures: Fixture[];
@@ -13,11 +12,6 @@ interface Props {
   refereeAddress: string;
   daemonChampPool?: ChampionPool; // from live daemon when online
 }
-
-// All 32 R32 teams in bracket order
-const R32_TEAMS = STATIC_FIXTURES
-  .filter(f => f.round === 'R32')
-  .flatMap(f => [f.home, f.away]);
 
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w160/${iso.toLowerCase()}.png`;
@@ -49,6 +43,7 @@ function fmtWei(wei: string | bigint): string {
 }
 
 export function ChampionPick({
+  fixtures,
   eliminatedTeams,
   refereeAddress,
   daemonChampPool,
@@ -63,10 +58,21 @@ export function ChampionPick({
   // Local pool (client-side tracking until daemon picks it up)
   const [localPool, setLocalPool] = useState<Record<string, bigint>>({});
 
+  const championTeams = useMemo(() => {
+    const teams = new Map<string, Fixture['home']>();
+    fixtures.forEach(fixture => {
+      if (fixture.home.code !== 'TBD') teams.set(fixture.home.code, fixture.home);
+      if (fixture.away.code !== 'TBD') teams.set(fixture.away.code, fixture.away);
+    });
+    return [...teams.values()]
+      .filter(team => CHAMP_TEAM_INDEX[team.code] !== undefined)
+      .sort((a, b) => CHAMP_TEAM_INDEX[a.code] - CHAMP_TEAM_INDEX[b.code]);
+  }, [fixtures]);
+
   // Merge daemon pool (if live) with local
   const effectivePool = useMemo<Record<string, string>>(() => {
     const merged: Record<string, bigint> = {};
-    R32_TEAMS.forEach(t => { merged[t.code] = 0n; });
+    championTeams.forEach(t => { merged[t.code] = 0n; });
     // daemon pool
     if (daemonChampPool) {
       Object.entries(daemonChampPool.byTeam).forEach(([code, wei]) => {
@@ -78,7 +84,7 @@ export function ChampionPick({
       merged[code] = (merged[code] ?? 0n) + wei;
     });
     return Object.fromEntries(Object.entries(merged).map(([k, v]) => [k, v.toString()]));
-  }, [daemonChampPool, localPool]);
+  }, [daemonChampPool, localPool, championTeams]);
 
   const totalWei = Object.values(effectivePool).reduce((s, v) => s + BigInt(v), 0n);
   const totalCount = (daemonChampPool?.count ?? 0) + Object.values(localPool).filter(v => v > 0n).length;
@@ -86,7 +92,7 @@ export function ChampionPick({
   const settledWinner = daemonChampPool?.winner;
 
   // Odds: squad model first, then market flow as OKB enters the pool.
-  const activeTeams = R32_TEAMS.filter(t => !eliminatedTeams.has(t.code));
+  const activeTeams = championTeams.filter(t => !eliminatedTeams.has(t.code));
   const ratingWeight = (code: string) => {
     const strength = STRENGTH[code] ?? 60;
     return Math.exp((strength - 72) / 10);
@@ -197,7 +203,7 @@ export function ChampionPick({
 
           {/* Team grid */}
           <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5">
-            {R32_TEAMS.map(team => {
+            {championTeams.map(team => {
               const elim    = eliminatedTeams.has(team.code);
               const odds    = displayOdds(team.code);
               const share   = poolShare(team.code);
@@ -259,7 +265,7 @@ export function ChampionPick({
             <div className="dark:bg-zinc-800/60 bg-zinc-50 border dark:border-zinc-700 border-zinc-200 rounded-xl p-3 flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-sm font-bold dark:text-zinc-100 text-zinc-800">
                 {(() => {
-                  const team = R32_TEAMS.find(t => t.code === selected);
+                  const team = championTeams.find(t => t.code === selected);
                   return team ? (
                     <>
                       <TeamFlag iso={team.iso} fallback={team.flag} className="h-5 w-7" />

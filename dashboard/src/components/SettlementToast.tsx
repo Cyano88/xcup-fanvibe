@@ -21,6 +21,7 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
   }, [onDismiss]);
 
   const totalOKB = formatOKB(settlement.totalPool);
+  const payoutTx = settlement.payouts.find(p => !!p.txHash)?.txHash;
 
   return (
     <div
@@ -53,12 +54,12 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
             <div>
               <div className="text-zinc-100 font-medium capitalize">{settlement.outcome} wins</div>
               <div className="text-xs text-zinc-500">
-                {settlement.winnerCount} winner{settlement.winnerCount !== 1 ? 's' : ''}  - {totalOKB} OKB distributed
+                {settlement.winnerCount} winner{settlement.winnerCount !== 1 ? 's' : ''} - {totalOKB} OKB paid
               </div>
             </div>
           </div>
 
-          {settlement.payouts.length > 0 && (
+          {payoutTx && (
             <a
               href={settlement.explorerUrl}
               target="_blank"
@@ -66,7 +67,7 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
               className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
             >
               <ExternalLink size={11} />
-              <span>{settlement.payouts[0].txHash.slice(0, 18)}...</span>
+              <span>{payoutTx.slice(0, 18)}...</span>
               Verify on-chain open
             </a>
           )}

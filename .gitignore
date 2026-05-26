@@ -8,3 +8,4 @@ dashboard/.vercel/
 .DS_Store
 
 .vercel
+.fanvibe-state/

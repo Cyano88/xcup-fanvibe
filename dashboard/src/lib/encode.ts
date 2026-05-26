@@ -6,10 +6,12 @@ const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
 // Champion prediction market — must match backend CHAMP_TEAMS order exactly
 export const CHAMP_FIXTURE_ID = 'champion-2026';
 export const CHAMP_TEAMS = [
-  'BRA','ECU','FRA','TUR','ARG','KOR','ENG','NGA',
-  'ESP','DEN','POR','CMR','GER','MEX','NED','AUS',
-  'BEL','JPN','ITA','COL','CRO','CAN','MAR','USA',
-  'URU','EGY','SRB','SUI','ALG','KSA','CIV','SEN',
+  'CAN','MEX','USA','AUS','IRQ','IRN','JPN','JOR',
+  'KOR','QAT','KSA','UZB','ALG','CPV','COD','CIV',
+  'EGY','GHA','MAR','SEN','RSA','TUN','CUW','HAI',
+  'PAN','ARG','BRA','COL','ECU','PAR','URU','NZL',
+  'AUT','BEL','BIH','CRO','CZE','ENG','FRA','GER',
+  'NED','NOR','POR','SCO','ESP','SWE','SUI','TUR',
 ] as const;
 
 export const CHAMP_TEAM_INDEX: Record<string, number> =

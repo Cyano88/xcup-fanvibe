@@ -1,5 +1,5 @@
-import type { Fixture, MatchState, Outcome, Team, TournamentRound } from '../types';
-import { REALTIME_FIXTURES } from '../types';
+import type { Fixture, MatchState, Outcome, Team, TournamentRound } from '../types.js';
+import { REALTIME_FIXTURES } from './worldCupFixtures.js';
 
 export const SEASON_GROUPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 export const GROUP_STAGE_MATCH_MS = 10 * 60 * 1000;

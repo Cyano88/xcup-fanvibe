@@ -4,15 +4,12 @@ import { SQUADS } from './squadData';
 // ── Strength + squad data (mirrors backend, lives here for offline demo) ──────
 
 export const STRENGTH: Record<string, number> = {
-  // Core simulated-bracket teams
   ARG:95, FRA:93, BRA:92, ENG:88, ESP:87, GER:86, POR:85, NED:83,
-  BEL:82, ITA:80, CRO:77, URU:77, MAR:75, SEN:74, JPN:73, DEN:73,
-  COL:72, MEX:72, SUI:71, CAN:71, USA:70, SRB:70, TUR:69, CIV:69,
-  NGA:68, AUS:67, KOR:67, ECU:66, ALG:65, EGY:64, CMR:64, KSA:61,
-  // Official FIFA WC 2026 teams (realtime groups)
-  SWE:76, NOR:74, AUT:68, CZE:66, SCO:65, GHA:60, PAR:60, TUN:60,
-  IRN:61, RSA:57, COD:56, BIH:58, IRQ:52, QAT:52, CPV:48, PAN:48,
-  JOR:48, UZB:50, NZL:45, HAI:42, CUW:35,
+  BEL:82, CRO:77, URU:77, MAR:75, SEN:74, JPN:73, SWE:76, NOR:74,
+  COL:72, MEX:72, SUI:71, CAN:71, USA:70, TUR:69, CIV:69, AUS:67,
+  KOR:67, ECU:66, ALG:65, EGY:64, KSA:61, AUT:68, CZE:66, SCO:65,
+  GHA:60, PAR:60, TUN:60, IRN:61, RSA:57, COD:56, BIH:58, IRQ:52,
+  QAT:52, CPV:48, PAN:48, JOR:48, UZB:50, NZL:45, HAI:42, CUW:35,
 };
 
 const PLAYERS: Record<string, string[]> = {
@@ -25,25 +22,20 @@ const PLAYERS: Record<string, string[]> = {
   POR: ['Ronaldo','Félix','Leão','Bernardo Silva','Vitinha','Neves','Rúben Dias','Cancelo'],
   NED: ['Gakpo','van Dijk','de Jong','Reijnders','Depay','Dumfries','de Ligt','Veerman'],
   BEL: ['De Bruyne','Lukaku','Trossard','Doku','Onana','Mangala','Vertonghen','Faes'],
-  ITA: ['Pellegrini','Barella','Tonali','Chiesa','Retegui','Bastoni','Di Lorenzo','Donnarumma'],
   CRO: ['Modrić','Kovačić','Gvardiol','Kramarić','Perisić','Sosa','Pašalić','Šutalo'],
   MAR: ['En-Nesyri','Hakimi','Ziyech','Ounahi','Amrabat','Boufal','Saiss','Bounou'],
   URU: ['Núñez','Valverde','Bentancur','Araújo','Pellistri','Ugarte','De Arrascaeta','Olivera'],
   COL: ['L. Díaz','J. Díaz','Cuadrado','Borré','Arias','Cuesta','Ospina','Quintero'],
   SEN: ['Mané','Dia','Sarr','Gueye','Koulibaly','Sabaly','Diatta','Mendy'],
   JPN: ['Kubo','Mitoma','Doan','Endo','Kamada','Tomiyasu','Taniguchi','Maeda'],
-  DEN: ['Eriksen','Højlund','Damsgaard','Delaney','Maehle','Christiansen','Andersen','Schmeichel'],
   MEX: ['Jiménez','Lozano','Antuna','Álvarez','Herrera','Sánchez','Moreno','Ochoa'],
   USA: ['Pulisic','Reyna','McKennie','Musah','Aaronson','Turner','Dest','Richards'],
   CAN: ['Davies','David','Buchanan','Larin','Johnston','Eustáquio','Henry','Adekugbe'],
   TUR: ['Çalhanoğlu','Karaman','Yildiz','Yazici','Kahveci','Söyüncü','Çelik','Günok'],
-  SRB: ['Tadic','Mitrovic','Milinkovic-Savic','Vlahovic','Ilic','Pavlovic','Grujic','Rajkovic'],
   SUI: ['Xhaka','Shaqiri','Embolo','Vargas','Freuler','Akanji','Elvedi','Sommer'],
-  CMR: ['Choupo-Moting','Aboubakar','Toko Ekambi','Kunde','Bassogog','Castelletto','Fai','Epassy'],
   AUS: ['Leckie','Mabil','Irvine','Mooy','McGree','Ryan','Souttar','Rowles'],
   EGY: ['Salah','Trezeguet','Elneny','Mostafa Mohamed','El-Shenawy','Hamdy','Galal','El-Solia'],
   KOR: ['Son Heung-min','Hwang Hee-chan','Lee Jae-sung','Kim Min-jae','Jung Woo-young','Na Sang-ho','Hwang In-beom','Jo Hyeon-woo'],
-  NGA: ['Osimhen','Lookman','Iheanacho','Ndidi','Iwobi','Troost-Ekong','Collins','Uzoho'],
   CIV: ['Haller','Zaha','Kessié','Sangaré','Konaté','Gradel','Bailly','Fofana'],
   ECU: ['Valencia','Caicedo','Plata','Preciado','Estupiñán','Pacho','Cifuentes','Domínguez'],
   ALG: ['Mahrez','Bennacer','Bensebaini','Atal','Slimani','Feghouli','Boudaoui','Zerrouki'],

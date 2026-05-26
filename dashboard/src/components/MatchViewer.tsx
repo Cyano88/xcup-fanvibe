@@ -763,7 +763,7 @@ function SquadPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
         </div>
         {incidentMap[player.name]?.length ? (
           <span className="shrink-0 text-[9px] font-semibold dark:text-emerald-300 text-emerald-700">
-            {incidentMap[player.name].slice(-2).join(', ')}
+            {incidentMap[player.name].join(', ')}
           </span>
         ) : null}
       </div>
@@ -971,8 +971,7 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
       ev.team === team &&
       (ev.type === `goal_${team}` || ev.type.startsWith('yellow') || ev.type.startsWith('red')) &&
       ev.player
-    )
-    .slice(-4);
+    );
   const homeMarkers = teamEvents('home');
   const awayMarkers = teamEvents('away');
   const TeamEventMarkers = ({ events, align = 'left' }: { events: MatchEvent[]; align?: 'left' | 'right' }) => (
@@ -983,7 +982,7 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
         return (
           <div key={ev.id} className="flex max-w-[138px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700">
             {isGoal ? (
-              <span className="text-[11px] leading-none">⚽</span>
+              <span className="text-[10px] leading-none">Goal</span>
             ) : (
               <span className={`h-3.5 w-2.5 rounded-[2px] border border-black/20 ${isRed ? 'bg-red-500' : 'bg-yellow-400'}`} />
             )}
@@ -1074,8 +1073,8 @@ export function MatchViewer({ fixture, matchState, onClose }: Props) {
               outcome === 'away' ? 'dark:bg-zinc-800 bg-zinc-100 dark:text-zinc-300 text-zinc-700 border dark:border-zinc-700 border-zinc-200' :
               'dark:bg-zinc-800/60 bg-zinc-100 dark:text-zinc-300 text-zinc-600 border dark:border-zinc-700 border-zinc-200'}`}>
             {outcome === 'draw'
-              ? 'Draw - all stakers refunded'
-              : `${outcome === 'home' ? fixture.home.name : fixture.away.name} win - payouts sent`}
+              ? 'Draw - result confirmed'
+              : `${outcome === 'home' ? fixture.home.name : fixture.away.name} win - result confirmed`}
           </div>
         )}
 

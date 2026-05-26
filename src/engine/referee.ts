@@ -21,6 +21,7 @@ import { xLayerMainnet, explorerTx } from '../chain.js';
 import { FIXTURES } from './fixtures.js';
 import { checkAndRefuel } from './metabolism.js';
 import { MatchSimulator } from './simulation.js';
+import { readRefereeMarket, writeRefereeMarket, type PersistedSettlementJob } from '../seasonStore.js';
 import type {
   Fixture,
   Team,
@@ -32,6 +33,7 @@ import type {
   MetabolicState,
   Outcome,
   SettlementResult,
+  RejectedStakeRefund,
   ChampionStake,
   ChampionPool,
   LogPrefix,
@@ -50,30 +52,30 @@ const BRACKET: Record<string, {
   winner: { matchId: string; slot: 'home' | 'away' };
   loser?: { matchId: string; slot: 'home' | 'away' };
 }> = {
-  'r32-1':  { winner: { matchId: 'r16-1', slot: 'home' } },
-  'r32-2':  { winner: { matchId: 'r16-1', slot: 'away' } },
-  'r32-3':  { winner: { matchId: 'r16-2', slot: 'home' } },
-  'r32-4':  { winner: { matchId: 'r16-2', slot: 'away' } },
-  'r32-5':  { winner: { matchId: 'r16-3', slot: 'home' } },
-  'r32-6':  { winner: { matchId: 'r16-3', slot: 'away' } },
-  'r32-7':  { winner: { matchId: 'r16-4', slot: 'home' } },
-  'r32-8':  { winner: { matchId: 'r16-4', slot: 'away' } },
-  'r32-9':  { winner: { matchId: 'r16-5', slot: 'home' } },
-  'r32-10': { winner: { matchId: 'r16-5', slot: 'away' } },
-  'r32-11': { winner: { matchId: 'r16-6', slot: 'home' } },
-  'r32-12': { winner: { matchId: 'r16-6', slot: 'away' } },
-  'r32-13': { winner: { matchId: 'r16-7', slot: 'home' } },
-  'r32-14': { winner: { matchId: 'r16-7', slot: 'away' } },
-  'r32-15': { winner: { matchId: 'r16-8', slot: 'home' } },
-  'r32-16': { winner: { matchId: 'r16-8', slot: 'away' } },
-  'r16-1':  { winner: { matchId: 'qf-1', slot: 'home' } },
-  'r16-2':  { winner: { matchId: 'qf-1', slot: 'away' } },
-  'r16-3':  { winner: { matchId: 'qf-2', slot: 'home' } },
-  'r16-4':  { winner: { matchId: 'qf-2', slot: 'away' } },
-  'r16-5':  { winner: { matchId: 'qf-3', slot: 'home' } },
-  'r16-6':  { winner: { matchId: 'qf-3', slot: 'away' } },
-  'r16-7':  { winner: { matchId: 'qf-4', slot: 'home' } },
-  'r16-8':  { winner: { matchId: 'qf-4', slot: 'away' } },
+  'k32-1':  { winner: { matchId: 'k16-1', slot: 'home' } },
+  'k32-2':  { winner: { matchId: 'k16-1', slot: 'away' } },
+  'k32-3':  { winner: { matchId: 'k16-2', slot: 'home' } },
+  'k32-4':  { winner: { matchId: 'k16-2', slot: 'away' } },
+  'k32-5':  { winner: { matchId: 'k16-3', slot: 'home' } },
+  'k32-6':  { winner: { matchId: 'k16-3', slot: 'away' } },
+  'k32-7':  { winner: { matchId: 'k16-4', slot: 'home' } },
+  'k32-8':  { winner: { matchId: 'k16-4', slot: 'away' } },
+  'k32-9':  { winner: { matchId: 'k16-5', slot: 'home' } },
+  'k32-10': { winner: { matchId: 'k16-5', slot: 'away' } },
+  'k32-11': { winner: { matchId: 'k16-6', slot: 'home' } },
+  'k32-12': { winner: { matchId: 'k16-6', slot: 'away' } },
+  'k32-13': { winner: { matchId: 'k16-7', slot: 'home' } },
+  'k32-14': { winner: { matchId: 'k16-7', slot: 'away' } },
+  'k32-15': { winner: { matchId: 'k16-8', slot: 'home' } },
+  'k32-16': { winner: { matchId: 'k16-8', slot: 'away' } },
+  'k16-1':  { winner: { matchId: 'qf-1', slot: 'home' } },
+  'k16-2':  { winner: { matchId: 'qf-1', slot: 'away' } },
+  'k16-3':  { winner: { matchId: 'qf-2', slot: 'home' } },
+  'k16-4':  { winner: { matchId: 'qf-2', slot: 'away' } },
+  'k16-5':  { winner: { matchId: 'qf-3', slot: 'home' } },
+  'k16-6':  { winner: { matchId: 'qf-3', slot: 'away' } },
+  'k16-7':  { winner: { matchId: 'qf-4', slot: 'home' } },
+  'k16-8':  { winner: { matchId: 'qf-4', slot: 'away' } },
   'qf-1':   { winner: { matchId: 'sf-1', slot: 'home' } },
   'qf-2':   { winner: { matchId: 'sf-1', slot: 'away' } },
   'qf-3':   { winner: { matchId: 'sf-2', slot: 'home' } },
@@ -85,10 +87,12 @@ const BRACKET: Record<string, {
 // ── Champion prediction market ─────────────────────────────────────────────────
 export const CHAMP_FIXTURE_ID = 'champion-2026';
 export const CHAMP_TEAMS = [
-  'BRA','ECU','FRA','TUR','ARG','KOR','ENG','NGA',
-  'ESP','DEN','POR','CMR','GER','MEX','NED','AUS',
-  'BEL','JPN','ITA','COL','CRO','CAN','MAR','USA',
-  'URU','EGY','SRB','SUI','ALG','KSA','CIV','SEN',
+  'CAN','MEX','USA','AUS','IRQ','IRN','JPN','JOR',
+  'KOR','QAT','KSA','UZB','ALG','CPV','COD','CIV',
+  'EGY','GHA','MAR','SEN','RSA','TUN','CUW','HAI',
+  'PAN','ARG','BRA','COL','ECU','PAR','URU','NZL',
+  'AUT','BEL','BIH','CRO','CZE','ENG','FRA','GER',
+  'NED','NOR','POR','SCO','ESP','SWE','SUI','TUR',
 ];
 
 // ── Calldata codec ─────────────────────────────────────────────────────────────
@@ -139,8 +143,10 @@ export class RefereeEngine {
 
   private fixtures: Fixture[] = structuredClone(FIXTURES);
   private stakes = new Map<string, Stake>();
+  private rejectedStakeRefunds = new Map<string, RejectedStakeRefund>();
   private pools = new Map<string, Pool>();
   private settlements: SettlementResult[] = [];
+  private settlementJobs = new Map<string, PersistedSettlementJob>();
   private champStakes: ChampionStake[] = [];
   private champPool = new Map<string, bigint>(CHAMP_TEAMS.map(t => [t, 0n]));
   private champSettled = false;
@@ -155,6 +161,7 @@ export class RefereeEngine {
 
   public onLog?: (log: DaemonLog) => void;
   public onUpdate?: () => void;
+  private saveQueued = false;
 
   constructor() {
     const pk = process.env.REFEREE_PRIVATE_KEY;
@@ -192,8 +199,86 @@ export class RefereeEngine {
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
 
+  syncFixtures(fixtures: Fixture[]): void {
+    let changed = false;
+
+    for (const incoming of fixtures) {
+      if (!incoming?.id || incoming.home?.code === 'TBD' || incoming.away?.code === 'TBD') continue;
+
+      const existing = this.fixtures.find(f => f.id === incoming.id);
+      if (existing) {
+        if (existing.status === 'settled') continue;
+        Object.assign(existing, incoming, {
+          status: incoming.status === 'settled' ? existing.status : incoming.status,
+          result: existing.result,
+        });
+      } else {
+        this.fixtures.push(structuredClone(incoming));
+        changed = true;
+      }
+
+      if (!this.pools.has(incoming.id)) {
+        this.pools.set(incoming.id, { fixtureId: incoming.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 });
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.log('SYSTEM', 'info', `Season fixtures synced - watching ${this.fixtures.length} fixtures.`);
+      this.onUpdate?.();
+    }
+  }
+
+  async settleSyncedFixture(fixtureId: string, outcome: Outcome): Promise<SettlementResult | null> {
+    const fixture = this.fixtures.find(f => f.id === fixtureId);
+    if (!fixture || fixture.status === 'settled') return null;
+    return this.settleFixture(fixtureId, outcome);
+  }
+
+  getPositions(address: string) {
+    const wallet = address.toLowerCase();
+    const stakePositions = Array.from(this.stakes.values())
+      .filter(stake => stake.staker.toLowerCase() === wallet)
+      .map(stake => {
+        const fixture = this.fixtures.find(f => f.id === stake.fixtureId);
+        const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId);
+        const won = settlement ? settlement.outcome === stake.outcome : false;
+        const payout = won ? settlement?.payouts.find(p => p.address.toLowerCase() === wallet) : undefined;
+        return {
+          type: 'match' as const,
+          status: payout ? 'paid' : settlement ? (won ? 'won_pending_payout' : 'lost') : 'active',
+          stake,
+          fixture,
+          settlement,
+          payout,
+        };
+      });
+
+    const championPositions = this.champStakes
+      .filter(stake => stake.staker.toLowerCase() === wallet)
+      .map(stake => ({
+        type: 'champion' as const,
+        status: this.champSettled ? (this.champWinner === stake.teamCode ? 'settled_winner' : 'settled_lost') : 'active',
+        stake,
+        winner: this.champWinner,
+      }));
+
+    const refunds = Array.from(this.rejectedStakeRefunds.values())
+      .filter(refund => refund.staker.toLowerCase() === wallet)
+      .map(refund => ({ type: 'refund' as const, status: refund.status, refund }));
+
+    return [...stakePositions, ...championPositions, ...refunds]
+      .sort((a, b) => {
+        const at = 'stake' in a ? a.stake.timestamp : a.refund.timestamp;
+        const bt = 'stake' in b ? b.stake.timestamp : b.refund.timestamp;
+        return bt - at;
+      });
+  }
+
   async start(): Promise<void> {
     this.log('SYSTEM', 'info', `RefereeEngine starting — wallet ${this.account.address}`);
+    await this.loadMarketState();
+    await this.resumeSettlementJobs();
     await this.refreshMetabolism();
     this.startWebSocketListener();
     this.startMetabolismLoop();
@@ -213,11 +298,116 @@ export class RefereeEngine {
 
   // ── WebSocket block listener ─────────────────────────────────────────────────
 
+  private async loadMarketState(): Promise<void> {
+    const stored = await readRefereeMarket();
+    if (!stored) return;
+
+    this.stakes = new Map(stored.stakes.map(stake => [stake.txHash, stake]));
+    this.rejectedStakeRefunds = new Map(stored.rejectedStakeRefunds.map(refund => [refund.txHash, refund]));
+    this.pools = new Map(stored.pools.map(pool => [pool.fixtureId, pool]));
+    this.settlements = stored.settlements;
+    this.settlementJobs = new Map((stored.settlementJobs ?? []).map(job => [job.id, job]));
+    this.champStakes = stored.champStakes;
+    this.champPool = new Map(CHAMP_TEAMS.map(team => [team, BigInt(stored.champPool[team] ?? '0')]));
+    this.champSettled = stored.champSettled;
+    this.champWinner = stored.champWinner;
+    this.lastBlock = stored.lastBlock;
+
+    for (const fixture of this.fixtures) {
+      if (!this.pools.has(fixture.id)) {
+        this.pools.set(fixture.id, { fixtureId: fixture.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 });
+      }
+      const settlement = this.settlements.find(s => s.fixtureId === fixture.id);
+      if (settlement) {
+        fixture.status = 'settled';
+        fixture.result = settlement.outcome;
+      }
+    }
+
+    this.log('SYSTEM', 'success', `Loaded referee market history - ${this.stakes.size} stakes, ${this.settlements.length} settlements.`);
+  }
+
+  private async resumeSettlementJobs(): Promise<void> {
+    for (const job of this.settlementJobs.values()) {
+      if (job.type === 'match' && job.status === 'complete' && job.fixtureId && !this.settlements.some(s => s.fixtureId === job.fixtureId)) {
+        this.settlements.push(this.resultFromSettlementJob(job));
+      }
+    }
+
+    const pendingJobs = Array.from(this.settlementJobs.values()).filter(job => job.status === 'paying');
+    if (pendingJobs.length === 0) {
+      if (this.settlements.length) await this.persistMarketStateNow();
+      return;
+    }
+
+    this.log('ORACLE', 'warn', `Resuming ${pendingJobs.length} interrupted settlement job(s)`);
+    for (const job of pendingJobs) {
+      const verb = job.type === 'champion'
+        ? job.winnerCount > 0 ? 'Champion payout' : 'Champion refund'
+        : job.winnerCount > 0 ? 'Payout' : 'Refund';
+      await this.processSettlementJob(job, verb);
+
+      if (job.type === 'match' && job.fixtureId && job.outcome) {
+        const fixture = this.fixtures.find(f => f.id === job.fixtureId);
+        if (fixture) {
+          fixture.status = 'settled';
+          fixture.result = job.outcome;
+        }
+        if (!this.settlements.some(s => s.fixtureId === job.fixtureId)) {
+          this.settlements.push(this.resultFromSettlementJob(job));
+        }
+      }
+    }
+
+    await this.persistMarketStateNow();
+    this.onUpdate?.();
+  }
+
+  private marketSnapshot() {
+    const champPool: Record<string, string> = {};
+    this.champPool.forEach((value, team) => { champPool[team] = value.toString(); });
+    return {
+      version: 1 as const,
+      stakes: Array.from(this.stakes.values()),
+      rejectedStakeRefunds: Array.from(this.rejectedStakeRefunds.values()),
+      pools: Array.from(this.pools.values()),
+      settlements: this.settlements,
+      settlementJobs: Array.from(this.settlementJobs.values()),
+      champStakes: this.champStakes,
+      champPool,
+      champSettled: this.champSettled,
+      champWinner: this.champWinner,
+      lastBlock: this.lastBlock,
+      updatedAt: Date.now(),
+    };
+  }
+
+  private async persistMarketStateNow(): Promise<void> {
+    await writeRefereeMarket(this.marketSnapshot());
+  }
+
+  private persistMarketState(): void {
+    if (this.saveQueued) return;
+    this.saveQueued = true;
+    setTimeout(() => {
+      this.saveQueued = false;
+      writeRefereeMarket(this.marketSnapshot()).catch((err: unknown) => {
+        this.log('SYSTEM', 'warn', `Referee market persistence failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }, 250);
+  }
+
   private httpPollerStarted = false;
 
   private startWebSocketListener(): void {
     // Always start HTTP poller as baseline — WS upgrades it if available
     this.startHttpPoller();
+
+    if (process.env.ENABLE_XLAYER_WS !== 'true') {
+      this.wsConnected = false;
+      this.log('RPC', 'info', 'HTTP poller active - WebSocket listener disabled');
+      return;
+    }
 
     try {
       const wsClient = createPublicClient({
@@ -322,6 +512,7 @@ export class RefereeEngine {
           timestamp,
         });
         this.log('STAKE', 'success', `+${parseFloat(formatEther(gross)).toFixed(4)} OKB · Champion → ${teamCode}`, tx.hash);
+        this.persistMarketState();
         this.onUpdate?.();
         return;
       }
@@ -330,8 +521,18 @@ export class RefereeEngine {
       const { fixtureId, outcome } = decoded;
       const fixture = this.fixtures.find((f) => f.id === fixtureId);
 
-      if (!fixture || fixture.status !== 'open') {
-        this.log('STAKE', 'warn', `Rejected stake — fixture "${fixtureId}" not open (tx ${tx.hash.slice(0, 10)}...)`);
+      if (!fixture && fixtureId.startsWith('season-')) {
+        this.log('STAKE', 'warn', `Pending stake import - waiting for season fixture sync "${fixtureId}"`, tx.hash);
+        return;
+      }
+
+      if (!fixture || fixture.home.code === 'TBD' || fixture.away.code === 'TBD' || fixture.status === 'locked' || fixture.status === 'settled') {
+        const reason = fixture?.status === 'locked'
+          ? `fixture "${fixtureId}" already live`
+          : fixture?.status === 'settled'
+            ? `fixture "${fixtureId}" already settled`
+            : `fixture "${fixtureId}" not open`;
+        this.refundRejectedStake(tx, fixtureId, outcome, reason);
         return;
       }
 
@@ -357,6 +558,7 @@ export class RefereeEngine {
         tx.hash,
       );
 
+      this.persistMarketState();
       this.onUpdate?.();
     } catch {
       // Not a stake transaction — plain OKB transfer or unrelated calldata
@@ -364,6 +566,43 @@ export class RefereeEngine {
   }
 
   // ── Champion settlement ──────────────────────────────────────────────────────
+
+  private refundRejectedStake(tx: Transaction, fixtureId: string, outcome: Outcome, reason: string): void {
+    if (this.rejectedStakeRefunds.has(tx.hash)) return;
+
+    const record: RejectedStakeRefund = {
+      txHash: tx.hash,
+      staker: tx.from,
+      fixtureId,
+      outcome,
+      amountWei: tx.value.toString(),
+      reason,
+      status: 'queued',
+      timestamp: Date.now(),
+    };
+    this.rejectedStakeRefunds.set(tx.hash, record);
+    this.persistMarketState();
+
+    this.log('STAKE', 'warn', `Rejected stake - ${reason}; refund queued`, tx.hash);
+
+    this.walletClient.sendTransaction({
+      account: this.account,
+      to: tx.from as Address,
+      value: tx.value,
+      chain: xLayerMainnet,
+    }).then((txHash) => {
+      this.rejectedStakeRefunds.set(tx.hash, { ...record, status: 'refunded', refundTxHash: txHash });
+      this.persistMarketState();
+      this.log('ORACLE', 'success', `Rejected stake refunded ${formatEther(tx.value)} OKB -> ${tx.from.slice(0, 10)}...`, txHash);
+      this.refreshMetabolism().then(() => this.onUpdate?.()).catch(() => this.onUpdate?.());
+    }).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.rejectedStakeRefunds.set(tx.hash, { ...record, status: 'failed', error: msg });
+      this.persistMarketState();
+      this.log('ORACLE', 'error', `Rejected stake refund failed -> ${tx.from.slice(0, 10)}...: ${msg}`, tx.hash);
+      this.onUpdate?.();
+    });
+  }
 
   async oracleChampion(teamCode: string, signature: string, nonce: number): Promise<void> {
     const message = `X-Cup-Champion:${teamCode}:${nonce}`;
@@ -376,9 +615,65 @@ export class RefereeEngine {
     await this.settleChampion(teamCode);
   }
 
+  private async saveSettlementJob(job: PersistedSettlementJob): Promise<void> {
+    this.settlementJobs.set(job.id, job);
+    await this.persistMarketStateNow();
+  }
+
+  private async processSettlementJob(job: PersistedSettlementJob, verb: 'Payout' | 'Refund' | 'Champion payout' | 'Champion refund'): Promise<void> {
+    for (const payout of job.payouts) {
+      if (payout.status === 'sent' && payout.txHash) continue;
+      try {
+        const txHash = await this.walletClient.sendTransaction({
+          account: this.account,
+          to: payout.address as Address,
+          value: BigInt(payout.amountWei),
+          chain: xLayerMainnet,
+        });
+        payout.status = 'sent';
+        payout.txHash = txHash;
+        delete payout.error;
+        await this.saveSettlementJob(job);
+        this.log('ORACLE', 'success', `${verb} ${formatEther(BigInt(payout.amountWei))} OKB -> ${payout.address.slice(0, 10)}...`, txHash);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        payout.status = 'failed';
+        payout.error = msg;
+        await this.saveSettlementJob(job);
+        this.log('ORACLE', 'error', `${verb} failed -> ${payout.address.slice(0, 10)}...: ${msg}`);
+      }
+    }
+
+    job.status = job.payouts.some(payout => payout.status === 'failed') ? 'paying' : 'complete';
+    await this.saveSettlementJob(job);
+  }
+
+  private resultFromSettlementJob(job: PersistedSettlementJob): SettlementResult {
+    if (!job.fixtureId || !job.outcome) throw new Error(`Invalid match settlement job ${job.id}`);
+    const payouts = job.payouts
+      .filter(payout => payout.status === 'sent' && payout.txHash)
+      .map(payout => ({ address: payout.address, amountWei: payout.amountWei, txHash: payout.txHash! }));
+
+    return {
+      fixtureId: job.fixtureId,
+      outcome: job.outcome,
+      totalPool: job.totalPool,
+      winnerCount: job.winnerCount,
+      payouts,
+      blockNumber: job.blockNumber,
+      explorerUrl: payouts[0] ? explorerTx(payouts[0].txHash) : `https://www.okx.com/web3/explorer/xlayer/address/${this.account.address}`,
+      settledAt: job.settledAt,
+    };
+  }
+
   private async settleChampion(winner: string): Promise<void> {
-    if (this.champSettled) throw new Error('Champion market already settled');
     if (!CHAMP_TEAMS.includes(winner)) throw new Error(`Unknown team: ${winner}`);
+
+    const jobId = `champion:${winner}`;
+    const existingJob = this.settlementJobs.get(jobId);
+    if (this.champSettled && (!existingJob || existingJob.status === 'complete')) {
+      throw new Error('Champion market already settled');
+    }
 
     this.champSettled = true;
     this.champWinner  = winner;
@@ -389,36 +684,40 @@ export class RefereeEngine {
 
     this.log('ORACLE', 'info', `Champion: ${winner} · total pool ${formatEther(totalPool)} OKB · ${winners.length} winner(s)`);
 
-    if (winPool === 0n && this.champStakes.length > 0) {
-      for (const s of this.champStakes) {
-        const gross  = BigInt(s.amountWei);
-        const refund = gross - (gross * PROTOCOL_FEE_BPS) / 10_000n;
-        try {
-          const txHash = await this.walletClient.sendTransaction({ account: this.account, to: s.staker as Address, value: refund, chain: xLayerMainnet });
-          this.log('ORACLE', 'success', `Champion refund ${formatEther(refund)} OKB → ${s.staker.slice(0, 10)}...`, txHash);
-        } catch (err: unknown) {
-          this.log('ORACLE', 'error', `Champion refund failed → ${s.staker.slice(0, 10)}...: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    } else {
-      for (const s of winners) {
-        const stake  = BigInt(s.amountWei);
-        const net    = stake - (stake * PROTOCOL_FEE_BPS) / 10_000n;
-        const payout = winPool > 0n ? (net * totalPool) / winPool : 0n;
-        if (payout === 0n) continue;
-        try {
-          const txHash = await this.walletClient.sendTransaction({ account: this.account, to: s.staker as Address, value: payout, chain: xLayerMainnet });
-          this.log('ORACLE', 'success', `Champion payout ${formatEther(payout)} OKB → ${s.staker.slice(0, 10)}...`, txHash);
-        } catch (err: unknown) {
-          this.log('ORACLE', 'error', `Champion payout failed → ${s.staker.slice(0, 10)}...: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
+    let job = existingJob;
+    if (!job) {
+      const payingStakes = winPool === 0n && this.champStakes.length > 0 ? this.champStakes : winners;
+      const payouts = payingStakes.map((s, idx) => {
+        const stake = BigInt(s.amountWei);
+        const net = stake - (stake * PROTOCOL_FEE_BPS) / 10_000n;
+        const amount = winPool > 0n ? (net * totalPool) / winPool : net;
+        return {
+          id: `${s.txHash}:${idx}`,
+          address: s.staker,
+          amountWei: amount.toString(),
+          status: 'pending' as const,
+        };
+      }).filter(payout => BigInt(payout.amountWei) > 0n);
+
+      job = {
+        id: jobId,
+        type: 'champion',
+        status: 'paying',
+        teamCode: winner,
+        totalPool: totalPool.toString(),
+        winnerCount: winners.length,
+        blockNumber: this.lastBlock,
+        settledAt: Date.now(),
+        payouts,
+      };
+      await this.saveSettlementJob(job);
     }
 
+    await this.processSettlementJob(job, winPool > 0n ? 'Champion payout' : 'Champion refund');
     this.onUpdate?.();
   }
 
-  // ── Oracle Override ──────────────────────────────────────────────────────────
+  // Oracle Override ──────────────────────────────────────────────────────────
 
   async oracleOverride(
     fixtureId: string,
@@ -457,70 +756,53 @@ export class RefereeEngine {
 
     this.log('ORACLE', 'info', `Settling ${fixtureId}: pool ${formatEther(totalPool)} OKB · ${winners.length} winner(s)`);
 
-    const payouts: SettlementResult['payouts'] = [];
+    const jobId = `match:${fixtureId}`;
+    let job = this.settlementJobs.get(jobId);
+    if (!job) {
+      const payingStakes = winPool === 0n && allFixtureStakes.length > 0 ? allFixtureStakes : winners;
+      const payoutPlan = payingStakes.map((stake, idx) => {
+        const gross = BigInt(stake.amountWei);
+        const fee = (gross * PROTOCOL_FEE_BPS) / 10_000n;
+        const net = gross - fee;
+        const amount = winPool > 0n ? (net * totalPool) / winPool : net;
+        return {
+          id: `${stake.txHash}:${idx}`,
+          address: stake.staker,
+          amountWei: amount.toString(),
+          status: 'pending' as const,
+        };
+      }).filter(payout => BigInt(payout.amountWei) > 0n);
 
-    // ── No-winner edge case: refund all stakers (principal minus fee) ──────
-    if (winPool === 0n && allFixtureStakes.length > 0) {
-      this.log('ORACLE', 'warn', `No stakes on winning outcome (${outcome}) — refunding ${allFixtureStakes.length} stakers`);
-      for (const staker of allFixtureStakes) {
-        const gross = BigInt(staker.amountWei);
-        const fee   = (gross * PROTOCOL_FEE_BPS) / 10_000n;
-        const refund = gross - fee;
-        try {
-          const txHash = await this.walletClient.sendTransaction({
-            account: this.account,
-            to: staker.staker as Address,
-            value: refund,
-            chain: xLayerMainnet,
-          });
-          payouts.push({ address: staker.staker, amountWei: refund.toString(), txHash });
-          this.log('ORACLE', 'success', `Refund ${formatEther(refund)} OKB → ${staker.staker.slice(0, 10)}...`, txHash);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          this.log('ORACLE', 'error', `Refund failed → ${staker.staker.slice(0, 10)}...: ${msg}`);
-        }
-      }
-    } else {
-      // ── Normal payout to winners ──────────────────────────────────────────
-      for (const winner of winners) {
-        const stake  = BigInt(winner.amountWei);
-        const fee    = (stake * PROTOCOL_FEE_BPS) / 10_000n;
-        const net    = stake - fee;
-        const payout = winPool > 0n ? (net * totalPool) / winPool : 0n;
-        if (payout === 0n) continue;
-        try {
-          const txHash = await this.walletClient.sendTransaction({
-            account: this.account,
-            to: winner.staker as Address,
-            value: payout,
-            chain: xLayerMainnet,
-          });
-          payouts.push({ address: winner.staker, amountWei: payout.toString(), txHash });
-          this.log('ORACLE', 'success', `Payout ${formatEther(payout)} OKB → ${winner.staker.slice(0, 10)}...${winner.staker.slice(-4)}`, txHash);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          this.log('ORACLE', 'error', `Payout failed → ${winner.staker.slice(0, 10)}...: ${msg}`);
-        }
-      }
+      job = {
+        id: jobId,
+        type: 'match',
+        status: 'paying',
+        fixtureId,
+        outcome,
+        totalPool: totalPool.toString(),
+        winnerCount: winners.length,
+        blockNumber: this.lastBlock,
+        settledAt: Date.now(),
+        payouts: payoutPlan,
+      };
+      await this.saveSettlementJob(job);
     }
+
+    if (winPool === 0n && allFixtureStakes.length > 0) {
+      this.log('ORACLE', 'warn', `No stakes on winning outcome (${outcome}) - refunding ${allFixtureStakes.length} stakers`);
+    }
+    await this.processSettlementJob(job, winPool > 0n ? 'Payout' : 'Refund');
 
     fixture.status = 'settled';
     fixture.result = outcome;
     this.advanceBracket(fixture, outcome);
 
-    const result: SettlementResult = {
-      fixtureId,
-      outcome,
-      totalPool: totalPool.toString(),
-      winnerCount: winners.length,
-      payouts,
-      blockNumber: this.lastBlock,
-      explorerUrl: payouts[0] ? explorerTx(payouts[0].txHash) : `https://www.okx.com/web3/explorer/xlayer/address/${this.account.address}`,
-    };
+    const resumedResult = this.resultFromSettlementJob(job);
+    if (!this.settlements.some(s => s.fixtureId === fixtureId)) {
+      this.settlements.push(resumedResult);
+      await this.persistMarketStateNow();
+    }
 
-    this.settlements.push(result);
-
-    // Auto-settle champion market when the Final (f-1) completes
     if (fixtureId === 'f-1' && !this.champSettled) {
       const champTeam = outcome === 'away' ? fixture.away : fixture.home;
       if (champTeam && CHAMP_TEAMS.includes(champTeam.code)) {
@@ -531,12 +813,11 @@ export class RefereeEngine {
     }
 
     this.onUpdate?.();
-
     await this.refreshMetabolism();
-    return result;
+    return resumedResult;
   }
 
-  // ── Metabolism loop ──────────────────────────────────────────────────────────
+  // Metabolism loop ──────────────────────────────────────────────────────────
 
   private advanceBracket(fixture: Fixture, outcome: Outcome): void {
     if (fixture.mode !== 'simulated') return;
@@ -653,6 +934,7 @@ export class RefereeEngine {
       lastBlock:       this.lastBlock,
       wsConnected:     this.wsConnected,
       settlements:     this.settlements.slice(-20),
+      rejectedStakeRefunds: Array.from(this.rejectedStakeRefunds.values()).slice(-50),
       matchStates:     this.simulator.getStates(),
       simulationMode:  this.fixtures.some(f => f.mode === 'simulated'),
       championPool,

@@ -12,6 +12,7 @@ interface Props {
   seasonKickoffDelayMs?: number;
   seasonStartedAt?: number;
   seasonFixtureStartsAt?: number | null;
+  stakeClosedNotice?: string;
   onStake: (fixtureId: string, outcome: Outcome) => void;
   onWatch: (fixtureId: string) => void;
 }
@@ -84,6 +85,7 @@ export function FixtureCard({
   seasonKickoffDelayMs = 0,
   seasonStartedAt,
   seasonFixtureStartsAt,
+  stakeClosedNotice,
   onStake,
   onWatch,
 }: Props) {
@@ -123,7 +125,6 @@ export function FixtureCard({
   const hasPool   = fmt.totalOKB !== '0.0000';
   const isSettled = fixture.status === 'settled';
   const isLocked  = fixture.status === 'locked' || isSettled;
-  const isOpen    = fixture.status === 'open';
   const seasonFixtureStartsIn = seasonPhase === 'preseason'
     ? seasonTimer + Math.ceil(seasonKickoffDelayMs / 1000)
     : seasonPhase === 'playing'
@@ -140,6 +141,14 @@ export function FixtureCard({
         ? 'Starting'
         : 'Awaiting'
     : countdown(fixture.kickoff);
+  const isStakeWindowOpen = !isLocked
+    && !canStream
+    && matchState?.status !== 'live'
+    && matchState?.status !== 'half_time'
+    && matchState?.status !== 'finished'
+    && (fixture.status === 'open' || fixture.status === 'upcoming')
+    && (!isSeasonPlay || !Number.isFinite(seasonFixtureStartsIn) || seasonFixtureStartsIn > 5);
+  const showStakeClosedNotice = !!stakeClosedNotice || (!isStakeWindowOpen && (isLiveMatch || fixture.status === 'locked'));
 
   // Use live pool shares when stakes exist, otherwise baseOdds
   const homeOdds = hasPool ? Math.round(fmt.homeShare) : fixture.baseOdds.home;
@@ -309,11 +318,20 @@ export function FixtureCard({
             className={`transition-all duration-300 rounded-full ${!showHome ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/30 hover:bg-white/50'}`}
           />
         </div>
+
+        {showStakeClosedNotice && (
+          <div className="absolute inset-x-4 bottom-4 z-20 rounded-lg border border-blue-300/35 bg-blue-950/78 px-3 py-2 text-center shadow-[0_0_24px_rgba(59,130,246,0.30)] backdrop-blur-md animate-slide-in">
+            <div className="text-xs font-bold text-blue-100">Match already started</div>
+            <div className="mt-0.5 text-[11px] font-medium text-blue-100/75">
+              {stakeClosedNotice ?? 'Stake on the next available match.'}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Outcome buttons ──────────────────────────────────────────── */}
       <div className="p-3 dark:bg-zinc-950 bg-white">
-        {isLocked || canStream ? (
+        {!isStakeWindowOpen || canStream ? (
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
               <Lock size={11} />
@@ -342,7 +360,7 @@ export function FixtureCard({
             <button
               onClick={() => onStake(fixture.id, 'home')}
               onMouseEnter={() => flipTo('home')}
-              disabled={!isOpen}
+              disabled={!isStakeWindowOpen}
               className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
                 dark:bg-emerald-500/8 bg-emerald-50 dark:border-emerald-500/20 border-emerald-200
                 dark:hover:bg-emerald-500/18 hover:bg-emerald-100 dark:hover:border-emerald-400/50 hover:border-emerald-400
@@ -360,7 +378,7 @@ export function FixtureCard({
             {/* Draw */}
             <button
               onClick={() => onStake(fixture.id, 'draw')}
-              disabled={!isOpen}
+              disabled={!isStakeWindowOpen}
               className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
                 dark:bg-zinc-800/50 bg-zinc-100 dark:border-zinc-700/50 border-zinc-200
                 dark:hover:bg-zinc-700/60 hover:bg-zinc-200 dark:hover:border-zinc-500 hover:border-zinc-400
@@ -379,7 +397,7 @@ export function FixtureCard({
             <button
               onClick={() => onStake(fixture.id, 'away')}
               onMouseEnter={() => flipTo('away')}
-              disabled={!isOpen}
+              disabled={!isStakeWindowOpen}
               className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
                 dark:bg-blue-500/8 bg-blue-50 dark:border-blue-500/20 border-blue-200
                 dark:hover:bg-blue-500/14 hover:bg-blue-100 dark:hover:border-blue-400/45 hover:border-blue-300

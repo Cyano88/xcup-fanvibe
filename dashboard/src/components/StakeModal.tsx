@@ -9,6 +9,7 @@ interface Props {
   defaultOutcome: Outcome;
   refereeAddress: string;
   onClose: () => void;
+  onStakeClosed?: (fixtureId: string, reason?: string) => void;
 }
 
 type Step = 'configure' | 'pending' | 'confirmed' | 'error';
@@ -25,7 +26,7 @@ const OUTCOME_COLOR: Record<Outcome, string> = {
   away: 'border-blue-400/60 bg-blue-500/14 text-blue-100',
 };
 
-export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }: Props) {
+export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, onStakeClosed }: Props) {
   const [outcome, setOutcome] = useState<Outcome>(defaultOutcome);
   const [amount, setAmount] = useState('0.01');
   const [step, setStep] = useState<Step>('configure');
@@ -81,6 +82,16 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
       const amountFloat = parseFloat(amount);
       if (isNaN(amountFloat) || amountFloat <= 0) throw new Error('Invalid stake amount');
 
+      const statusRes = await fetch(`${import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001'}/stake/status/${fixture.id}`);
+      if (statusRes.ok) {
+        const status = await statusRes.json() as { canStake?: boolean; reason?: string };
+        if (!status.canStake) {
+          onStakeClosed?.(fixture.id, status.reason);
+          onClose();
+          return;
+        }
+      }
+
       const amountWei = BigInt(Math.floor(amountFloat * 1e18)).toString(16);
 
       const hash = await provider.request({
@@ -108,7 +119,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose }:
       setError(msg.includes('User rejected') ? 'Transaction rejected by wallet.' : msg);
       setStep('error');
     }
-  }, [fixture.id, outcome, amount, refereeAddress]);
+  }, [fixture.id, outcome, amount, refereeAddress, onClose, onStakeClosed]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

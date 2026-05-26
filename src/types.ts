@@ -93,6 +93,20 @@ export interface SettlementResult {
   payouts: PayoutRecord[];
   blockNumber: number;
   explorerUrl: string;
+  settledAt: number;
+}
+
+export interface RejectedStakeRefund {
+  txHash: string;
+  staker: string;
+  fixtureId: string;
+  outcome: Outcome;
+  amountWei: string;
+  reason: string;
+  status: 'queued' | 'refunded' | 'failed';
+  refundTxHash?: string;
+  error?: string;
+  timestamp: number;
 }
 
 export interface MetabolicState {
@@ -139,6 +153,7 @@ export interface DaemonState {
   lastBlock: number;
   wsConnected: boolean;
   settlements: SettlementResult[];
+  rejectedStakeRefunds: RejectedStakeRefund[];
   matchStates: Record<string, MatchState>;
   simulationMode: boolean;
   championPool: ChampionPool;
