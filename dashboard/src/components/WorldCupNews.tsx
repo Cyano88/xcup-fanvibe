@@ -131,10 +131,13 @@ export function WorldCupNews() {
         {items.map((item, index) => {
           const hasUrl = !!item.url && item.url !== '#';
           const image = brokenImages[item.image] ? '/assets/fanvibe-season-bg.jpeg' : item.image;
+          const ListItemTag = hasUrl ? 'a' : 'button';
           return (
-          <button
+          <ListItemTag
             key={item.title}
-            onClick={() => setActive(index)}
+            {...(hasUrl
+              ? { href: item.url, target: '_blank', rel: 'noopener noreferrer', onMouseEnter: () => setActive(index), onFocus: () => setActive(index) }
+              : { type: 'button', onClick: () => setActive(index) })}
             className={`flex w-full items-center gap-3 border-b px-3 py-3 text-left last:border-b-0 dark:border-zinc-900 border-zinc-100 transition-colors ${
               active === index
                 ? 'dark:bg-blue-500/10 bg-blue-50'
@@ -171,7 +174,7 @@ export function WorldCupNews() {
             <div className="hidden shrink-0 text-[11px] font-bold dark:text-zinc-600 text-zinc-400 sm:block">
               {hasUrl ? 'Open' : 'Restricted'}
             </div>
-          </button>
+          </ListItemTag>
         );})}
       </div>
     </section>
