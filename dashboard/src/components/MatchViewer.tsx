@@ -242,28 +242,14 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
   useEffect(() => { possRef.current = state.possession; }, [state.possession]);
   useEffect(() => { freezeRef.current = freeze; }, [freeze]);
 
-  // On goal freeze end: snap ball back to kickoff center
-  useEffect(() => {
-    if (!freeze) {
-      smoothRef.current = { lx: 0, ly: 0 };
-      targetRef.current = { lx: 0, ly: 0 };
-      phaseRef.current  = 'neutral';
-      setPhase('neutral');
-      setTrail([]);
-    }
-  }, [freeze]);
-
-  // New event -> update phase + target + action label
-  useEffect(() => {
-    if (state.events.length === eventLenRef.current) return;
-    eventLenRef.current = state.events.length;
-    const ev = state.events[state.events.length - 1];
-    if (!ev) return;
+  const applyPitchEvent = useCallback((ev: MatchEvent, announce: boolean) => {
     const p = eventToPhase(ev);
     phaseRef.current = p;
     setPhase(p);
     if (ev.lx !== undefined && ev.ly !== undefined) {
       targetRef.current = { lx: ev.lx, ly: ev.ly };
+      smoothRef.current = { lx: ev.lx, ly: ev.ly };
+      setRenderPos({ lx: ev.lx, ly: ev.ly });
     } else {
       targetRef.current = wanderTarget(p, possRef.current);
     }
@@ -281,12 +267,34 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
       clearTimeout(actionTimeoutRef.current);
       actionTimeoutRef.current = null;
     }
-    if (label && ev.lx !== undefined && ev.ly !== undefined) {
+    if (announce && label && ev.lx !== undefined && ev.ly !== undefined) {
       if (bannerTimeoutRef.current !== null) clearTimeout(bannerTimeoutRef.current);
       setBannerEv({ text: label.text, isHome: label.isHome, lx: ev.lx, ly: ev.ly, key: ++bannerKeyRef.current });
       bannerTimeoutRef.current = setTimeout(() => setBannerEv(null), ev.type === 'goal_home' || ev.type === 'goal_away' ? 5000 : 1300) as unknown as number;
     }
-  }, [state.events.length, fixture.home.code, fixture.away.code]);
+  }, [fixture.home.code, fixture.away.code]);
+
+  // On goal freeze end: snap ball back to kickoff center
+  useEffect(() => {
+    if (!freeze) {
+      smoothRef.current = { lx: 0, ly: 0 };
+      targetRef.current = { lx: 0, ly: 0 };
+      phaseRef.current  = 'neutral';
+      setPhase('neutral');
+      setTrail([]);
+    }
+  }, [freeze]);
+
+  // New event -> update phase + target + action label
+  useEffect(() => {
+    if (state.events.length === 0) return;
+    const announce = state.events.length > eventLenRef.current;
+    if (!announce && eventLenRef.current !== 0) return;
+    eventLenRef.current = state.events.length;
+    const ev = state.events[state.events.length - 1];
+    if (!ev) return;
+    applyPitchEvent(ev, announce);
+  }, [state.events.length, state.fixtureId, applyPitchEvent]);
 
   // Wander: new waypoint every 1.8 s, stays near current zone
   useEffect(() => {
@@ -999,13 +1007,18 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
         return (
           <div key={ev.id} className="flex w-full max-w-[118px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700 sm:max-w-[150px]">
             {isGoal ? (
-              <span
-                className="h-3 w-3 shrink-0 rounded-full shadow-sm"
-                style={{
-                  background: 'radial-gradient(circle at 35% 32%, #ffffff 0%, #f4f4f5 62%, #a1a1aa 100%)',
-                  border: '1px solid rgba(0, 0, 0, 0.45)',
-                }}
-              />
+              <svg viewBox="-8 -8 16 16" className="h-3 w-3 shrink-0 drop-shadow-sm" aria-hidden="true">
+                <defs>
+                  <radialGradient id={`scoreBall-${ev.id}`} cx="35%" cy="32%" r="72%">
+                    <stop offset="0%" stopColor="#ffffff" />
+                    <stop offset="62%" stopColor="#f4f4f5" />
+                    <stop offset="100%" stopColor="#a1a1aa" />
+                  </radialGradient>
+                </defs>
+                <circle cx="0" cy="0" r="7.2" fill={`url(#scoreBall-${ev.id})`} />
+                <path d="M -2.6 -6 L 3.2 -4 L 5.3 1.8 L 0.1 5.8 L -4.9 2.7 L -4.8 -3.3 Z" fill="rgba(24,24,27,0.82)" />
+                <circle cx="0" cy="0" r="7.2" fill="none" stroke="rgba(0,0,0,0.45)" strokeWidth="1" />
+              </svg>
             ) : (
               <span className={`h-3.5 w-2.5 shrink-0 rounded-[2px] border border-black/20 ${isRed ? 'bg-red-500' : 'bg-yellow-400'}`} />
             )}

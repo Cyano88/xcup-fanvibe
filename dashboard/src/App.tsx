@@ -136,6 +136,29 @@ function freshSeasonState(
   };
 }
 
+function mergeLiveMatchStates(
+  current: Record<string, MatchState>,
+  incoming: Record<string, MatchState>,
+): Record<string, MatchState> {
+  const merged = { ...incoming };
+  for (const [fixtureId, currentState] of Object.entries(current)) {
+    const incomingState = incoming[fixtureId];
+    if (!incomingState) continue;
+    const currentEvents = currentState.events?.length ?? 0;
+    const incomingEvents = incomingState.events?.length ?? 0;
+    const currentFreshness = (currentState.minute * 1000) + currentEvents;
+    const incomingFreshness = (incomingState.minute * 1000) + incomingEvents;
+    if (
+      (currentState.status === 'live' || currentState.status === 'half_time') &&
+      incomingState.status !== 'finished' &&
+      currentFreshness > incomingFreshness
+    ) {
+      merged[fixtureId] = currentState;
+    }
+  }
+  return merged;
+}
+
 export default function App() {
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
   if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
@@ -167,6 +190,7 @@ export default function App() {
   const [groupFilter, setGroupFilter]           = useState<string>('all');
   const [searchQuery, setSearchQuery]           = useState('');
   const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>(initialSeason.matchStates);
+  const [liveUiTick, setLiveUiTick]             = useState(0);
   const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
   const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
   const [activeTab, setActiveTab]               = useState<AppTab>('home');
@@ -209,6 +233,11 @@ export default function App() {
   }, [seasonTiming]);
 
   useEffect(() => {
+    const timer = setInterval(() => setLiveUiTick(tick => tick + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const audio = themeAudioRef.current;
     if (!audio) return;
     audio.volume = 0.34;
@@ -242,7 +271,7 @@ export default function App() {
     setPhaseEndsAt(snapshot.phaseEndsAt);
     setPhaseTimer(Math.max(0, Math.ceil((snapshot.phaseEndsAt - Date.now()) / 1000)));
     setFixtures(seasonFixturesFromState(snapshot.fixtures));
-    setMatchStates(snapshot.matchStates ?? {});
+    setMatchStates(prev => preserveWatching ? mergeLiveMatchStates(prev, snapshot.matchStates ?? {}) : snapshot.matchStates ?? {});
     setEliminatedTeams(new Set(snapshot.eliminatedTeams ?? []));
     setChampion(snapshot.champion ?? null);
     setTournamentGen(snapshot.tournamentGen ?? 0);
@@ -655,6 +684,18 @@ export default function App() {
 
   const simFixtures    = viewMode === 'simulated' ? fixtures : realtimeFixtures;
   const rtGroups       = ['all', ...Array.from(new Set(realtimeFixtures.map(f => f.group))).sort()];
+  const projectMatchState = useCallback((state?: MatchState): MatchState | undefined => {
+    if (!state || state.status !== 'live') return state;
+    const kickoffMs = Date.parse(state.simulatedKickoff);
+    if (!Number.isFinite(kickoffMs)) return state;
+    const minuteMs = Math.max(1000, Math.round(seasonTiming.matchMs / 90));
+    const projectedMinute = Math.min(89, Math.max(state.minute, Math.floor((Date.now() - kickoffMs) / minuteMs)));
+    return projectedMinute === state.minute ? state : { ...state, minute: projectedMinute };
+  }, [liveUiTick, seasonTiming.matchMs]);
+  const displayMatchStates = Object.fromEntries(
+    Object.entries(matchStates).map(([id, state]) => [id, projectMatchState(state) ?? state])
+  ) as Record<string, MatchState>;
+  const displayWatchingMatchState = watchingMatchState ? projectMatchState(watchingMatchState) ?? watchingMatchState : null;
   const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
   const fixtureRoundFilter = activeTab === 'search' ? roundFilter : 'all';
   const fixtureGroupFilter = activeTab === 'search' ? groupFilter : 'all';
@@ -691,11 +732,11 @@ export default function App() {
   const orderedVisibleFixtures = activeTab === 'home' && viewMode === 'simulated'
     ? [...visibleFixtures].sort((a, b) => {
       const latestEventMinute = (fixture: Fixture) => {
-        const events = matchStates[fixture.id]?.events ?? [];
-        return events.length ? Math.max(...events.map(event => event.minute ?? 0)) : matchStates[fixture.id]?.minute ?? 0;
+        const events = displayMatchStates[fixture.id]?.events ?? [];
+        return events.length ? Math.max(...events.map(event => event.minute ?? 0)) : displayMatchStates[fixture.id]?.minute ?? 0;
       };
       const stateRank = (fixture: Fixture) => {
-        const state = matchStates[fixture.id];
+        const state = displayMatchStates[fixture.id];
         if (state?.status === 'live' || state?.status === 'half_time' || fixture.status === 'locked') return 0;
         if (state?.status === 'finished' || fixture.status === 'settled') return 1;
         if (fixture.status === 'open') return 2;
@@ -703,8 +744,8 @@ export default function App() {
       };
       const rankDiff = stateRank(a) - stateRank(b);
       if (rankDiff !== 0) return rankDiff;
-      const aState = matchStates[a.id];
-      const bState = matchStates[b.id];
+      const aState = displayMatchStates[a.id];
+      const bState = displayMatchStates[b.id];
       if ((aState?.status === 'live' || aState?.status === 'half_time' || a.status === 'locked') && (bState?.status === 'live' || bState?.status === 'half_time' || b.status === 'locked')) {
         return latestEventMinute(b) - latestEventMinute(a) || b.matchday - a.matchday || b.id.localeCompare(a.id);
       }
@@ -1313,7 +1354,7 @@ export default function App() {
                   key={fixture.id}
                   fixture={fixture}
                   pool={pools[fixture.id]}
-                  matchState={matchStates[fixture.id]}
+                  matchState={displayMatchStates[fixture.id]}
                   seasonPhase={viewMode === 'simulated' ? phase : undefined}
                   seasonTimer={viewMode === 'simulated' ? phaseTimer : undefined}
                   seasonKickoffDelayMs={viewMode === 'simulated' ? seasonFixtureKickoffDelayMs(fixtures, fixture.id) : undefined}
@@ -1520,11 +1561,11 @@ export default function App() {
         <SettlementToast key={`${s.fixtureId}-${s.blockNumber}`} settlement={s} onDismiss={() => dismissToast(s)} />
       ))}
 
-      {watchingFixture && watchingMatchState && (
+      {watchingFixture && displayWatchingMatchState && (
         <MatchViewer
           fixture={watchingFixture}
           fixtures={fixtures}
-          matchState={watchingMatchState}
+          matchState={displayWatchingMatchState}
           onClose={() => setWatchingId(null)}
         />
       )}
