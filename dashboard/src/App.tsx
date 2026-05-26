@@ -1456,10 +1456,10 @@ export default function App() {
 
       {(activeTab === 'home' || activeTab === 'search') && viewMode === 'simulated' && !seasonHydrated && (
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 px-6"
+          className="fixed inset-0 z-[80] bg-black/90"
           style={{ animation: 'overlayIn 0.25s ease both' }}
         >
-          <div className="flex flex-col items-center gap-5 text-center">
+          <div className="absolute left-1/2 top-1/2 flex w-full max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-5 px-6 text-center">
             <div
               className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/10 shadow-2xl sm:h-36 sm:w-36"
               style={{
