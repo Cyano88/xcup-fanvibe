@@ -1566,18 +1566,29 @@ export default function App() {
         </div>
         )}
 
-        {activeTab === 'home' && seasonWinners.length > 0 && (
+        {activeTab === 'home' && (
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <div className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:bg-transparent bg-white">
             <span className="flex min-w-0 items-center gap-2">
               <span className="font-semibold dark:text-zinc-400 text-zinc-600">Season Winners</span>
               <span className="season-winners-mask block">
                 <span className="season-winners-track text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
-                {[...seasonWinners, ...seasonWinners].map((winner, index) => (
-                  <span key={`${winner.seasonNumber}-${winner.team.code}-${index}`}>
-                    <strong>S{String(winner.seasonNumber).padStart(2, '0')} winner</strong> - {winner.team.name}
-                  </span>
-                ))}
+                {seasonWinners.length > 0 ? (
+                  [...seasonWinners, ...seasonWinners].map((winner, index) => (
+                    <span key={`${winner.seasonNumber}-${winner.team.code}-${index}`}>
+                      <strong>S{String(winner.seasonNumber).padStart(2, '0')} winner</strong> - {winner.team.name}
+                    </span>
+                  ))
+                ) : (
+                  <>
+                    <span><strong>S01 winner</strong> - appears after the Final</span>
+                    <span><strong>Season archive</strong> - champions append automatically</span>
+                    <span><strong>Next winner</strong> - shown after settlement</span>
+                    <span><strong>S01 winner</strong> - appears after the Final</span>
+                    <span><strong>Season archive</strong> - champions append automatically</span>
+                    <span><strong>Next winner</strong> - shown after settlement</span>
+                  </>
+                )}
                 </span>
               </span>
             </span>
