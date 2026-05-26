@@ -194,6 +194,7 @@ function validateSeasonSnapshotState(state: unknown): PersistedSeasonState {
 }
 
 function outcomeFromMatchState(matchState: MatchState): Outcome {
+  if (matchState.penaltyWinner) return matchState.penaltyWinner;
   if (matchState.homeScore > matchState.awayScore) return 'home';
   if (matchState.awayScore > matchState.homeScore) return 'away';
   return 'draw';

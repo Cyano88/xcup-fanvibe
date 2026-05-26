@@ -367,7 +367,9 @@ export function advanceKnockout(fixtures: Fixture[], fixtureId: string, matchSta
   const source = fixtures.find(f => f.id === fixtureId);
   if (!source) return { fixtures };
 
-  const winner = matchState.homeScore > matchState.awayScore ? source.home
+  const winner = matchState.penaltyWinner === 'home' ? source.home
+    : matchState.penaltyWinner === 'away' ? source.away
+    : matchState.homeScore > matchState.awayScore ? source.home
     : matchState.awayScore > matchState.homeScore ? source.away
     : Math.random() > 0.5 ? source.home : source.away;
   const loser = winner.code === source.home.code ? source.away : source.home;
@@ -389,6 +391,7 @@ export function advanceKnockout(fixtures: Fixture[], fixtureId: string, matchSta
 }
 
 export function matchOutcome(matchState: MatchState): Outcome {
+  if (matchState.penaltyWinner) return matchState.penaltyWinner;
   if (matchState.homeScore > matchState.awayScore) return 'home';
   if (matchState.awayScore > matchState.homeScore) return 'away';
   return 'draw';

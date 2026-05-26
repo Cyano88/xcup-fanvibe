@@ -27,8 +27,8 @@ function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchSt
   const isHalfTime = matchState?.status === 'half_time';
   const isDone = matchState?.status === 'finished';
   const canOpen = isLive || isHalfTime || isDone;
-  const homeWin = isDone && matchState.homeScore > matchState.awayScore;
-  const awayWin = isDone && matchState.awayScore > matchState.homeScore;
+  const homeWin = isDone && (matchState.penaltyWinner === 'home' || (!matchState.penaltyWinner && matchState.homeScore > matchState.awayScore));
+  const awayWin = isDone && (matchState.penaltyWinner === 'away' || (!matchState.penaltyWinner && matchState.awayScore > matchState.homeScore));
 
   return (
     <button
@@ -53,7 +53,7 @@ function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchSt
       <div className="my-1 flex items-center gap-2">
         <div className="h-px flex-1 dark:bg-zinc-800 bg-zinc-200" />
         <span className={`text-[9px] font-semibold uppercase tracking-widest ${isLive ? 'text-emerald-400' : 'dark:text-zinc-600 text-zinc-400'}`}>
-          {isLive ? `${matchState!.minute}'` : isHalfTime ? 'HT' : isDone ? 'FT' : isReady ? 'Ready' : 'Pending'}
+          {isLive ? `${matchState!.minute}'` : isHalfTime ? 'HT' : isDone ? matchState?.penaltyShootout ? 'PENS' : 'FT' : isReady ? 'Ready' : 'Pending'}
         </span>
         <div className="h-px flex-1 dark:bg-zinc-800 bg-zinc-200" />
       </div>

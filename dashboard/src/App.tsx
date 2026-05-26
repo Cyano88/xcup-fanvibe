@@ -644,7 +644,10 @@ export default function App() {
     championTriggeredRef.current = true;
     const fx = fixtures.find(f => f.id === 'f-1');
     if (!fx) return;
-    const winner = ms.homeScore >= ms.awayScore ? fx.home : fx.away;
+    const winner = ms.penaltyWinner === 'home' ? fx.home
+      : ms.penaltyWinner === 'away' ? fx.away
+      : ms.homeScore >= ms.awayScore ? fx.home
+      : fx.away;
     setChampion(winner);
     setPhase('champion');
     setPhaseEndsAt(Date.now() + 10 * 1000);

@@ -90,7 +90,20 @@ function isStoppageEvent(type: string): boolean {
     type.startsWith('shot_off') ||
     type.startsWith('yellow') ||
     type.startsWith('red') ||
-    type.startsWith('sub');
+    type.startsWith('sub') ||
+    type.startsWith('penalty') ||
+    type.startsWith('penalties');
+}
+
+function knockoutStageLabel(round?: Fixture['round']): string | null {
+  if (!round) return null;
+  if (round === 'R32') return 'Round of 32';
+  if (round === 'R16') return 'Round of 16';
+  if (round === 'QF') return 'Quarter-final';
+  if (round === 'SF') return 'Semi-final';
+  if (round === '3PL') return 'Third-place playoff';
+  if (round === 'F') return 'Final';
+  return null;
 }
 
 function getActionLabel(ev: MatchEvent | undefined, home: string, away: string): { text: string; isHome: boolean } | null {
@@ -113,6 +126,10 @@ function getActionLabel(ev: MatchEvent | undefined, home: string, away: string):
   if (ev.type.startsWith('yellow')) return { text: `${team} - Yellow Card${actor}`, isHome };
   if (ev.type.startsWith('red'))    return { text: `${team} - Red Card${actor}`, isHome };
   if (ev.type.startsWith('sub'))    return { text: `${team} - ${ev.player ?? 'Sub'} On`, isHome };
+  if (ev.type === 'penalties_start') return { text: 'Penalties - Shootout', isHome: true };
+  if (ev.type.startsWith('penalty_score')) return { text: `${team} - Penalty Scored${actor}`, isHome };
+  if (ev.type.startsWith('penalty_miss')) return { text: `${team} - Penalty Missed${actor}`, isHome };
+  if (ev.type.startsWith('penalties_win')) return { text: `${team} - Wins Shootout`, isHome };
   if (ev.type === 'half_time')  return { text: 'Half Time', isHome: true };
   if (ev.type === 'full_time')  return { text: 'Full Time', isHome: true };
   if (ev.type === 'kickoff' || ev.type === 'second_half') return { text: `${home} - Ball Safe`, isHome: true };
@@ -156,6 +173,10 @@ type PitchPhase =
 function eventToPhase(ev: MatchEvent): PitchPhase {
   if (ev.type === 'goal_home') return 'danger_home';
   if (ev.type === 'goal_away') return 'danger_away';
+  if (ev.type === 'penalty_score_home') return 'danger_home';
+  if (ev.type === 'penalty_score_away') return 'danger_away';
+  if (ev.type === 'penalty_miss_home') return 'shot_off_home';
+  if (ev.type === 'penalty_miss_away') return 'shot_off_away';
   if (ev.type === 'shot_on_home') return 'shot_on_home';
   if (ev.type === 'shot_on_away') return 'shot_on_away';
   if (ev.type === 'shot_off_home' || ev.type === 'shot_home') return 'shot_off_home';
@@ -350,7 +371,7 @@ function Pitch({ fixture, state, freeze }: { fixture: Fixture; state: MatchState
   const shadowRy = isDangerPhase ? 30 : isAttackPhase ? 28 : isSetPiecePhase ? 20 : 23;
   const shadowFill = isDangerPhase ? 'rgba(12,74,110,0.28)' : isAttackPhase ? 'rgba(15,118,110,0.24)' : isSetPiecePhase ? 'rgba(15,23,42,0.28)' : 'rgba(15,23,42,0.20)';
   const timelineEvents = state.events
-    .filter(ev => ev.type.startsWith('goal') || ev.type.startsWith('shot') || ev.type.startsWith('yellow') || ev.type.startsWith('red') || ev.type.startsWith('corner') || ev.type.startsWith('safe') || ev.type.startsWith('attack') || ev.type.startsWith('pressure') || ev.type.startsWith('throw') || ev.type.startsWith('free_kick') || ev.type.startsWith('foul') || ev.type.startsWith('offside') || ev.type.startsWith('sub'))
+    .filter(ev => ev.type.startsWith('goal') || ev.type.startsWith('shot') || ev.type.startsWith('yellow') || ev.type.startsWith('red') || ev.type.startsWith('corner') || ev.type.startsWith('safe') || ev.type.startsWith('attack') || ev.type.startsWith('pressure') || ev.type.startsWith('throw') || ev.type.startsWith('free_kick') || ev.type.startsWith('foul') || ev.type.startsWith('offside') || ev.type.startsWith('sub') || ev.type.startsWith('penalty') || ev.type.startsWith('penalties'))
     .slice(-8);
   const statusLabel = state.status === 'half_time' ? 'HALF TIME'
     : state.status === 'finished' ? 'FULL TIME'
@@ -701,7 +722,7 @@ function CommentaryFeed({ state }: { state: MatchState }) {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [state.events.length]);
 
-  const isGoal = (t: string) => t === 'goal_home' || t === 'goal_away' || t === 'var';
+  const isGoal = (t: string) => t === 'goal_home' || t === 'goal_away' || t === 'var' || t.startsWith('penalty_score') || t.startsWith('penalties_win');
   const isCard = (t: string) => t.startsWith('yellow') || t.startsWith('red');
 
   return (
@@ -936,6 +957,7 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
   const isFinished = matchState.status === 'finished';
   const progress   = Math.min(100, (matchState.minute / 90) * 100);
   const [tab, setTab] = useState<Tab>('stats');
+  const stageLabel = knockoutStageLabel(fixture.round);
 
   // Goal celebrations + incident ticker
   const [goalOverlay, setGoalOverlay] = useState<GoalBanner | null>(null);
@@ -978,9 +1000,9 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
   }, [matchState.events.length, fixture.home.flag, fixture.home.name, fixture.away.flag, fixture.away.name, fixture.home.code, fixture.away.code]);
 
   const outcome = isFinished
-    ? matchState.homeScore > matchState.awayScore ? 'home'
+    ? matchState.penaltyWinner ?? (matchState.homeScore > matchState.awayScore ? 'home'
     : matchState.awayScore > matchState.homeScore ? 'away'
-    : 'draw'
+    : 'draw')
     : null;
   const nextKnockoutFixture = fixture.round ? fixtures.find(item => item.id === NEXT_KNOCKOUT_MATCH[fixture.id]) : null;
   const scoreWinner = outcome === 'home' ? fixture.home : outcome === 'away' ? fixture.away : null;
@@ -1002,7 +1024,7 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
   const TeamEventMarkers = ({ events, align = 'left' }: { events: MatchEvent[]; align?: 'left' | 'right' }) => (
     <div className={`flex min-w-0 max-w-full flex-col gap-1 ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}>
       {events.length > 0 ? events.map(ev => {
-        const isGoal = ev.type === 'goal_home' || ev.type === 'goal_away';
+        const isGoal = ev.type === 'goal_home' || ev.type === 'goal_away' || ev.type.startsWith('penalty_score');
         const isRed = ev.type.startsWith('red');
         return (
           <div key={ev.id} className="flex w-full max-w-[118px] items-center gap-1.5 text-[10px] font-bold dark:text-zinc-300 text-zinc-700 sm:max-w-[150px]">
@@ -1047,8 +1069,15 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
 
         {/* ── Header ── */}
         <div className="relative flex items-center justify-center px-5 pt-4 pb-3 border-b dark:border-zinc-800 border-zinc-100">
-          <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900">
-            <span>Live Match</span>
+          <div className="text-center">
+            <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900">
+              <span>Live Match</span>
+            </div>
+            {stageLabel && (
+              <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
+                {stageLabel}
+              </div>
+            )}
           </div>
           <div className="absolute right-5 top-1/2 -translate-y-1/2">
             <button onClick={onClose}
@@ -1090,6 +1119,40 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
             <TeamEventMarkers events={awayMarkers} />
           </div>
         </div>
+
+        {fixture.round && matchState.penaltyShootout && (
+          <div className="mx-5 mb-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/45">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                  Penalty shootout
+                </div>
+                <div className="mt-0.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  {fixture.home.code} {matchState.penaltyShootout.homeScore} - {matchState.penaltyShootout.awayScore} {fixture.away.code}
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col gap-1">
+                {(['home', 'away'] as const).map(team => (
+                  <div key={team} className="flex items-center justify-end gap-1">
+                    <span className="mr-1 w-8 text-right text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
+                      {team === 'home' ? fixture.home.code : fixture.away.code}
+                    </span>
+                    {matchState.penaltyShootout!.kicks
+                      .filter(kick => kick.team === team)
+                      .slice(0, 8)
+                      .map(kick => (
+                        <span
+                          key={`${team}-${kick.round}-${kick.player}`}
+                          className={`h-2 w-2 rounded-full ${kick.scored ? 'bg-emerald-500' : 'bg-red-500/80'}`}
+                          title={`${kick.player}: ${kick.scored ? 'scored' : 'missed'}`}
+                        />
+                      ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stadium info */}
         {fixture.stadium && (

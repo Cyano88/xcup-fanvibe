@@ -156,6 +156,13 @@ const TEMPLATES: Record<string, string[]> = {
   second_half: ['Second half underway. {home} {hs}-{as} {away}.'],
   half_time: ['Half time. {home} {hs}-{as} {away}.'],
   full_time: ['Full time. {home} {hs}-{as} {away}.'],
+  penalties_start: ['The knockout tie is level after 90 minutes. Penalties will decide who advances.'],
+  penalty_score_home: ['{player} scores for {home} in the shootout.'],
+  penalty_score_away: ['{player} scores for {away} in the shootout.'],
+  penalty_miss_home: ['{player} misses for {home} in the shootout.'],
+  penalty_miss_away: ['{player} misses for {away} in the shootout.'],
+  penalties_win_home: ['{home} win the penalty shootout and advance.'],
+  penalties_win_away: ['{away} win the penalty shootout and advance.'],
   attack_home: ['{home} build from midfield through {player}.'],
   attack_away: ['{away} move the ball quickly through {player}.'],
   pressure_home: ['{player} carries {home} into the final third.'],
@@ -312,6 +319,10 @@ function getEventCoords(type: string, team: 'home' | 'away' | 'neutral'): { lx: 
   if (type.startsWith('attack')) return { lx: sign * (18 + r1 * 40), ly: (r2 - 0.5) * 66 };
   if (type.startsWith('safe')) return { lx: -sign * (34 + r1 * 30), ly: (r2 - 0.5) * 54 };
   if (type === 'kickoff' || type === 'half_time' || type === 'full_time' || type === 'second_half') return { lx: 0, ly: 0 };
+  if (type.startsWith('penalty_score_home')) return { lx: 99, ly: (r2 - 0.5) * 12 };
+  if (type.startsWith('penalty_score_away')) return { lx: -99, ly: (r2 - 0.5) * 12 };
+  if (type.startsWith('penalty_miss_home')) return { lx: 96, ly: (r2 > 0.5 ? 1 : -1) * 34 };
+  if (type.startsWith('penalty_miss_away')) return { lx: -96, ly: (r2 > 0.5 ? 1 : -1) * 34 };
   if (type.startsWith('foul') || type.startsWith('yellow') || type.startsWith('red')) {
     return { lx: sign * (20 + r1 * 55), ly: (r2 - 0.5) * 78 };
   }
@@ -505,6 +516,9 @@ export class MatchSimulator {
         clearInterval(interval);
         this.timers.delete(`${fixture.id}:interval`);
         this.addEvent(state, 'full_time', fixture, 'neutral');
+        if (fixture.round && state.homeScore === state.awayScore) {
+          this.runPenaltyShootout(state, fixture, calibration);
+        }
         state.status = 'finished';
         state.finishedAt = Date.now();
         this.onEvent(fixture.id, state);
@@ -577,7 +591,53 @@ export class MatchSimulator {
     state.possession = Math.max(28, Math.min(72, state.possession));
   }
 
+  private runPenaltyShootout(state: MatchState, fixture: Fixture, calibration: CalibratedStrength): void {
+    state.penaltyShootout = { homeScore: 0, awayScore: 0, kicks: [] };
+    this.addEvent(state, 'penalties_start', fixture, 'neutral');
+
+    const kick = (team: 'home' | 'away', round: number): void => {
+      const isHome = team === 'home';
+      const teamCode = isHome ? fixture.home.code : fixture.away.code;
+      const player = pickPlayer(teamCode, 'outfield');
+      const quality = isHome ? calibration.homeWinProbability : calibration.awayWinProbability;
+      const pressure = round > 5 ? 0.03 : 0;
+      const scored = Math.random() < clamp(0.72 + quality * 0.16 - pressure, 0.62, 0.88);
+      state.penaltyShootout!.kicks.push({ team, player, scored, round });
+      if (scored) state.penaltyShootout![isHome ? 'homeScore' : 'awayScore']++;
+      this.addEvent(state, `penalty_${scored ? 'score' : 'miss'}_${team}`, fixture, team, 'outfield', player);
+    };
+
+    const clinched = (afterRound: number): boolean => {
+      const homeTaken = state.penaltyShootout!.kicks.filter(k => k.team === 'home').length;
+      const awayTaken = state.penaltyShootout!.kicks.filter(k => k.team === 'away').length;
+      const homeRemaining = Math.max(0, 5 - homeTaken);
+      const awayRemaining = Math.max(0, 5 - awayTaken);
+      return state.penaltyShootout!.homeScore > state.penaltyShootout!.awayScore + awayRemaining
+        || state.penaltyShootout!.awayScore > state.penaltyShootout!.homeScore + homeRemaining
+        || afterRound >= 5 && homeTaken === awayTaken && state.penaltyShootout!.homeScore !== state.penaltyShootout!.awayScore;
+    };
+
+    let round = 1;
+    while (round <= 5) {
+      kick('home', round);
+      if (clinched(round)) break;
+      kick('away', round);
+      if (clinched(round)) break;
+      round++;
+    }
+
+    while (state.penaltyShootout.homeScore === state.penaltyShootout.awayScore) {
+      round++;
+      kick('home', round);
+      kick('away', round);
+    }
+
+    state.penaltyWinner = state.penaltyShootout.homeScore > state.penaltyShootout.awayScore ? 'home' : 'away';
+    this.addEvent(state, `penalties_win_${state.penaltyWinner}`, fixture, state.penaltyWinner);
+  }
+
   private determineOutcome(state: MatchState): Outcome {
+    if (state.penaltyWinner) return state.penaltyWinner;
     if (state.homeScore > state.awayScore) return 'home';
     if (state.awayScore > state.homeScore) return 'away';
     return 'draw';

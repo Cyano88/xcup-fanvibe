@@ -48,6 +48,13 @@ export interface MatchEvent {
   ly?: number;
 }
 
+export interface PenaltyKick {
+  team: 'home' | 'away';
+  player: string;
+  scored: boolean;
+  round: number;
+}
+
 export interface MatchState {
   fixtureId: string;
   status: 'scheduled' | 'live' | 'half_time' | 'finished';
@@ -58,6 +65,12 @@ export interface MatchState {
   simulatedKickoff: string;
   possession: number;
   finishedAt?: number;
+  penaltyShootout?: {
+    homeScore: number;
+    awayScore: number;
+    kicks: PenaltyKick[];
+  };
+  penaltyWinner?: 'home' | 'away';
 }
 
 export interface Stake {

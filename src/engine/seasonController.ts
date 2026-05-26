@@ -44,6 +44,7 @@ function freshSeasonState(seasonNumber = 1, now = Date.now(), timings: SeasonTim
 }
 
 function outcomeFromState(state: MatchState): Outcome {
+  if (state.penaltyWinner) return state.penaltyWinner;
   if (state.homeScore > state.awayScore) return 'home';
   if (state.awayScore > state.homeScore) return 'away';
   return 'draw';
