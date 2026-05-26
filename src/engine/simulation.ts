@@ -394,6 +394,21 @@ export class MatchSimulator {
     this.states.clear();
   }
 
+  resume(fixture: Fixture, existingState: MatchState): void {
+    if (existingState.status === 'finished') return;
+    const openTimer = this.timers.get(`${fixture.id}:open`);
+    const kickoffTimer = this.timers.get(`${fixture.id}:kickoff`);
+    const intervalTimer = this.timers.get(`${fixture.id}:interval`);
+    if (openTimer) clearTimeout(openTimer);
+    if (kickoffTimer) clearTimeout(kickoffTimer);
+    if (intervalTimer) clearInterval(intervalTimer);
+    this.timers.delete(`${fixture.id}:open`);
+    this.timers.delete(`${fixture.id}:kickoff`);
+    this.timers.delete(`${fixture.id}:interval`);
+    fixture.status = 'locked';
+    this.runMatch(fixture, Math.min(89, Math.max(0, existingState.minute)), existingState);
+  }
+
   private blankState(fixture: Fixture, kickoffMs: number): MatchState {
     return {
       fixtureId: fixture.id,
@@ -437,7 +452,7 @@ export class MatchSimulator {
     return event;
   }
 
-  private runMatch(fixture: Fixture, startMinute: number): void {
+  private runMatch(fixture: Fixture, startMinute: number, initialState?: MatchState): void {
     const openTimer = this.timers.get(`${fixture.id}:open`);
     const kickoffTimer = this.timers.get(`${fixture.id}:kickoff`);
     if (openTimer) clearTimeout(openTimer);
@@ -445,24 +460,32 @@ export class MatchSimulator {
     this.timers.delete(`${fixture.id}:open`);
     this.timers.delete(`${fixture.id}:kickoff`);
 
-    const state: MatchState = {
-      fixtureId: fixture.id,
-      status: 'live',
-      minute: startMinute,
-      homeScore: 0,
-      awayScore: 0,
-      events: [],
-      simulatedKickoff: fixture.simulatedKickoff ?? new Date().toISOString(),
-      possession: 50,
-    };
+    const state: MatchState = initialState
+      ? {
+        ...initialState,
+        status: 'live',
+        minute: startMinute,
+        events: [...(initialState.events ?? [])],
+        simulatedKickoff: initialState.simulatedKickoff ?? fixture.simulatedKickoff ?? new Date().toISOString(),
+        possession: initialState.possession ?? 50,
+      }
+      : {
+        fixtureId: fixture.id,
+        status: 'live',
+        minute: startMinute,
+        homeScore: 0,
+        awayScore: 0,
+        events: [],
+        simulatedKickoff: fixture.simulatedKickoff ?? new Date().toISOString(),
+        possession: 50,
+      };
     this.states.set(fixture.id, state);
-    if (startMinute === 0) this.addEvent(state, 'kickoff', fixture, 'neutral');
+    if (startMinute === 0 && state.events.length === 0) this.addEvent(state, 'kickoff', fixture, 'neutral');
     this.onEvent(fixture.id, state);
 
     const calibration = calibrateTeamStrength(fixture);
 
     const interval = setInterval(async () => {
-      if ((this.pauseUntil.get(fixture.id) ?? 0) > Date.now()) return;
       if (state.status === 'half_time') return;
       state.minute++;
 

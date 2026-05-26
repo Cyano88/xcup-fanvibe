@@ -159,6 +159,28 @@ function mergeLiveMatchStates(
   return merged;
 }
 
+function fixtureStageLabel(fixture?: Fixture | null, fallbackMatchday = 1): string {
+  if (!fixture) return `Matchday ${fallbackMatchday}`;
+  if (fixture.round === 'R32') return 'Round of 32';
+  if (fixture.round === 'R16') return 'Round of 16';
+  if (fixture.round === 'QF') return 'Quarter-finals';
+  if (fixture.round === 'SF') return 'Semi-finals';
+  if (fixture.round === '3PL') return 'Third-place Playoff';
+  if (fixture.round === 'F') return 'Final';
+  return `Matchday ${fixture.matchday}`;
+}
+
+function fixtureStageCode(fixture?: Fixture | null, fallbackMatchday = 1): string {
+  if (!fixture) return `MD${fallbackMatchday}`;
+  if (fixture.round === 'R32') return 'R32';
+  if (fixture.round === 'R16') return 'R16';
+  if (fixture.round === 'QF') return 'QF';
+  if (fixture.round === 'SF') return 'SF';
+  if (fixture.round === '3PL') return '3P';
+  if (fixture.round === 'F') return 'Final';
+  return `MD${fixture.matchday}`;
+}
+
 export default function App() {
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
   if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
@@ -812,6 +834,11 @@ export default function App() {
   const liveEntries = viewMode === 'simulated'
     ? Object.entries(matchStates).filter(([id, ms]) => ms.status === 'live' && isResolvedFixture(fixtures.find(f => f.id === id)))
     : [];
+  const primaryLiveFixture = liveEntries.length > 0
+    ? fixtures.find(f => f.id === liveEntries[0][0]) ?? null
+    : fixtures.find(f => (f.status === 'locked' || f.status === 'open') && isResolvedFixture(f)) ?? null;
+  const liveSeasonStageLabel = fixtureStageLabel(primaryLiveFixture, activeGroupMatchday);
+  const liveSeasonStageCode = fixtureStageCode(primaryLiveFixture, activeGroupMatchday);
   const finishedSeasonEntries = viewMode === 'simulated'
     ? Object.entries(matchStates).filter(([id, ms]) => ms.status === 'finished' && isResolvedFixture(fixtures.find(f => f.id === id)))
     : [];
@@ -824,7 +851,7 @@ export default function App() {
       ? `Next season in ${fmtDuration(phaseTimer)}`
       : phase === 'champion'
         ? 'Final settled'
-        : `Matchday ${activeGroupMatchday} live`;
+        : `${liveSeasonStageLabel} live`;
   const seasonStatusAccent = phase === 'playing'
     ? `${liveEntries.length} live - ${finishedSeasonCount} FT`
     : phase === 'preseason'
@@ -1051,7 +1078,7 @@ export default function App() {
                   <span>{seasonLabel}</span>
                 </span>
                 <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-300">
-                  {phase === 'playing' ? `MD${activeGroupMatchday}` : fmtDuration(phaseTimer)}
+                  {phase === 'playing' ? liveSeasonStageCode : fmtDuration(phaseTimer)}
                 </span>
                 <span className="text-[10px] font-semibold dark:text-zinc-600 text-zinc-400">
                   {seasonDurable ? 'Durable' : 'Local fallback'}
@@ -1110,12 +1137,12 @@ export default function App() {
                   <div>
                     <div className="text-[10px] font-extrabold tracking-[0.18em] text-blue-100/90">LIVE SCORES</div>
                     <div className="mt-0.5 text-sm font-semibold text-white">
-                      {liveEntries.length > 0 ? `${liveEntries.length} live - ${finishedSeasonCount} FT` : `Matchday ${activeGroupMatchday} broadcast window`}
+                      {liveEntries.length > 0 ? `${liveEntries.length} live - ${finishedSeasonCount} FT` : `${liveSeasonStageLabel} broadcast window`}
                     </div>
                   </div>
                   <div className="rounded-md border border-white/10 bg-black/35 px-3 py-1.5 text-right backdrop-blur-[2px]">
                     <div className="text-[10px] font-bold uppercase text-zinc-300">World Cup Season</div>
-                    <div className="text-lg font-semibold tabular-nums text-white">MD{activeGroupMatchday}</div>
+                    <div className="text-lg font-semibold tabular-nums text-white">{liveSeasonStageCode}</div>
                   </div>
                 </div>
 
@@ -1223,7 +1250,7 @@ export default function App() {
         {activeTab === 'search' && (viewMode === 'simulated' ? (
           <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
             {[
-              { id: 'all', label: `Live MD${activeGroupMatchday}`, tone: 'live' },
+              { id: 'all', label: `Live ${liveSeasonStageCode}`, tone: 'live' },
               { id: 'md1', label: 'MD1', tone: 'matchday' },
               { id: 'md2', label: '2', tone: 'matchday' },
               { id: 'md3', label: '3', tone: 'matchday' },

@@ -78,6 +78,7 @@ export class SeasonController {
     const stored = await readSeasonState('prod');
     this.state = stored?.mode === 'prod' ? this.normalizeStoredState(stored) : freshSeasonState(1, Date.now(), this.timing);
     this.referee.syncFixtures(this.state.fixtures);
+    this.resumeStoredLiveMatches();
     this.emit();
     this.tick();
     this.tickTimer = setInterval(() => this.tick(), 1000);
@@ -201,6 +202,18 @@ export class SeasonController {
     }
   }
 
+  private resumeStoredLiveMatches(): void {
+    for (const fixture of this.state.fixtures) {
+      const matchState = this.state.matchStates[fixture.id];
+      if (!matchState || matchState.status === 'finished' || matchState.status === 'scheduled') continue;
+      if (fixture.home.code === 'TBD' || fixture.away.code === 'TBD') continue;
+      fixture.status = 'locked';
+      this.scheduled.add(fixture.id);
+      this.simulator.resume(fixture, matchState);
+      this.log('SYSTEM', 'info', `Resumed live match ${fixture.home.code} vs ${fixture.away.code} at ${matchState.minute}'`);
+    }
+  }
+
   private handleMatchUpdate(fixtureId: string, matchState: MatchState): void {
     this.state.matchStates[fixtureId] = matchState;
     const fixture = this.state.fixtures.find(f => f.id === fixtureId);
@@ -265,7 +278,7 @@ export class SeasonController {
 
   private labelForFixture(fixture: Fixture): string {
     if (isGroupStageFixture(fixture)) return `MD${currentGroupMatchday(this.state.fixtures, this.state.matchStates)}`;
-    return fixture.round ?? fixture.group;
+    return fixture.round ?? 'Knockout';
   }
 
   private emit(save = true): void {
