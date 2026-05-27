@@ -97,7 +97,7 @@ function statusLabel(position: UserPosition, effectiveStatus = position.status):
 
 function pickLabel(position: UserPosition): string {
   if (position.type === 'refund') return position.refund.outcome.toUpperCase();
-  if (position.type === 'champion') return 'Champion';
+  if (position.type === 'champion') return 'Outright';
   return position.stake.outcome.toUpperCase();
 }
 
