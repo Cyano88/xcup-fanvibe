@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { xLayerMainnet } from '../lib/chain';
+import { xLayerPublicClient } from '../lib/publicClient';
 import { formatOkbUsdFromWei, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 
 function isEmbeddedWallet(walletClientType: string) {
@@ -43,15 +43,10 @@ export function PrivyBalanceHint({ amountOKB }: { amountOKB: string }) {
       return;
     }
 
-    wallet.switchChain(xLayerMainnet.id)
-      .then(() => wallet.getEthereumProvider())
-      .then(provider => provider.request({
-        method: 'eth_getBalance',
-        params: [wallet.address, 'latest'],
-      }))
-      .then(balanceHex => {
+    xLayerPublicClient.getBalance({ address: wallet.address as `0x${string}` })
+      .then(nextBalance => {
         if (cancelled) return;
-        setBalance(BigInt(balanceHex as string));
+        setBalance(nextBalance);
         setCheckedAddress(wallet.address);
       })
       .catch(() => {
@@ -63,7 +58,7 @@ export function PrivyBalanceHint({ amountOKB }: { amountOKB: string }) {
     return () => {
       cancelled = true;
     };
-  }, [authenticated, wallet, amountOKB]);
+  }, [authenticated, wallet]);
 
   if (!authenticated || !checkedAddress || balance === null || required <= 0n || balance >= required) return null;
   const balanceUsd = formatOkbUsdFromWei(balance, okbUsd);

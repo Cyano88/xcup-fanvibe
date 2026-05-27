@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Mail } from 'lucide-react';
 import {
@@ -51,18 +51,20 @@ export function PrivyStakeButton({
   const { sendTransaction } = useSendTransaction();
   const [pending, setPending] = useState(false);
   const [preparing, setPreparing] = useState(false);
-  const [preparedWalletAddress, setPreparedWalletAddress] = useState<string | null>(null);
-  const [preparedForNextTap, setPreparedForNextTap] = useState(false);
   const [walletSyncing, setWalletSyncing] = useState(false);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const embeddedWallet = wallets.find(wallet => isEmbeddedWallet(wallet.walletClientType))
     ?? getEmbeddedConnectedWallet(wallets);
-  const stakeWalletAddress = embeddedWallet?.address ?? preparedWalletAddress;
+  const stakeWalletAddress = embeddedWallet?.address ?? null;
+
+  useEffect(() => () => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!embeddedWallet?.address) return;
     setWalletSyncing(false);
-    setPreparedForNextTap(false);
   }, [embeddedWallet?.address]);
 
   const reportError = (message: string) => {
@@ -73,8 +75,6 @@ export function PrivyStakeButton({
     if (!ready) return;
 
     if (!authenticated) {
-      setPreparedWalletAddress(null);
-      setPreparedForNextTap(false);
       setWalletSyncing(false);
       login({ loginMethods: ['email'] });
       return;
@@ -83,13 +83,14 @@ export function PrivyStakeButton({
     if (!stakeWalletAddress) {
       if (!walletsReady) return;
       setPreparing(true);
-      setPreparedForNextTap(false);
       reportError('');
       try {
-        const wallet = await createWallet();
-        setPreparedWalletAddress(wallet.address);
-        setPreparedForNextTap(true);
-        setWalletSyncing(false);
+        await createWallet();
+        setWalletSyncing(true);
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(() => {
+          setWalletSyncing(false);
+        }, 1500);
       } catch (err) {
         const message = walletErrorMessage(err, 'Email wallet setup failed');
         const lower = message.toLowerCase();
@@ -106,7 +107,6 @@ export function PrivyStakeButton({
     }
 
     setPending(true);
-    setPreparedForNextTap(false);
     setWalletSyncing(false);
     reportError('');
 
@@ -148,11 +148,11 @@ export function PrivyStakeButton({
     <button
       type="button"
       onClick={handleEmailStake}
-      disabled={disabled || pending || preparing || !ready}
+      disabled={disabled || pending || preparing || walletSyncing || !ready}
       className={className}
     >
       <Mail size={14} />
-      {pending ? pendingLabel : preparing ? 'Preparing wallet...' : walletSyncing ? 'Wallet syncing...' : preparedForNextTap ? 'Tap again to stake' : children}
+      {pending ? pendingLabel : preparing ? 'Preparing wallet...' : walletSyncing ? 'Wallet syncing...' : children}
     </button>
   );
 }

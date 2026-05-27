@@ -8,6 +8,7 @@ import { seasonFixtureStartAtMs } from '../lib/seasonTournament';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { xLayerPublicClient } from '../lib/publicClient';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
@@ -340,21 +341,15 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
   const transferUsd = formatStakeUsd(amount, okbUsd);
 
   const refreshBalance = useCallback(async (showError = false) => {
-    if (!wallet) return;
     try {
-      const provider = await wallet.getEthereumProvider();
-      const balanceHex = await provider.request({
-        method: 'eth_getBalance',
-        params: [address, 'latest'],
-      }) as string;
-      const nextBalance = BigInt(balanceHex);
+      const nextBalance = await xLayerPublicClient.getBalance({ address: address as `0x${string}` });
       setBalanceWei(nextBalance);
       setCachedBalance(address, nextBalance);
       if (showError) onError(null);
     } catch (err) {
       if (showError) onError(walletErrorMessage(err, 'Balance is syncing. Try again in a moment.'));
     }
-  }, [address, onError, wallet]);
+  }, [address, onError]);
 
   useEffect(() => {
     refreshBalance();
@@ -387,15 +382,11 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
       const amountWei = parseEther(amount || '0');
       if (amountWei <= 0n) throw new Error('Enter an amount to withdraw.');
 
-      await wallet.switchChain(xLayerMainnet.id);
-      const provider = await wallet.getEthereumProvider();
-      const balanceHex = await provider.request({
-        method: 'eth_getBalance',
-        params: [address, 'latest'],
-      }) as string;
-      const balance = BigInt(balanceHex);
+      const balance = await xLayerPublicClient.getBalance({ address: address as `0x${string}` });
       if (balance < amountWei) throw new Error(lowBalanceMessage(amountWei, balance));
 
+      await wallet.switchChain(xLayerMainnet.id);
+      const provider = await wallet.getEthereumProvider();
       const hash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{
