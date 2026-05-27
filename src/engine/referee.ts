@@ -244,11 +244,12 @@ export class RefereeEngine {
         const fixture = this.fixtures.find(f => f.id === stake.fixtureId);
         const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
         const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stakeMs);
-        const won = settlement ? settlement.outcome === stake.outcome : false;
+        const settledOutcome = settlement?.outcome ?? (fixture?.status === 'settled' ? fixture.result : undefined);
+        const won = settledOutcome ? settledOutcome === stake.outcome : false;
         const payout = won ? settlement?.payouts.find(p => p.address.toLowerCase() === wallet) : undefined;
         return {
           type: 'match' as const,
-          status: payout ? 'paid' : settlement ? (won ? 'won_pending_payout' : 'lost') : 'active',
+          status: payout ? 'paid' : settledOutcome ? (won ? 'won_pending_payout' : 'lost') : 'active',
           stake,
           fixture,
           settlement,

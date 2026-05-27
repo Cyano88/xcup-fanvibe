@@ -59,8 +59,14 @@ function effectiveMatchStatus(position: UserPosition, liveFixture?: Fixture, liv
   const stakeMs = position.stake.timestamp > 10_000_000_000 ? position.stake.timestamp : position.stake.timestamp * 1000;
   const settlementAppliesToStake = !!position.settlement && position.settlement.settledAt >= stakeMs;
   const currentFixtureIsLive = liveState?.status === 'live' || liveState?.status === 'half_time';
+  const currentFixtureIsSettled = liveFixture?.status === 'settled' && !!liveFixture.result;
   const currentFixtureUnsettled = liveFixture?.status && liveFixture.status !== 'settled';
-  if (!settlementAppliesToStake || currentFixtureIsLive || currentFixtureUnsettled) return 'active';
+  if (currentFixtureIsLive || currentFixtureUnsettled) return 'active';
+  if (currentFixtureIsSettled) {
+    if (position.status === 'paid') return position.status;
+    return liveFixture.result === position.stake.outcome ? 'won_pending_payout' : 'lost';
+  }
+  if (!settlementAppliesToStake) return 'active';
   return position.status;
 }
 
@@ -695,7 +701,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                 liveFixture?.matchday ? `MD${liveFixture.matchday}` : undefined,
                 liveFixture?.kickoff ? `Kickoff ${formatTime(liveFixture.kickoff)}` : undefined,
                 effectiveStatus !== 'active' && position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
-                effectiveStatus !== 'active' && position.settlement ? `Result ${position.settlement.outcome.toUpperCase()}` : undefined,
+                effectiveStatus !== 'active' && (position.settlement?.outcome ?? liveFixture?.result) ? `Result ${(position.settlement?.outcome ?? liveFixture?.result)?.toUpperCase()}` : undefined,
               ].filter(Boolean).join(' - ')
               : position.type === 'refund'
                 ? `Rejected ${formatTime(position.refund.timestamp)} - ${position.refund.reason}`
