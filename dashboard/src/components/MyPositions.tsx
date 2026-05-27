@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Wallet } from 'lucide-react';
+import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Send, Wallet } from 'lucide-react';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
+import { formatEther, isAddress, parseEther } from 'viem';
 import type { Fixture, MatchState, UserPosition } from '../types';
-import { explorerTx } from '../lib/chain';
+import { explorerTx, xLayerMainnet } from '../lib/chain';
 import { seasonFixtureStartAtMs } from '../lib/seasonTournament';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
+import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
@@ -82,6 +84,15 @@ function pickTone(pick: string): string {
 
 function positionsSyncMessage(): string {
   return 'Positions are syncing. Try again in a moment.';
+}
+
+function formatBalance(balanceWei: bigint | null): string {
+  if (balanceWei === null) return '-';
+  const value = Number(formatEther(balanceWei));
+  if (!Number.isFinite(value)) return '0.0000';
+  if (value >= 100) return value.toFixed(2);
+  if (value >= 1) return value.toFixed(4);
+  return value.toFixed(6);
 }
 
 interface Props {
@@ -249,6 +260,160 @@ function PrivyPositionsConnect({
   );
 }
 
+function PrivyWalletPanel({ address, onError }: { address: string; onError: (message: string | null) => void }) {
+  const { wallets } = useWallets();
+  const [mode, setMode] = useState<'balance' | 'withdraw'>('balance');
+  const [balanceWei, setBalanceWei] = useState<bigint | null>(null);
+  const [recipient, setRecipient] = useState('');
+  const [amount, setAmount] = useState('');
+  const [pending, setPending] = useState(false);
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+
+  const wallet = wallets.find(item => item.address.toLowerCase() === address.toLowerCase()) ?? wallets[0];
+
+  const refreshBalance = useCallback(async (showError = false) => {
+    if (!wallet) return;
+    try {
+      const provider = await wallet.getEthereumProvider();
+      const balanceHex = await provider.request({
+        method: 'eth_getBalance',
+        params: [address, 'latest'],
+      }) as string;
+      setBalanceWei(BigInt(balanceHex));
+      if (showError) onError(null);
+    } catch (err) {
+      if (showError) onError(walletErrorMessage(err, 'Balance is syncing. Try again in a moment.'));
+    }
+  }, [address, onError, wallet]);
+
+  useEffect(() => {
+    refreshBalance();
+    const timer = setInterval(refreshBalance, 12_000);
+    return () => clearInterval(timer);
+  }, [refreshBalance]);
+
+  const withdraw = useCallback(async () => {
+    if (!wallet || pending) return;
+    setPending(true);
+    setTxHash(null);
+    onError(null);
+    try {
+      const to = recipient.trim();
+      if (!isAddress(to)) throw new Error('Enter a valid wallet address.');
+      const amountWei = parseEther(amount || '0');
+      if (amountWei <= 0n) throw new Error('Enter an amount to withdraw.');
+
+      await wallet.switchChain(xLayerMainnet.id);
+      const provider = await wallet.getEthereumProvider();
+      const balanceHex = await provider.request({
+        method: 'eth_getBalance',
+        params: [address, 'latest'],
+      }) as string;
+      const balance = BigInt(balanceHex);
+      if (balance < amountWei) throw new Error(lowBalanceMessage(amountWei, balance));
+
+      const hash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to,
+          value: `0x${amountWei.toString(16)}`,
+          chainId: `0x${xLayerMainnet.id.toString(16)}`,
+        }],
+      }) as `0x${string}`;
+
+      setAmount('');
+      setRecipient('');
+      setTxHash(hash);
+      await refreshBalance();
+    } catch (err) {
+      onError(walletErrorMessage(err, 'Withdrawal failed.'));
+    } finally {
+      setPending(false);
+    }
+  }, [address, amount, onError, pending, recipient, refreshBalance, wallet]);
+
+  return (
+    <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950 bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Wallet Balance</div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-2xl font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatBalance(balanceWei)}</span>
+            <span className="text-xs font-bold dark:text-zinc-500 text-zinc-400">OKB</span>
+          </div>
+        </div>
+        <div className="inline-flex rounded-md border dark:border-zinc-800 border-zinc-200 p-0.5">
+          <button
+            type="button"
+            onClick={() => setMode('balance')}
+            className={`rounded px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${mode === 'balance' ? 'dark:bg-white dark:text-zinc-950 bg-zinc-950 text-white' : 'dark:text-zinc-500 text-zinc-500 hover:text-blue-500'}`}
+          >
+            Balance
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('withdraw')}
+            className={`rounded px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${mode === 'withdraw' ? 'dark:bg-white dark:text-zinc-950 bg-zinc-950 text-white' : 'dark:text-zinc-500 text-zinc-500 hover:text-blue-500'}`}
+          >
+            Withdraw
+          </button>
+        </div>
+      </div>
+
+      {mode === 'balance' ? (
+        <div className="mt-3 flex items-center justify-between rounded-md dark:bg-zinc-900/45 bg-zinc-50 px-3 py-2">
+          <span className="text-xs dark:text-zinc-500 text-zinc-500">Available for stakes and transfers</span>
+          <button
+            type="button"
+            onClick={() => refreshBalance(true)}
+            className="rounded p-1.5 dark:text-zinc-500 text-zinc-500 transition-colors hover:text-blue-500"
+            title="Refresh balance"
+            aria-label="Refresh balance"
+          >
+            <RefreshCw size={13} />
+          </button>
+        </div>
+      ) : (
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_120px_auto]">
+          <input
+            value={recipient}
+            onChange={event => setRecipient(event.target.value)}
+            placeholder="Recipient wallet"
+            className="min-w-0 rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 text-sm dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-blue-500"
+          />
+          <div className="relative">
+            <input
+              value={amount}
+              onChange={event => setAmount(event.target.value.replace(/[^\d.]/g, ''))}
+              placeholder="0.00"
+              inputMode="decimal"
+              className="w-full rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 pr-11 text-sm tabular-nums dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-blue-500"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">OKB</span>
+          </div>
+          <button
+            type="button"
+            onClick={withdraw}
+            disabled={pending || !recipient.trim() || !amount.trim()}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Send size={13} />
+            {pending ? 'Confirming' : 'Send'}
+          </button>
+        </div>
+      )}
+
+      {txHash && (
+        <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
+          View withdrawal
+          <ExternalLink size={11} />
+        </a>
+      )}
+    </div>
+  );
+}
+
 export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, onWatch }: Props) {
   const [address, setAddress] = useState<string | null>(null);
   const [positions, setPositions] = useState<UserPosition[]>([]);
@@ -380,6 +545,10 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
             <div className="mt-1 text-lg font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatOKB(summary.totalWei.toString())}</div>
           </div>
         </div>
+
+        {address && PRIVY_ENABLED && (
+          <PrivyWalletPanel address={address} onError={setError} />
+        )}
       </div>
 
       {error && <div className="mx-4 mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-500">{error}</div>}
