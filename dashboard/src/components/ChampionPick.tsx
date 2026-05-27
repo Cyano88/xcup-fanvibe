@@ -2,8 +2,15 @@ import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Trophy, Zap, CheckCircle } from 'lucide-react';
 import { parseEther } from 'viem';
 import type { Fixture, MatchState, ChampionPool } from '../types';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { STRENGTH } from '../lib/clientSim';
 import { encodeChampionStake, CHAMP_TEAM_INDEX } from '../lib/encode';
+import { formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { PrivyStakeButton } from './PrivyStakeButton';
+import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
+import { PrivyBalanceHint } from './PrivyBalanceHint';
+
+const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 
 interface Props {
   fixtures: Fixture[];
@@ -42,6 +49,66 @@ function fmtWei(wei: string | bigint): string {
   return n < 0.0001 ? '0' : n.toFixed(4);
 }
 
+function isEmbeddedWallet(walletClientType: string) {
+  return walletClientType === 'privy' || walletClientType === 'privy-v2';
+}
+
+function PrimaryChampionStakeAction({
+  amountOKB,
+  calldata,
+  refereeAddress,
+  disabled,
+  pendingLabel,
+  onSuccess,
+  onError,
+}: {
+  amountOKB: string;
+  calldata: `0x${string}`;
+  refereeAddress: string;
+  disabled?: boolean;
+  pendingLabel: string;
+  onSuccess: (hash: `0x${string}`, amountWei: bigint) => void;
+  onError: (message: string) => void;
+}) {
+  const { authenticated } = usePrivy();
+  const { wallets } = useWallets();
+  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const buttonClass = 'inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+  const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB ->` : 'Sign in to stake';
+
+  if (externalWallet) {
+    return (
+      <PrivyWalletStakeButton
+        amountOKB={amountOKB}
+        calldata={calldata}
+        refereeAddress={refereeAddress}
+        disabled={disabled}
+        pendingLabel={pendingLabel}
+        onSuccess={(hash, amountWei) => onSuccess(hash, amountWei)}
+        onError={(message) => onError(message || '')}
+        className={buttonClass}
+      >
+        {label}
+      </PrivyWalletStakeButton>
+    );
+  }
+
+  return (
+    <PrivyStakeButton
+      amountOKB={amountOKB}
+      calldata={calldata}
+      refereeAddress={refereeAddress}
+      disabled={disabled}
+      pendingLabel="Confirm stake..."
+      onSuccess={(hash, amountWei) => onSuccess(hash, amountWei)}
+      onError={(message) => onError(message || '')}
+      className={buttonClass}
+    >
+      {label}
+    </PrivyStakeButton>
+  );
+}
+
 export function ChampionPick({
   fixtures,
   eliminatedTeams,
@@ -54,6 +121,8 @@ export function ChampionPick({
   const [txPending, setTxPending] = useState(false);
   const [txHash, setTxHash]       = useState<string | null>(null);
   const [txError, setTxError]     = useState<string | null>(null);
+  const okbUsd = useOkbUsdPrice();
+  const stakeUsd = formatStakeUsd(amountOKB, okbUsd);
 
   // Local pool (client-side tracking until daemon picks it up)
   const [localPool, setLocalPool] = useState<Record<string, bigint>>({});
@@ -287,24 +356,48 @@ export function ChampionPick({
                   />
                   <span className="text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
                 </div>
+                {stakeUsd && (
+                  <span className="text-[11px] font-medium dark:text-zinc-600 text-zinc-400">
+                    {stakeUsd}
+                  </span>
+                )}
                 <button
                   onClick={() => setSelected(null)}
                   className="px-2.5 py-1.5 rounded-lg text-xs dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleStake}
-                  disabled={txPending || !refereeAddress}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95
-                    bg-emerald-500 text-black hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {txPending ? (
-                    <><Zap size={10} className="animate-pulse" />Confirm in wallet...</>
-                  ) : (
-                    <>Stake {amountOKB} OKB {'->'}</>
-                  )}
-                </button>
+                {PRIVY_ENABLED ? (
+                  <PrimaryChampionStakeAction
+                    amountOKB={amountOKB}
+                    calldata={encodeChampionStake(selected)}
+                    refereeAddress={refereeAddress}
+                    disabled={txPending || !refereeAddress}
+                    pendingLabel="Confirm in wallet..."
+                    onSuccess={(hash, amountWei) => {
+                      setTxHash(hash);
+                      setLocalPool(prev => ({
+                        ...prev,
+                        [selected]: (prev[selected] ?? 0n) + amountWei,
+                      }));
+                      setSelected(null);
+                    }}
+                    onError={(message) => setTxError(message || null)}
+                  />
+                ) : (
+                  <button
+                    onClick={handleStake}
+                    disabled={txPending || !refereeAddress}
+                    className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {txPending ? (
+                      <><Zap size={10} className="animate-pulse" />Confirm in wallet...</>
+                    ) : (
+                      <>Stake {amountOKB} OKB {'->'}</>
+                    )}
+                  </button>
+                )}
+                {PRIVY_ENABLED && <PrivyBalanceHint amountOKB={amountOKB} />}
               </div>
               {txError && (
                 <p className="w-full text-[11px] text-red-400 mt-1">{txError}</p>

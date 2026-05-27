@@ -266,7 +266,7 @@ export default function App() {
   const [soundMuted, setSoundMuted]             = useState(false);
   const [seasonMode, setSeasonMode]             = useState<SeasonStorageMode>('prod');
   const [seasonTiming, setSeasonTimingState]    = useState<SeasonTiming>(DEFAULT_SEASON_TIMING);
-  const [seasonDurable, setSeasonDurable]       = useState(false);
+  const [, setSeasonDurable]                    = useState(false);
   const [seasonAdminOpen, setSeasonAdminOpen]   = useState(false);
   const [seasonHydrated, setSeasonHydrated]     = useState(false);
   const [eliminatedTeams, setEliminatedTeams]   = useState<Set<string>>(() => new Set(initialSeason.eliminatedTeams));
@@ -384,7 +384,16 @@ export default function App() {
 
   const loadSeasonSnapshot = useCallback((preserveWatching = false, showLoading = true) => {
     if (showLoading) setSeasonHydrated(false);
-    fetch(`${BACKEND_HTTP}/season/snapshot?mode=${seasonMode}`)
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    const applyFreshSeason = () => {
+      const fresh = freshSeasonState(1, Date.now(), seasonMode === 'test' ? TEST_SEASON_TIMING : DEFAULT_SEASON_TIMING, seasonMode);
+      applySeasonSnapshot(fresh, seasonMode);
+      setSeasonDurable(false);
+      setSeasonHydrated(true);
+      return fresh;
+    };
+    fetch(`${BACKEND_HTTP}/season/snapshot?mode=${seasonMode}`, { signal: controller.signal })
       .then(r => r.json())
       .then((res: { state: InitialSeasonState | null; durable?: boolean }) => {
         setSeasonDurable(!!res.durable);
@@ -393,9 +402,7 @@ export default function App() {
           setSeasonHydrated(true);
           return;
         }
-        const fresh = freshSeasonState(1, Date.now(), seasonMode === 'test' ? TEST_SEASON_TIMING : DEFAULT_SEASON_TIMING, seasonMode);
-        applySeasonSnapshot(fresh, seasonMode);
-        setSeasonHydrated(true);
+        const fresh = applyFreshSeason();
         if (seasonMode === 'prod') return;
         fetch(`${BACKEND_HTTP}/season/snapshot`, {
           method: 'POST',
@@ -403,7 +410,10 @@ export default function App() {
           body: JSON.stringify({ mode: seasonMode, state: fresh }),
         }).catch(() => {});
       })
-      .catch(() => {});
+      .catch(() => {
+        applyFreshSeason();
+      })
+      .finally(() => window.clearTimeout(timeout));
   }, [applySeasonSnapshot, seasonMode]);
 
   useEffect(() => {
@@ -1185,7 +1195,7 @@ export default function App() {
                   {phase === 'playing' ? liveSeasonStageCode : fmtDuration(phaseTimer)}
                 </span>
                 <span className="text-[10px] font-semibold dark:text-zinc-600 text-zinc-400">
-                  {seasonDurable ? 'Durable' : 'Local fallback'}
+                  Live season
                 </span>
               </>
               ) : null
@@ -1576,11 +1586,11 @@ export default function App() {
             className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Agent Self Maintenance History</span>
+              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Account Activity</span>
               <span className="season-status-rotate hidden sm:inline-flex text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
-                <span>{logs.length} maintenance entries</span>
-                <span>{engineOnline ? 'Engine online' : 'Engine offline'}</span>
-                <span>{logs[logs.length - 1]?.prefix ?? 'SYSTEM'} monitor</span>
+                <span>{logs.length} recent updates</span>
+                <span>{engineOnline ? 'Live updates active' : 'Updates syncing'}</span>
+                <span>Market monitor</span>
               </span>
             </span>
             {logOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -1643,9 +1653,9 @@ export default function App() {
             className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span className="font-semibold dark:text-zinc-400 text-zinc-600">X Layer Proof</span>
+              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Match Records</span>
               <span className="hidden sm:inline-flex min-w-0 text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
-                Chain 196 - {lastBlock > 0 ? `block ${lastBlock.toLocaleString()}` : 'indexing pending'} - {wsConnected || engineOnline ? 'engine online' : 'engine offline'}
+                Stakes, payouts, and settlement history
               </span>
             </span>
             {proofOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -1655,12 +1665,12 @@ export default function App() {
             <div className="border-t dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950/80 bg-white px-4 py-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Network</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Market</div>
                   <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">X Layer Mainnet</div>
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Chain ID 196, OKB gas</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">OKB-powered predictions</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Wallet</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Settlement</div>
                   {refereeAddress ? (
                     <a href={explorerAddr(refereeAddress)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900 hover:text-blue-500">
                       {shortAddr(refereeAddress)}
@@ -1669,55 +1679,55 @@ export default function App() {
                   ) : (
                     <div className="mt-1 text-sm font-semibold dark:text-zinc-500 text-zinc-500">Not connected</div>
                   )}
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Settlement account controlled by the referee engine</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Account used for verified payouts</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Block</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Latest Record</div>
                   {lastBlock > 0 ? (
                     <a href={explorerBlock(lastBlock)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900 hover:text-blue-500">
                       {lastBlock.toLocaleString()}
                       <ExternalLink size={12} />
                     </a>
                   ) : (
-                    <div className="mt-1 text-sm font-semibold dark:text-zinc-500 text-zinc-500">Waiting for RPC</div>
+                    <div className="mt-1 text-sm font-semibold dark:text-zinc-500 text-zinc-500">Syncing</div>
                   )}
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Latest indexed X Layer block</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Most recent verified update</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Balance</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Reserve</div>
                   <div className={`mt-1 text-sm font-semibold tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</div>
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{metabolism.healthPercent}% gas health</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{metabolism.healthPercent}% ready</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Engine</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Status</div>
                   <div className={`mt-1 text-sm font-semibold ${wsConnected || engineOnline ? 'dark:text-emerald-300 text-emerald-600' : 'dark:text-zinc-500 text-zinc-500'}`}>
                     {wsConnected || engineOnline ? 'Online' : 'Offline'}
                   </div>
-                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{wsConnected ? 'WebSocket connected' : 'HTTP state checks active'}</div>
+                  <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{wsConnected || engineOnline ? 'Live updates active' : 'Updates syncing'}</div>
                 </div>
               </div>
 
               <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-3 text-xs leading-relaxed dark:text-zinc-400 text-zinc-600">
-                FanVibe keeps the game readable for users and verifiable for judges: fixtures and stakes are tracked by the app, settlement actions are sent from the referee wallet, and every payout transaction links back to X Layer explorer records. Redis persistence keeps season state durable across Railway restarts.
+                FanVibe keeps every stake, result, and payout easy to review. Completed payouts link to public records so users can confirm market outcomes.
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Tracked Pool</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Pool</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fmtOKBWei(proofPoolWei)}</div>
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Open Fixtures</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Open Markets</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fixtures.filter(f => f.status === 'open').length}</div>
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Payout Settlements</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Payouts</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{payoutSettlementCount}</div>
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Persistence</div>
-                  <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{seasonDurable ? 'Redis active' : 'Local fallback'}</div>
-                  <div className="mt-0.5 truncate text-[10px] dark:text-zinc-600 text-zinc-400">{worldCupSourceLabel} - {worldCupFreshness}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Season</div>
+                  <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{seasonLabel}</div>
+                  <div className="mt-0.5 truncate text-[10px] dark:text-zinc-600 text-zinc-400">{liveSeasonStageCode}</div>
                 </div>
               </div>
 

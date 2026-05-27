@@ -1,8 +1,13 @@
 import { useState, useCallback } from 'react';
 import { X, Wallet, ExternalLink, AlertCircle } from 'lucide-react';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Outcome } from '../types';
 import { encodeStakeCalldata } from '../lib/encode';
 import { CHAIN_ID_HEX, explorerTx } from '../lib/chain';
+import { formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { PrivyStakeButton } from './PrivyStakeButton';
+import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
+import { PrivyBalanceHint } from './PrivyBalanceHint';
 
 interface Props {
   fixture: Fixture;
@@ -13,6 +18,8 @@ interface Props {
 }
 
 type Step = 'configure' | 'pending' | 'confirmed' | 'error';
+
+const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 
 const OUTCOME_LABEL: Record<Outcome, string> = {
   home: 'Home Win',
@@ -26,12 +33,70 @@ const OUTCOME_COLOR: Record<Outcome, string> = {
   away: 'border-blue-400/60 bg-blue-500/14 text-blue-100',
 };
 
+function isEmbeddedWallet(walletClientType: string) {
+  return walletClientType === 'privy' || walletClientType === 'privy-v2';
+}
+
+function PrimaryStakeAction({
+  amountOKB,
+  calldata,
+  refereeAddress,
+  onBeforeStake,
+  onSuccess,
+  onError,
+}: {
+  amountOKB: string;
+  calldata: `0x${string}`;
+  refereeAddress: string;
+  onBeforeStake: () => Promise<boolean>;
+  onSuccess: (hash: `0x${string}`) => void;
+  onError: (message: string) => void;
+}) {
+  const { authenticated } = usePrivy();
+  const { wallets } = useWallets();
+  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const className = 'inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+  const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB` : 'Sign in to stake';
+
+  if (externalWallet) {
+    return (
+      <PrivyWalletStakeButton
+        amountOKB={amountOKB}
+        calldata={calldata}
+        refereeAddress={refereeAddress}
+        onBeforeStake={onBeforeStake}
+        onSuccess={(hash) => onSuccess(hash)}
+        onError={onError}
+        className={className}
+      >
+        {label}
+      </PrivyWalletStakeButton>
+    );
+  }
+
+  return (
+    <PrivyStakeButton
+      amountOKB={amountOKB}
+      calldata={calldata}
+      refereeAddress={refereeAddress}
+      onBeforeStake={onBeforeStake}
+      onSuccess={(hash) => onSuccess(hash)}
+      onError={onError}
+      className={className}
+    >
+      {label}
+    </PrivyStakeButton>
+  );
+}
+
 export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, onStakeClosed }: Props) {
   const [outcome, setOutcome] = useState<Outcome>(defaultOutcome);
   const [amount, setAmount] = useState('0.01');
   const [step, setStep] = useState<Step>('configure');
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const okbUsd = useOkbUsdPrice();
+  const stakeUsd = formatStakeUsd(amount, okbUsd);
 
   const handleStake = useCallback(async () => {
     const provider = (window as typeof window & { ethereum?: unknown }).ethereum as
@@ -121,6 +186,29 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
     }
   }, [fixture.id, outcome, amount, refereeAddress, onClose, onStakeClosed]);
 
+  const checkStakeOpen = useCallback(async () => {
+    const statusRes = await fetch(`${import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001'}/stake/status/${fixture.id}`);
+    if (statusRes.ok) {
+      const status = await statusRes.json() as { canStake?: boolean; reason?: string };
+      if (!status.canStake) {
+        onStakeClosed?.(fixture.id, status.reason);
+        onClose();
+        return false;
+      }
+    }
+    return true;
+  }, [fixture.id, onClose, onStakeClosed]);
+
+  const handlePrivySuccess = useCallback((hash: `0x${string}`) => {
+    setTxHash(hash);
+    setStep('confirmed');
+    fetch(`${import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001'}/stake/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ txHash: hash }),
+    }).catch(() => {});
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -189,15 +277,35 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                     </button>
                   ))}
                 </div>
+                {stakeUsd && (
+                  <div className="text-[11px] font-medium text-zinc-500">
+                    Approx. {stakeUsd} USD
+                  </div>
+                )}
+                {PRIVY_ENABLED && <PrivyBalanceHint amountOKB={amount} />}
               </div>
 
               {/* Protocol fee note */}
               <p className="text-xs font-medium text-zinc-300">0.5% protocol fee - Payouts sent autonomously on settlement</p>
 
-              <button onClick={handleStake} className="btn-primary w-full">
-                <Wallet size={14} />
-                Stake via Wallet
-              </button>
+              {PRIVY_ENABLED ? (
+                <PrimaryStakeAction
+                  amountOKB={amount}
+                  calldata={encodeStakeCalldata(fixture.id, outcome)}
+                  refereeAddress={refereeAddress}
+                  onBeforeStake={checkStakeOpen}
+                  onSuccess={handlePrivySuccess}
+                  onError={(message) => {
+                    setError(message || null);
+                    if (message) setStep('error');
+                  }}
+                />
+              ) : (
+                <button onClick={handleStake} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-500">
+                  <Wallet size={14} />
+                  Stake via Wallet
+                </button>
+              )}
             </>
           )}
 

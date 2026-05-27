@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, RefreshCw, Wallet } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, ExternalLink, RefreshCw, Wallet } from 'lucide-react';
+import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, MatchState, UserPosition } from '../types';
 import { explorerTx } from '../lib/chain';
 import { seasonFixtureStartAtMs } from '../lib/seasonTournament';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
+const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 
 function shortHash(hash?: string): string {
   if (!hash) return '-';
@@ -71,7 +73,7 @@ function pickLabel(position: UserPosition): string {
 }
 
 function pickTone(pick: string): string {
-  if (pick === 'HOME') return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300';
+  if (pick === 'HOME') return 'bg-blue-500/10 text-blue-600 dark:text-blue-300';
   if (pick === 'AWAY') return 'bg-blue-500/10 text-blue-600 dark:text-blue-300';
   if (pick === 'DRAW') return 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300';
   return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300';
@@ -82,6 +84,78 @@ interface Props {
   matchStates?: Record<string, MatchState>;
   seasonStartedAt?: number;
   onWatch?: (fixtureId: string) => void;
+}
+
+function PrivyPositionsConnect({
+  address,
+  onAddress,
+  onError,
+}: {
+  address: string | null;
+  onAddress: (address: string | null) => void;
+  onError: (message: string | null) => void;
+}) {
+  const { ready, authenticated, login, logout } = usePrivy();
+  const { createWallet } = useCreateWallet();
+  const { wallets } = useWallets();
+  const activeWallet = wallets[0];
+  const creatingWalletRef = useRef(false);
+
+  useEffect(() => {
+    if (activeWallet?.address) {
+      onAddress(activeWallet.address);
+      onError(null);
+    }
+  }, [activeWallet?.address, onAddress, onError]);
+
+  useEffect(() => {
+    if (!ready || !authenticated || activeWallet || creatingWalletRef.current) return;
+    creatingWalletRef.current = true;
+    createWallet()
+      .then(wallet => {
+        onAddress(wallet.address);
+        onError(null);
+      })
+      .catch(err => onError(err instanceof Error ? err.message : 'Unable to create FanVibe wallet'))
+      .finally(() => {
+        creatingWalletRef.current = false;
+      });
+  }, [activeWallet, authenticated, createWallet, onAddress, onError, ready]);
+
+  if (address) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="inline-flex items-center gap-2 rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-3 py-2 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-200 text-zinc-800">
+          <Wallet size={13} />
+          {address.slice(0, 6)}...{address.slice(-4)}
+        </div>
+        <button
+          onClick={() => {
+            activeWallet?.disconnect();
+            logout();
+            onAddress(null);
+          }}
+          className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-bold dark:text-zinc-500 text-zinc-500 transition-colors hover:border-rose-500 hover:text-rose-600"
+          title="Sign out"
+        >
+          <ArrowRight size={13} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => {
+        if (!authenticated || !activeWallet) login({ loginMethods: ['email', 'wallet'] });
+      }}
+      disabled={!ready}
+      className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Wallet size={13} />
+      {authenticated ? 'Setting up account...' : 'Sign in'}
+    </button>
+  );
 }
 
 export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, onWatch }: Props) {
@@ -120,7 +194,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   useEffect(() => {
     const provider = (window as typeof window & { ethereum?: { request: (args: { method: string }) => Promise<unknown> } }).ethereum;
     provider?.request({ method: 'eth_accounts' })
-      .then((accounts) => {
+      .then((accounts: unknown) => {
         const list = accounts as string[];
         if (list?.[0]) setAddress(list[0]);
       })
@@ -141,37 +215,87 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   const summary = useMemo(() => {
     const active = positions.filter(p => statusLabel(p).toLowerCase().includes('active')).length;
     const paid = positions.filter(p => ['paid', 'refunded', 'settled_winner'].includes(p.status)).length;
-    return { active, paid };
+    const totalWei = positions.reduce((sum, position) => {
+      const amount = position.type === 'refund' ? position.refund.amountWei : position.stake.amountWei;
+      try {
+        return sum + BigInt(amount);
+      } catch {
+        return sum;
+      }
+    }, 0n);
+    return { active, paid, totalWei };
   }, [positions]);
 
   return (
-    <section className="rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">Wallet Positions</div>
-          <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">
-            {address ? `${positions.length} positions - ${summary.active} active - ${summary.paid} paid/refunded` : 'Connect wallet to track stakes'}
+    <section className="overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white shadow-sm">
+      <div className="border-b dark:border-zinc-900 border-zinc-100 px-4 py-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-md bg-zinc-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white dark:bg-white dark:text-zinc-950">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              Account
+            </div>
+            <div className="mt-3 text-xl font-semibold tracking-tight dark:text-zinc-50 text-zinc-950">
+              Portfolio
+            </div>
+            <div className="mt-1 text-sm dark:text-zinc-500 text-zinc-500">
+              {address
+                ? 'Track stakes, payouts, refunds, and champion positions from one account.'
+                : PRIVY_ENABLED
+                  ? 'Sign in with email or wallet to view your FanVibe positions.'
+                  : 'Connect your account to view positions.'}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {address && (
+              <button onClick={refresh} className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-semibold dark:text-zinc-300 text-zinc-700 hover:border-blue-500 transition-colors">
+                <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+              </button>
+            )}
+            {PRIVY_ENABLED ? (
+              <PrivyPositionsConnect address={address} onAddress={setAddress} onError={setError} />
+            ) : (
+              <div className="flex items-center gap-2">
+                <button onClick={connect} className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-all active:scale-95 hover:bg-blue-500">
+                  <Wallet size={13} />
+                  {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect'}
+                </button>
+                {address && (
+                  <button
+                    onClick={() => setAddress(null)}
+                    className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-bold dark:text-zinc-500 text-zinc-500 transition-colors hover:border-rose-500 hover:text-rose-600"
+                    title="Disconnect"
+                  >
+                    <ArrowRight size={13} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {address && (
-            <button onClick={refresh} className="rounded-lg border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-semibold dark:text-zinc-300 text-zinc-700 hover:border-blue-400/60 transition-colors">
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            </button>
-          )}
-          <button onClick={connect} className="btn-primary px-3 py-2 text-xs">
-            <Wallet size={13} />
-            {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect'}
-          </button>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/50 bg-zinc-50 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Positions</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{positions.length}</div>
+          </div>
+          <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/50 bg-zinc-50 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Active</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums text-blue-600 dark:text-blue-400">{summary.active}</div>
+          </div>
+          <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/50 bg-zinc-50 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Volume</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatOKB(summary.totalWei.toString())}</div>
+          </div>
         </div>
       </div>
 
-      {error && <div className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-500">{error}</div>}
+      {error && <div className="mx-4 mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-500">{error}</div>}
 
       {address && (
-        <div className="mt-3 space-y-2">
+        <div className="space-y-2 p-4">
           {positions.length === 0 ? (
-            <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-4 text-sm dark:text-zinc-500 text-zinc-500">
+            <div className="rounded-md border dark:border-zinc-900 border-zinc-100 px-3 py-6 text-center text-sm dark:text-zinc-500 text-zinc-500">
               No stakes found for this wallet yet.
             </div>
           ) : positions.map((position) => {
@@ -237,7 +361,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     onWatch?.(liveFixture.id);
                   }
                 } : undefined}
-                className={`flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2.5 ${canOpenMatch ? 'cursor-pointer transition-colors dark:hover:border-blue-500/40 hover:border-blue-300' : ''}`}
+                className={`flex items-center justify-between gap-3 rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950 bg-white px-3 py-3 shadow-sm ${canOpenMatch ? 'cursor-pointer transition-colors dark:hover:border-blue-500 hover:border-blue-500' : ''}`}
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

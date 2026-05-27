@@ -1,6 +1,9 @@
-export const xLayerMainnet = {
+import { defineChain } from 'viem';
+
+export const xLayerMainnet = defineChain({
   id: 196,
   name: 'X Layer Mainnet',
+  network: 'xlayer-mainnet',
   nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
   rpcUrls: {
     default: { http: ['https://rpc.xlayer.tech'], webSocket: ['wss://rpc.xlayer.tech'] },
@@ -9,7 +12,7 @@ export const xLayerMainnet = {
   blockExplorers: {
     default: { name: 'OKX Explorer', url: 'https://www.okx.com/web3/explorer/xlayer' },
   },
-} as const;
+});
 
 export const CHAIN_ID_HEX = '0xc4'; // 196
 

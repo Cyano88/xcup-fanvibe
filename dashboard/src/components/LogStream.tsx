@@ -23,12 +23,30 @@ const LEVEL_TEXT: Record<LogLevel, string> = {
   success: 'dark:text-emerald-300 text-emerald-600',
 };
 
+const PREFIX_LABEL: Record<LogPrefix, string> = {
+  SYSTEM: 'System',
+  RPC: 'Network',
+  STAKE: 'Stake',
+  ORACLE: 'Scores',
+  METABOLISM: 'Reserve',
+};
+
 function formatTs(ts: string): string {
   try {
     return new Date(ts).toLocaleTimeString('en-US', { hour12: false });
   } catch {
     return ts.slice(11, 19);
   }
+}
+
+function displayMessage(message: string): string {
+  return message
+    .replace(/\bRPC\b/g, 'network')
+    .replace(/\bWebSocket\b/g, 'live connection')
+    .replace(/\bHTTP\b/g, 'backup')
+    .replace(/\bengine\b/gi, 'updates')
+    .replace(/\bMETABOLISM\b/g, 'reserve')
+    .replace(/\bdaemon\b/gi, 'service');
 }
 
 export function LogStream({ logs, daemonOnline }: Props) {
@@ -54,7 +72,7 @@ export function LogStream({ logs, daemonOnline }: Props) {
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {logs.length === 0 && (
           <div className="flex items-center justify-center h-20 text-xs dark:text-zinc-700 text-zinc-400">
-            {daemonOnline ? 'Waiting for engine events...' : 'Connect market engine to see live activity'}
+            {daemonOnline ? 'Waiting for live activity...' : 'Live activity is syncing'}
           </div>
         )}
 
@@ -62,10 +80,10 @@ export function LogStream({ logs, daemonOnline }: Props) {
           <div key={log.id} className="flex items-start gap-2 text-xs animate-fade-in group">
             <span className=" dark:text-zinc-700 text-zinc-400 shrink-0 mt-px">{formatTs(log.ts)}</span>
             <span className={`shrink-0 mt-px px-1.5 py-px rounded text-[10px] font-bold ${PREFIX_STYLE[log.prefix]}`}>
-              {log.prefix}
+              {PREFIX_LABEL[log.prefix]}
             </span>
             <span className={`flex-1 leading-5 break-all ${LEVEL_TEXT[log.level]}`}>
-              {log.message}
+              {displayMessage(log.message)}
               {log.txHash && (
                 <a
                   href={explorerTx(log.txHash)}
