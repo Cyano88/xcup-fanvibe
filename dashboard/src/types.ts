@@ -163,6 +163,9 @@ export type UserPosition =
       status: 'active' | 'settled_winner' | 'settled_lost';
       stake: ChampionStake;
       winner?: string;
+      settledAt?: number;
+      seasonNumber?: number;
+      payout?: PayoutRecord;
     }
   | {
       type: 'refund';

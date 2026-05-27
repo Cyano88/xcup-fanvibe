@@ -21,7 +21,7 @@ import { xLayerMainnet, explorerTx } from '../chain.js';
 import { FIXTURES } from './fixtures.js';
 import { checkAndRefuel } from './metabolism.js';
 import { MatchSimulator } from './simulation.js';
-import { readRefereeMarket, writeRefereeMarket, type PersistedSettlementJob } from '../seasonStore.js';
+import { readRefereeMarket, writeRefereeMarket, type PersistedChampionPosition, type PersistedSettlementJob } from '../seasonStore.js';
 import type {
   Fixture,
   Team,
@@ -149,6 +149,7 @@ export class RefereeEngine {
   private settlements: SettlementResult[] = [];
   private settlementJobs = new Map<string, PersistedSettlementJob>();
   private champStakes: ChampionStake[] = [];
+  private champHistory: PersistedChampionPosition[] = [];
   private champPool = new Map<string, bigint>(CHAMP_TEAMS.map(t => [t, 0n]));
   private champSettled = false;
   private champWinner?: string;
@@ -258,20 +259,43 @@ export class RefereeEngine {
         };
       });
 
+    const archivedChampionTxs = new Set(this.champHistory.map(position => position.stake.txHash));
     const championPositions = this.champStakes
       .filter(stake => stake.staker.toLowerCase() === wallet)
-      .map(stake => ({
-        type: 'champion' as const,
-        status: this.champSettled ? (this.champWinner === stake.teamCode ? 'settled_winner' : 'settled_lost') : 'active',
-        stake,
-        winner: this.champWinner,
-      }));
+      .filter(stake => !archivedChampionTxs.has(stake.txHash))
+      .map(stake => {
+        const championJob = this.champWinner ? this.settlementJobs.get(`champion:${this.champWinner}`) : undefined;
+        const payout = championJob?.payouts.find(p => p.address.toLowerCase() === wallet && p.status === 'sent' && p.txHash);
+        return {
+          type: 'champion' as const,
+          status: this.champSettled ? (this.champWinner === stake.teamCode ? 'settled_winner' : 'settled_lost') : 'active',
+          stake,
+          winner: this.champWinner,
+          payout,
+        };
+      });
+
+    const championHistoryPositions = this.champHistory
+      .filter(position => position.stake.staker.toLowerCase() === wallet)
+      .map(position => {
+        const championJob = this.settlementJobs.get(`champion:${position.winner}`);
+        const payout = championJob?.payouts.find(p => p.address.toLowerCase() === wallet && p.status === 'sent' && p.txHash);
+        return {
+          type: 'champion' as const,
+          status: position.winner === position.stake.teamCode ? 'settled_winner' : 'settled_lost',
+          stake: position.stake,
+          winner: position.winner,
+          settledAt: position.settledAt,
+          seasonNumber: position.seasonNumber,
+          payout,
+        };
+      });
 
     const refunds = Array.from(this.rejectedStakeRefunds.values())
       .filter(refund => refund.staker.toLowerCase() === wallet)
       .map(refund => ({ type: 'refund' as const, status: refund.status, refund }));
 
-    return [...stakePositions, ...championPositions, ...refunds]
+    return [...stakePositions, ...championPositions, ...championHistoryPositions, ...refunds]
       .sort((a, b) => {
         const at = 'stake' in a ? a.stake.timestamp : a.refund.timestamp;
         const bt = 'stake' in b ? b.stake.timestamp : b.refund.timestamp;
@@ -291,6 +315,7 @@ export class RefereeEngine {
       return;
     }
 
+    this.archiveSettledChampionStakes();
     this.championSeasonNumber = seasonNumber;
     this.champStakes = [];
     this.champPool = new Map(CHAMP_TEAMS.map(team => [team, 0n]));
@@ -299,6 +324,22 @@ export class RefereeEngine {
     this.log('SYSTEM', 'info', `Champion market opened for Season ${seasonNumber}`);
     this.persistMarketState();
     this.onUpdate?.();
+  }
+
+  private archiveSettledChampionStakes(settledAt = Date.now()): void {
+    if (!this.champSettled || !this.champWinner || this.champStakes.length === 0) return;
+
+    const existing = new Set(this.champHistory.map(position => position.stake.txHash));
+    for (const stake of this.champStakes) {
+      if (existing.has(stake.txHash)) continue;
+      this.champHistory.push({
+        stake,
+        winner: this.champWinner,
+        settledAt,
+        seasonNumber: this.championSeasonNumber,
+      });
+      existing.add(stake.txHash);
+    }
   }
 
   async start(): Promise<void> {
@@ -334,6 +375,7 @@ export class RefereeEngine {
     this.settlements = stored.settlements;
     this.settlementJobs = new Map((stored.settlementJobs ?? []).map(job => [job.id, job]));
     this.champStakes = stored.champStakes;
+    this.champHistory = stored.champHistory ?? [];
     this.champPool = new Map(CHAMP_TEAMS.map(team => [team, BigInt(stored.champPool[team] ?? '0')]));
     this.champSettled = stored.champSettled;
     this.champWinner = stored.champWinner;
@@ -407,6 +449,7 @@ export class RefereeEngine {
       settlements: this.settlements,
       settlementJobs: Array.from(this.settlementJobs.values()),
       champStakes: this.champStakes,
+      champHistory: this.champHistory,
       champPool,
       champSettled: this.champSettled,
       champWinner: this.champWinner,
@@ -432,6 +475,7 @@ export class RefereeEngine {
     this.settlements = [];
     this.settlementJobs.clear();
     this.champStakes = [];
+    this.champHistory = [];
     this.champPool = new Map(CHAMP_TEAMS.map(team => [team, 0n]));
     this.champSettled = false;
     this.champWinner = undefined;
@@ -773,6 +817,8 @@ export class RefereeEngine {
       this.log('ORACLE', 'warn', `No stakes on champion winner (${winner}) - settled pool retained by treasury`);
     }
     await this.processSettlementJob(job, 'Champion payout');
+    this.archiveSettledChampionStakes(job.settledAt);
+    await this.persistMarketStateNow();
     this.onUpdate?.();
   }
 

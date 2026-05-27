@@ -56,12 +56,20 @@ export interface PersistedRefereeMarket {
   settlements: SettlementResult[];
   settlementJobs?: PersistedSettlementJob[];
   champStakes: ChampionStake[];
+  champHistory?: PersistedChampionPosition[];
   champPool: Record<string, string>;
   champSettled: boolean;
   champWinner?: string;
   championSeasonNumber?: number;
   lastBlock: number;
   updatedAt: number;
+}
+
+export interface PersistedChampionPosition {
+  stake: ChampionStake;
+  winner: string;
+  settledAt: number;
+  seasonNumber?: number;
 }
 
 export interface PersistedSettlementPayout {

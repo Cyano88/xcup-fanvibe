@@ -44,7 +44,7 @@ function stripUsdPrefix(value: string | null): string | null {
 
 function positionUpdatedAt(position: UserPosition): number {
   if (position.type === 'refund') return position.refund.timestamp;
-  if (position.type === 'champion') return position.stake.timestamp;
+  if (position.type === 'champion') return position.settledAt ?? position.stake.timestamp;
   return position.settlement?.settledAt ?? position.stake.timestamp;
 }
 
@@ -85,7 +85,7 @@ function statusLabel(position: UserPosition, effectiveStatus = position.status):
     return 'Refund queued';
   }
   if (position.type === 'champion') {
-    if (effectiveStatus === 'settled_winner') return 'Won';
+    if (effectiveStatus === 'settled_winner') return position.payout ? 'Payout sent' : 'Won';
     if (effectiveStatus === 'settled_lost') return 'Lost';
     return 'Active';
   }
@@ -844,12 +844,19 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
               ].filter(Boolean).join(' - ')
               : position.type === 'refund'
                 ? `Rejected ${formatTime(position.refund.timestamp)} - ${position.refund.reason}`
-                : `Placed ${formatTime(position.stake.timestamp)}${position.winner ? ` - Winner ${position.winner}` : ''}`;
-            const settledMeta = position.type === 'match' && effectiveStatus !== 'active'
-              ? [
-                position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
-                (position.settlement?.outcome ?? liveFixture?.result) ? `Result ${(position.settlement?.outcome ?? liveFixture?.result)?.toUpperCase()}` : undefined,
-              ].filter(Boolean).join(' - ')
+                : `Placed ${formatTime(position.stake.timestamp)}`;
+            const settledMeta = effectiveStatus !== 'active'
+              ? position.type === 'match'
+                ? [
+                  position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
+                  (position.settlement?.outcome ?? liveFixture?.result) ? `Result ${(position.settlement?.outcome ?? liveFixture?.result)?.toUpperCase()}` : undefined,
+                ].filter(Boolean).join(' - ')
+                : position.type === 'champion'
+                  ? [
+                    position.settledAt ? `Settled ${formatTime(position.settledAt)}` : undefined,
+                    position.winner ? `Winner ${position.winner}` : undefined,
+                  ].filter(Boolean).join(' - ')
+                  : ''
               : '';
               const flashGoal = position.type === 'match' && goalFlashIds.has(position.stake.fixtureId);
 
