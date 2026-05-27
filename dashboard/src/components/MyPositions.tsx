@@ -526,6 +526,8 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   const [address, setAddress] = useState<string | null>(() => getRememberedWallet());
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const positionsAddressRef = useRef<string | null>(null);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsLoaded, setPositionsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [visibleCount, setVisibleCount] = useState(POSITION_BATCH_SIZE);
@@ -548,6 +550,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   const refresh = useCallback(async (showError = false) => {
     if (!address) return;
     if (showError) setError(null);
+    setPositionsLoading(true);
     try {
       const res = await fetch(`${BACKEND_HTTP}/positions/${address}`);
       if (!res.ok) throw new Error('Positions unavailable');
@@ -559,9 +562,13 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
         if (sameAddress && current.length > 0 && nextPositions.length === 0) return current;
         return nextPositions;
       });
+      setPositionsLoaded(true);
       setError(null);
     } catch {
       if (showError) setError(positionsSyncMessage());
+      setPositionsLoaded(true);
+    } finally {
+      setPositionsLoading(false);
     }
   }, [address]);
 
@@ -595,6 +602,10 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
 
   useEffect(() => {
     setVisibleCount(POSITION_BATCH_SIZE);
+    setPositionsLoaded(false);
+    setPositionsLoading(Boolean(address));
+    setPositions([]);
+    positionsAddressRef.current = address;
   }, [address]);
 
   useEffect(() => {
@@ -799,7 +810,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
         <div className="p-4">
           {positions.length === 0 ? (
             <div className="rounded-md border dark:border-zinc-900 border-zinc-100 px-3 py-6 text-center text-sm dark:text-zinc-500 text-zinc-500">
-              No stakes found for this wallet yet.
+              {!positionsLoaded || positionsLoading ? 'Updating...' : 'No stakes found for this wallet yet.'}
             </div>
           ) : (
             <>
