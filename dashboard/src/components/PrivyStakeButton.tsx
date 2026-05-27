@@ -84,8 +84,6 @@ export function PrivyStakeButton({
         throw new Error('Email wallet is being created. Try again after login completes.');
       }
 
-      await wallet.switchChain(xLayerMainnet.id);
-
       const amountWei = parseEther(amountOKB || '0');
       if (amountWei <= 0n) throw new Error('Invalid stake amount');
 
@@ -99,6 +97,7 @@ export function PrivyStakeButton({
         {
           address: wallet.address,
           uiOptions: {
+            showWalletUIs: true,
             description: `Stake ${amountOKB} OKB on X Layer Mainnet.`,
             buttonText: 'Confirm stake',
             successHeader: 'Stake sent',
