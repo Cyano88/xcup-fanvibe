@@ -50,9 +50,13 @@ export function PrivyStakeButton({
   const { createWallet } = useCreateWallet();
   const { sendTransaction } = useSendTransaction();
   const [pending, setPending] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [preparedWalletAddress, setPreparedWalletAddress] = useState<string | null>(null);
+  const [preparedForNextTap, setPreparedForNextTap] = useState(false);
 
   const embeddedWallet = wallets.find(wallet => isEmbeddedWallet(wallet.walletClientType))
     ?? getEmbeddedConnectedWallet(wallets);
+  const stakeWalletAddress = embeddedWallet?.address ?? preparedWalletAddress;
 
   const reportError = (message: string) => {
     onError?.(message);
@@ -62,27 +66,36 @@ export function PrivyStakeButton({
     if (!ready) return;
 
     if (!authenticated) {
+      setPreparedWalletAddress(null);
+      setPreparedForNextTap(false);
       login({ loginMethods: ['email'] });
       return;
     }
 
+    if (!stakeWalletAddress) {
+      if (!walletsReady) return;
+      setPreparing(true);
+      setPreparedForNextTap(false);
+      reportError('');
+      try {
+        const wallet = await createWallet();
+        setPreparedWalletAddress(wallet.address);
+        setPreparedForNextTap(true);
+      } catch (err) {
+        reportError(walletErrorMessage(err, 'Email wallet setup failed'));
+      } finally {
+        setPreparing(false);
+      }
+      return;
+    }
+
     setPending(true);
+    setPreparedForNextTap(false);
     reportError('');
 
     try {
       const canStake = await onBeforeStake?.();
       if (canStake === false) return;
-
-      let wallet = embeddedWallet;
-      if (!wallet && walletsReady) {
-        await createWallet();
-        wallet = wallets.find(candidate => isEmbeddedWallet(candidate.walletClientType))
-          ?? getEmbeddedConnectedWallet(wallets);
-      }
-
-      if (!wallet) {
-        throw new Error('Email wallet is being created. Try again after login completes.');
-      }
 
       const amountWei = parseEther(amountOKB || '0');
       if (amountWei <= 0n) throw new Error('Invalid stake amount');
@@ -95,7 +108,7 @@ export function PrivyStakeButton({
           chainId: xLayerMainnet.id,
         },
         {
-          address: wallet.address,
+          address: stakeWalletAddress,
           uiOptions: {
             showWalletUIs: true,
             description: `Stake ${amountOKB} OKB on X Layer Mainnet.`,
@@ -106,7 +119,7 @@ export function PrivyStakeButton({
         },
       );
 
-      onSuccess?.(hash, amountWei, wallet.address);
+      onSuccess?.(hash, amountWei, stakeWalletAddress);
     } catch (err) {
       reportError(walletErrorMessage(err, 'Email wallet stake failed'));
     } finally {
@@ -118,11 +131,11 @@ export function PrivyStakeButton({
     <button
       type="button"
       onClick={handleEmailStake}
-      disabled={disabled || pending || !ready}
+      disabled={disabled || pending || preparing || !ready}
       className={className}
     >
       <Mail size={14} />
-      {pending ? pendingLabel : children}
+      {pending ? pendingLabel : preparing ? 'Preparing wallet...' : preparedForNextTap ? 'Tap again to stake' : children}
     </button>
   );
 }
