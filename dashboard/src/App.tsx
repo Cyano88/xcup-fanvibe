@@ -15,7 +15,7 @@ import { REALTIME_FIXTURES } from './types';
 import { BracketView } from './components/BracketView';
 import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
-import { xLayerMainnet, explorerAddr, explorerTx } from './lib/chain';
+import { X_LAYER_RPC_URLS, xLayerMainnet, explorerAddr, explorerTx } from './lib/chain';
 import { shortAddr } from './lib/encode';
 import {
   SEASON_GROUPS,
@@ -53,7 +53,7 @@ const isResolvedFixture = (fixture?: Fixture | null) =>
 const explorerBlock = (blockNumber: number) =>
   `https://www.okx.com/web3/explorer/xlayer/block/${blockNumber}`;
 
-const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http('https://rpc.xlayer.tech') });
+const rpcClient = createPublicClient({ chain: xLayerMainnet, transport: http(X_LAYER_RPC_URLS[0]) });
 
 type SeasonPhase = 'preseason' | 'playing' | 'champion' | 'interseason';
 type AppTab = 'home' | 'search' | 'news' | 'portfolio';

@@ -15,8 +15,10 @@ export function walletErrorMessage(error: unknown, fallback: string): string {
     || lower.includes('http request failed')
     || lower.includes('eth_getbalance')
     || lower.includes('rpc.xlayer.tech')
+    || lower.includes('xlayer.drpc.org')
+    || lower.includes('xlayerrpc.okx.com')
   ) {
-    return 'Could not read this wallet balance on X Layer. If this wallet has no OKB, fund it first, then try again.';
+    return 'Could not read this wallet balance on X Layer. Switch wallet RPC to X Layer Mainnet, confirm the wallet has OKB, then try again.';
   }
 
   return message;

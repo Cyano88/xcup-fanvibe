@@ -3,7 +3,7 @@ import { X, Wallet, ExternalLink, AlertCircle } from 'lucide-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Outcome } from '../types';
 import { encodeStakeCalldata } from '../lib/encode';
-import { CHAIN_ID_HEX, explorerTx } from '../lib/chain';
+import { CHAIN_ID_HEX, X_LAYER_RPC_URLS, explorerTx } from '../lib/chain';
 import { formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
@@ -134,7 +134,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
               chainId: CHAIN_ID_HEX,
               chainName: 'X Layer Mainnet',
               nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
-              rpcUrls: ['https://rpc.xlayer.tech'],
+              rpcUrls: [...X_LAYER_RPC_URLS],
               blockExplorerUrls: ['https://www.okx.com/web3/explorer/xlayer'],
             }],
           });
