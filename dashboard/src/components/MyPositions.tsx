@@ -155,8 +155,8 @@ function PrivyPositionsConnect({
             {copied ? <Check size={12} /> : <Copy size={12} />}
           </button>
           {copied && (
-            <span className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-blue-500/20 bg-blue-600 text-white shadow-sm">
-              <Check size={11} />
+            <span className="absolute -right-1 top-9 rounded-md border border-zinc-900 bg-zinc-950 px-2 py-1 text-[10px] font-semibold text-white shadow-sm dark:border-zinc-100 dark:bg-white dark:text-zinc-950">
+              Copied
             </span>
           )}
         </div>
