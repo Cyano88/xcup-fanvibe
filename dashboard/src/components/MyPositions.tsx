@@ -110,17 +110,10 @@ function PrivyPositionsConnect({
   const [profileName, setProfileName] = useState(() => getStoredProfileName());
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileInput, setProfileInput] = useState('');
-  const [showName, setShowName] = useState(false);
 
   useEffect(() => () => {
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
   }, []);
-
-  useEffect(() => {
-    if (!profileName) return;
-    const timer = setInterval(() => setShowName(value => !value), 2400);
-    return () => clearInterval(timer);
-  }, [profileName]);
 
   useEffect(() => {
     const syncProfile = () => setProfileName(getStoredProfileName());
@@ -171,10 +164,9 @@ function PrivyPositionsConnect({
     setStoredProfileName(nextName);
     setProfileName(getStoredProfileName());
     setEditingProfile(false);
-    setShowName(Boolean(nextName.trim()));
   }, [address, profileInput]);
 
-  const displayIdentity = profileName && showName ? fanDisplayName(address, profileName) : shortWallet(address);
+  const profilePrompt = profileName ? fanDisplayName(address, profileName) : 'Set username';
 
   if (address) {
     return (
@@ -194,7 +186,15 @@ function PrivyPositionsConnect({
               aria-label="Profile name"
             />
           ) : (
-            <span className="min-w-[74px] max-w-28 truncate transition-opacity">{displayIdentity}</span>
+            <button
+              type="button"
+              onClick={openProfileEditor}
+              className="profile-identity-rotate text-left"
+              title={profileName ? profileName : 'Set username'}
+            >
+              <span>{shortWallet(address)}</span>
+              <span>{profilePrompt}</span>
+            </button>
           )}
           <button
             type="button"

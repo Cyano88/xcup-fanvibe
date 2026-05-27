@@ -264,6 +264,35 @@
   animation-delay: 10s;
 }
 
+.profile-identity-rotate {
+  position: relative;
+  display: inline-block;
+  width: 92px;
+  height: 16px;
+  overflow: hidden;
+}
+
+.profile-identity-rotate span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: profileIdentityRotate 6s ease-in-out infinite;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-identity-rotate span:nth-child(2) {
+  animation-delay: 3s;
+}
+
+@keyframes profileIdentityRotate {
+  0%, 8% { opacity: 0; transform: translateY(8px); }
+  12%, 42% { opacity: 1; transform: translateY(0); }
+  50%, 100% { opacity: 0; transform: translateY(-8px); }
+}
+
 @keyframes seasonStatusRotate {
   0%, 4% { opacity: 0; transform: translateY(8px); }
   7%, 30% { opacity: 1; transform: translateY(0); }
