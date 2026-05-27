@@ -207,10 +207,10 @@ export class RefereeEngine {
 
       const existing = this.fixtures.find(f => f.id === incoming.id);
       if (existing) {
-        if (existing.status === 'settled') continue;
+        const keepSettlement = existing.status === 'settled' && incoming.status === 'settled';
         Object.assign(existing, incoming, {
-          status: incoming.status === 'settled' ? existing.status : incoming.status,
-          result: existing.result,
+          status: keepSettlement ? existing.status : incoming.status,
+          result: keepSettlement ? existing.result : incoming.result,
         });
       } else {
         this.fixtures.push(structuredClone(incoming));
@@ -241,7 +241,7 @@ export class RefereeEngine {
       .filter(stake => stake.staker.toLowerCase() === wallet)
       .map(stake => {
         const fixture = this.fixtures.find(f => f.id === stake.fixtureId);
-        const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId);
+        const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stake.timestamp);
         const won = settlement ? settlement.outcome === stake.outcome : false;
         const payout = won ? settlement?.payouts.find(p => p.address.toLowerCase() === wallet) : undefined;
         return {

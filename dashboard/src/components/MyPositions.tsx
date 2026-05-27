@@ -54,20 +54,29 @@ function statusTone(status: string): string {
   return 'text-zinc-600 dark:text-zinc-300 bg-zinc-500/10';
 }
 
-function statusLabel(position: UserPosition): string {
+function effectiveMatchStatus(position: UserPosition, liveFixture?: Fixture, liveState?: MatchState): UserPosition['status'] | 'active' {
+  if (position.type !== 'match') return position.status;
+  const settlementAppliesToStake = !!position.settlement && position.settlement.settledAt >= position.stake.timestamp;
+  const currentFixtureIsLive = liveState?.status === 'live' || liveState?.status === 'half_time';
+  const currentFixtureUnsettled = liveFixture?.status && liveFixture.status !== 'settled';
+  if (!settlementAppliesToStake || currentFixtureIsLive || currentFixtureUnsettled) return 'active';
+  return position.status;
+}
+
+function statusLabel(position: UserPosition, effectiveStatus = position.status): string {
   if (position.type === 'refund') {
-    if (position.status === 'refunded') return 'Refund sent';
-    if (position.status === 'failed') return 'Refund failed';
+    if (effectiveStatus === 'refunded') return 'Refund sent';
+    if (effectiveStatus === 'failed') return 'Refund failed';
     return 'Refund queued';
   }
   if (position.type === 'champion') {
-    if (position.status === 'settled_winner') return 'Champion win';
-    if (position.status === 'settled_lost') return 'Champion lost';
+    if (effectiveStatus === 'settled_winner') return 'Champion win';
+    if (effectiveStatus === 'settled_lost') return 'Champion lost';
     return 'Champion active';
   }
-  if (position.status === 'paid') return 'Payout sent';
-  if (position.status === 'won_pending_payout') return 'Won - payout pending';
-  if (position.status === 'lost') return 'Lost';
+  if (effectiveStatus === 'paid') return 'Payout sent';
+  if (effectiveStatus === 'won_pending_payout') return 'Won - payout pending';
+  if (effectiveStatus === 'lost') return 'Lost';
   return 'Active';
 }
 
@@ -507,8 +516,24 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   }, []);
 
   const summary = useMemo(() => {
-    const active = positions.filter(p => statusLabel(p).toLowerCase().includes('active')).length;
-    const paid = positions.filter(p => ['paid', 'refunded', 'settled_winner'].includes(p.status)).length;
+    const active = positions.filter(position => {
+      const liveFixture = position.type === 'match'
+        ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
+        : position.type === 'refund'
+          ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
+          : undefined;
+      const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
+      return statusLabel(position, effectiveMatchStatus(position, liveFixture, liveState)).toLowerCase().includes('active');
+    }).length;
+    const paid = positions.filter(position => {
+      const liveFixture = position.type === 'match'
+        ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
+        : position.type === 'refund'
+          ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
+          : undefined;
+      const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
+      return ['paid', 'refunded', 'settled_winner'].includes(effectiveMatchStatus(position, liveFixture, liveState));
+    }).length;
     const totalWei = positions.reduce((sum, position) => {
       const amount = position.type === 'refund' ? position.refund.amountWei : position.stake.amountWei;
       try {
@@ -518,7 +543,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
       }
     }, 0n);
     return { active, paid, totalWei };
-  }, [positions]);
+  }, [fixtures, matchStates, positions]);
   const volumeUsd = formatOkbUsdFromWei(summary.totalWei, okbUsd);
 
   return (
@@ -633,6 +658,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                 ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
                 : undefined;
             const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
+            const effectiveStatus = effectiveMatchStatus(position, liveFixture, liveState);
             const canOpenMatch = position.type === 'match'
               && !!liveFixture
               && !!liveState
@@ -667,8 +693,8 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                 liveFixture?.round ? liveFixture.round : liveFixture?.group ? `Group ${liveFixture.group}` : undefined,
                 liveFixture?.matchday ? `MD${liveFixture.matchday}` : undefined,
                 liveFixture?.kickoff ? `Kickoff ${formatTime(liveFixture.kickoff)}` : undefined,
-                position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
-                position.settlement ? `Result ${position.settlement.outcome.toUpperCase()}` : undefined,
+                effectiveStatus !== 'active' && position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
+                effectiveStatus !== 'active' && position.settlement ? `Result ${position.settlement.outcome.toUpperCase()}` : undefined,
               ].filter(Boolean).join(' - ')
               : position.type === 'refund'
                 ? `Rejected ${formatTime(position.refund.timestamp)} - ${position.refund.reason}`
@@ -694,8 +720,8 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${pickTone(pickLabel(position))}`}>
                       {pickLabel(position)}
                     </span>
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${statusTone(position.status)}`}>
-                      {statusLabel(position)}
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${statusTone(effectiveStatus)}`}>
+                      {statusLabel(position, effectiveStatus)}
                     </span>
                     {matchBadge && (
                       <span className="shrink-0 rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums text-zinc-600 dark:text-zinc-300">
