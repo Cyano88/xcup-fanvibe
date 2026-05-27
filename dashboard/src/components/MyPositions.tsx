@@ -85,9 +85,9 @@ function statusLabel(position: UserPosition, effectiveStatus = position.status):
     return 'Refund queued';
   }
   if (position.type === 'champion') {
-    if (effectiveStatus === 'settled_winner') return 'Champion win';
-    if (effectiveStatus === 'settled_lost') return 'Champion lost';
-    return 'Champion active';
+    if (effectiveStatus === 'settled_winner') return 'Won';
+    if (effectiveStatus === 'settled_lost') return 'Lost';
+    return 'Active';
   }
   if (effectiveStatus === 'paid') return 'Payout sent';
   if (effectiveStatus === 'won_pending_payout') return 'Won - payout pending';
@@ -97,7 +97,7 @@ function statusLabel(position: UserPosition, effectiveStatus = position.status):
 
 function pickLabel(position: UserPosition): string {
   if (position.type === 'refund') return position.refund.outcome.toUpperCase();
-  if (position.type === 'champion') return position.stake.teamCode;
+  if (position.type === 'champion') return 'Champion';
   return position.stake.outcome.toUpperCase();
 }
 
@@ -169,7 +169,9 @@ function PrivyPositionsConnect({
   const { ready, authenticated, login, logout } = usePrivy();
   const { createWallet } = useCreateWallet();
   const { wallets, ready: walletsReady } = useWallets();
-  const activeWallet = wallets[0];
+  const activeWallet = (address
+    ? wallets.find(wallet => wallet.address.toLowerCase() === address.toLowerCase())
+    : undefined) ?? wallets[0];
   const creatingWalletRef = useRef(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setupRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,12 +197,23 @@ function PrivyPositionsConnect({
   }, []);
 
   useEffect(() => {
-    if (activeWallet?.address) {
-      onAddress(activeWallet.address);
-      rememberWallet(activeWallet.address);
+    if (!walletsReady || wallets.length === 0) return;
+    const currentStillConnected = address
+      ? wallets.some(wallet => wallet.address.toLowerCase() === address.toLowerCase())
+      : false;
+
+    if (currentStillConnected) {
+      onError(null);
+      return;
+    }
+
+    const nextWallet = wallets[0];
+    if (nextWallet?.address) {
+      onAddress(nextWallet.address);
+      rememberWallet(nextWallet.address);
       onError(null);
     }
-  }, [activeWallet?.address, onAddress, onError]);
+  }, [address, onAddress, onError, wallets, walletsReady]);
 
   useEffect(() => {
     if (!ready || !walletsReady || !authenticated || activeWallet || creatingWalletRef.current) return;
@@ -503,6 +516,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
 export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, onWatch }: Props) {
   const [address, setAddress] = useState<string | null>(() => getRememberedWallet());
   const [positions, setPositions] = useState<UserPosition[]>([]);
+  const positionsAddressRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [visibleCount, setVisibleCount] = useState(POSITION_BATCH_SIZE);
@@ -529,7 +543,13 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
       const res = await fetch(`${BACKEND_HTTP}/positions/${address}`);
       if (!res.ok) throw new Error('Positions unavailable');
       const data = await res.json() as { positions: UserPosition[] };
-      setPositions(data.positions ?? []);
+      const nextPositions = data.positions ?? [];
+      setPositions(current => {
+        const sameAddress = positionsAddressRef.current?.toLowerCase() === address.toLowerCase();
+        positionsAddressRef.current = address;
+        if (sameAddress && current.length > 0 && nextPositions.length === 0) return current;
+        return nextPositions;
+      });
       setError(null);
     } catch {
       if (showError) setError(positionsSyncMessage());
@@ -812,7 +832,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                           ? 'Staking open'
                           : undefined;
             const title = position.type === 'champion'
-              ? `Champion - ${position.stake.teamCode}`
+              ? `${position.stake.teamCode} to win`
               : position.type === 'refund'
                 ? `${position.refund.fixtureId} - ${position.refund.outcome.toUpperCase()}`
                 : `${liveFixture?.home.code ?? position.stake.fixtureId} vs ${liveFixture?.away.code ?? ''}`;
