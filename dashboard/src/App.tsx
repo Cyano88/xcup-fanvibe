@@ -294,6 +294,7 @@ export default function App() {
   const themeAudioRef          = useRef<HTMLAudioElement | null>(null);
   const seasonPersistTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seasonSnapshotUpdatedAtRef = useRef(0);
+  const seasonHydratedRef = useRef(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -303,6 +304,10 @@ export default function App() {
   useEffect(() => {
     setSeasonTiming(seasonTiming);
   }, [seasonTiming]);
+
+  useEffect(() => {
+    seasonHydratedRef.current = seasonHydrated;
+  }, [seasonHydrated]);
 
   useEffect(() => {
     const timer = setInterval(() => setLiveUiTick(tick => tick + 1), 1000);
@@ -387,8 +392,10 @@ export default function App() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 8000);
     const applyFreshSeason = () => {
+      const previousSnapshotUpdatedAt = seasonSnapshotUpdatedAtRef.current;
       const fresh = freshSeasonState(1, Date.now(), seasonMode === 'test' ? TEST_SEASON_TIMING : DEFAULT_SEASON_TIMING, seasonMode);
       applySeasonSnapshot(fresh, seasonMode);
+      seasonSnapshotUpdatedAtRef.current = previousSnapshotUpdatedAt;
       setSeasonDurable(false);
       setSeasonHydrated(true);
       return fresh;
@@ -402,6 +409,7 @@ export default function App() {
           setSeasonHydrated(true);
           return;
         }
+        if (seasonMode === 'prod' && seasonHydratedRef.current) return;
         const fresh = applyFreshSeason();
         if (seasonMode === 'prod') return;
         fetch(`${BACKEND_HTTP}/season/snapshot`, {
@@ -411,7 +419,7 @@ export default function App() {
         }).catch(() => {});
       })
       .catch(() => {
-        applyFreshSeason();
+        if (!seasonHydratedRef.current) applyFreshSeason();
       })
       .finally(() => window.clearTimeout(timeout));
   }, [applySeasonSnapshot, seasonMode]);
@@ -617,12 +625,11 @@ export default function App() {
 
   // -- Phase / season timer -----------------------------------------------------
   useEffect(() => {
-    if (phase === 'playing') return;
+    if (phase === 'playing' || seasonMode === 'prod') return;
 
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000));
       setPhaseTimer(remaining);
-      if (seasonMode === 'prod') return;
       if (remaining > 0) return;
 
       if (phase === 'preseason') {
