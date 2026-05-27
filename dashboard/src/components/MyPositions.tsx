@@ -3,8 +3,9 @@ import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Send, Wallet 
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import { formatEther, isAddress, parseEther } from 'viem';
 import type { Fixture, MatchState, UserPosition } from '../types';
+import { REALTIME_FIXTURES } from '../types';
 import { explorerTx, xLayerMainnet } from '../lib/chain';
-import { seasonFixtureStartAtMs } from '../lib/seasonTournament';
+import { baseFixtureId, seasonFixtureStartAtMs } from '../lib/seasonTournament';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
@@ -40,6 +41,13 @@ function formatTime(ts?: number | string): string {
 
 function stripUsdPrefix(value: string | null): string | null {
   return value?.replace(/^US/, '') ?? null;
+}
+
+function friendlyFixtureId(fixtureId: string): string {
+  const normalized = baseFixtureId(fixtureId).replace(/^season-/, '');
+  const known = REALTIME_FIXTURES.find(fixture => fixture.id === normalized);
+  if (known) return `${known.home.code} vs ${known.away.code}`;
+  return normalized.replace(/-/g, ' ').toUpperCase();
 }
 
 function positionUpdatedAt(position: UserPosition): number {
@@ -177,7 +185,7 @@ function PrivyPositionsConnect({
   const setupRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [setupAttempt, setSetupAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [profileName, setProfileName] = useState(() => getStoredProfileName());
+  const [profileName, setProfileName] = useState(() => getStoredProfileName(address));
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileInput, setProfileInput] = useState('');
 
@@ -187,14 +195,15 @@ function PrivyPositionsConnect({
   }, []);
 
   useEffect(() => {
-    const syncProfile = () => setProfileName(getStoredProfileName());
+    const syncProfile = () => setProfileName(getStoredProfileName(address));
+    syncProfile();
     window.addEventListener(FAN_PROFILE_EVENT, syncProfile);
     window.addEventListener('storage', syncProfile);
     return () => {
       window.removeEventListener(FAN_PROFILE_EVENT, syncProfile);
       window.removeEventListener('storage', syncProfile);
     };
-  }, []);
+  }, [address]);
 
   useEffect(() => {
     if (!walletsReady || wallets.length === 0) return;
@@ -255,8 +264,8 @@ function PrivyPositionsConnect({
 
   const saveProfile = useCallback(() => {
     const nextName = profileInput.trim() === address ? '' : profileInput;
-    setStoredProfileName(nextName);
-    setProfileName(getStoredProfileName());
+    setStoredProfileName(nextName, address);
+    setProfileName(getStoredProfileName(address));
     setEditingProfile(false);
   }, [address, profileInput]);
 
@@ -835,7 +844,9 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
               ? `${position.stake.teamCode} to win`
               : position.type === 'refund'
                 ? `${position.refund.fixtureId} - ${position.refund.outcome.toUpperCase()}`
-                : `${liveFixture?.home.code ?? position.stake.fixtureId} vs ${liveFixture?.away.code ?? ''}`;
+                : liveFixture
+                  ? `${liveFixture.home.code} vs ${liveFixture.away.code}`
+                  : friendlyFixtureId(position.stake.fixtureId);
             const meta = position.type === 'match'
               ? [
                 liveFixture?.round ? liveFixture.round : liveFixture?.group ? `Group ${liveFixture.group}` : undefined,
@@ -897,7 +908,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     )}
                   </div>
                   <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
-                    {formatOKB(amount)}{amountUsd ? ` (${amountUsd})` : ''}
+                    {formatOKB(amount)}{amountUsd ? ` (${amountUsd})` : ' ($...)'}
                   </div>
                   <div className="mt-0.5 text-[10px] dark:text-zinc-600 text-zinc-400">
                     {meta}

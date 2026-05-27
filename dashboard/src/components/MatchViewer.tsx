@@ -850,7 +850,7 @@ function SquadPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
 function MatchChat({ fixtureId }: { fixtureId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [profileName, setProfileName] = useState(() => getStoredProfileName());
+  const [profileName, setProfileName] = useState(() => getStoredProfileName(walletAddress));
   const [editingProfile, setEditingProfile] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [text, setText] = useState('');
@@ -885,20 +885,21 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
   }, []);
 
   useEffect(() => {
-    const syncProfile = () => setProfileName(getStoredProfileName());
+    const syncProfile = () => setProfileName(getStoredProfileName(walletAddress));
+    syncProfile();
     window.addEventListener(FAN_PROFILE_EVENT, syncProfile);
     window.addEventListener('storage', syncProfile);
     return () => {
       window.removeEventListener(FAN_PROFILE_EVENT, syncProfile);
       window.removeEventListener('storage', syncProfile);
     };
-  }, []);
+  }, [walletAddress]);
 
   const joinChat = () => {
     const n = nameInput.trim();
     if (!n) return;
-    setStoredProfileName(n);
-    setProfileName(getStoredProfileName());
+    setStoredProfileName(n, walletAddress);
+    setProfileName(getStoredProfileName(walletAddress));
     setEditingProfile(false);
   };
 
@@ -941,7 +942,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
         {walletAddress && (
           <button
             onClick={() => {
-              setStoredProfileName('');
+              setStoredProfileName('', walletAddress);
               setProfileName('');
               setEditingProfile(false);
             }}
@@ -968,6 +969,11 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
           {user}
         </button>
       </div>
+      {walletAddress && !profileName && (
+        <p className="text-[10px] dark:text-zinc-600 text-zinc-400">
+          Set username from Portfolio to show a profile name here.
+        </p>
+      )}
       <div ref={listRef} className="h-36 overflow-y-auto space-y-1 scrollbar-thin">
         {comments.length === 0 && (
           <p className="text-xs dark:text-zinc-600 text-zinc-400 text-center pt-10">No messages yet - be first!</p>

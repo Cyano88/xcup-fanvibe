@@ -42,6 +42,7 @@ const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
 const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
+const SEASON_CACHE_KEY = 'fanvibe.seasonSnapshot.prod';
 const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -149,6 +150,24 @@ function freshSeasonState(
   };
 }
 
+function readCachedSeasonSnapshot(): InitialSeasonState | null {
+  try {
+    const raw = window.localStorage.getItem(SEASON_CACHE_KEY);
+    return raw ? JSON.parse(raw) as InitialSeasonState : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSeasonSnapshot(snapshot: InitialSeasonState, mode: SeasonStorageMode): void {
+  if (mode !== 'prod') return;
+  try {
+    window.localStorage.setItem(SEASON_CACHE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Cache is only used to smooth reloads.
+  }
+}
+
 function mergeLiveMatchStates(
   current: Record<string, MatchState>,
   incoming: Record<string, MatchState>,
@@ -232,7 +251,7 @@ function preseasonArchiveRank(fixture: Fixture): number {
 export default function App() {
   const okbUsd = useOkbUsdPrice();
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
-  if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
+  if (!initialSeasonRef.current) initialSeasonRef.current = readCachedSeasonSnapshot() ?? freshSeasonState(1);
   const initialSeason = initialSeasonRef.current;
 
   const [dark, setDark] = useState(() => {
@@ -269,7 +288,7 @@ export default function App() {
   const [seasonTiming, setSeasonTimingState]    = useState<SeasonTiming>(DEFAULT_SEASON_TIMING);
   const [, setSeasonDurable]                    = useState(false);
   const [seasonAdminOpen, setSeasonAdminOpen]   = useState(false);
-  const [seasonHydrated, setSeasonHydrated]     = useState(false);
+  const [seasonHydrated, setSeasonHydrated]     = useState(() => Boolean(readCachedSeasonSnapshot()));
   const [eliminatedTeams, setEliminatedTeams]   = useState<Set<string>>(() => new Set(initialSeason.eliminatedTeams));
   const [champion, setChampion]                 = useState<Team | null>(initialSeason.champion);
   const [previousKnockoutResults, setPreviousKnockoutResults] = useState(initialSeason.previousKnockoutResults ?? null);
@@ -359,6 +378,7 @@ export default function App() {
     setPreviousKnockoutResults(snapshot.previousKnockoutResults ?? null);
     setSeasonWinners(snapshot.seasonWinners ?? []);
     setTournamentGen(snapshot.tournamentGen ?? 0);
+    writeCachedSeasonSnapshot(snapshot, mode);
     if (!preserveWatching || snapshot.phase !== 'playing') setWatchingId(null);
   }, []);
 
@@ -1820,25 +1840,26 @@ export default function App() {
 
       {(activeTab === 'home' || activeTab === 'search') && viewMode === 'simulated' && !seasonHydrated && (
         <div
-          className="fixed inset-0 z-[80] bg-black/90"
-          style={{ animation: 'overlayIn 0.25s ease both' }}
+          className="fixed inset-0 z-[80] bg-zinc-950"
+          style={{ animation: 'overlayIn 0.18s ease both' }}
         >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(37,99,235,0.18),transparent_34%),linear-gradient(180deg,#020617,#09090b)]" />
           <div className="absolute left-1/2 top-1/2 flex w-full max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-5 px-6 text-center">
             <div
-              className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/10 shadow-2xl sm:h-36 sm:w-36"
+              className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-white/10 shadow-2xl shadow-blue-950/30 sm:h-32 sm:w-32"
               style={{
-                animation: 'fanvibeLoadPulse 1.65s ease-in-out infinite',
-                backgroundImage: `linear-gradient(180deg, rgba(2, 6, 23, 0.24), rgba(2, 6, 23, 0.72)), url(${FANVIBE_SEASON_BG})`,
+                animation: 'fanvibeLoadPulse 1.9s ease-in-out infinite',
+                backgroundImage: `linear-gradient(180deg, rgba(2, 6, 23, 0.42), rgba(2, 6, 23, 0.84)), url(${FANVIBE_SEASON_BG})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
             >
-              <div className="absolute inset-3 rounded-full border border-white/10 bg-black/18" />
-              <div className="relative z-10 h-16 w-16 overflow-hidden rounded-full ring-1 ring-white/20 sm:h-20 sm:w-20">
+              <div className="absolute inset-3 rounded-full border border-white/10 bg-black/45" />
+              <div className="relative z-10 h-14 w-14 overflow-hidden rounded-full ring-1 ring-white/20 sm:h-16 sm:w-16">
                 <img src={FANVIBE_HERO_LOGO} alt="" className="h-full w-full object-cover" />
               </div>
             </div>
-            <div className="text-base font-semibold tracking-tight text-white">
+            <div className="relative text-sm font-semibold tracking-tight text-white/90">
               Loading FanVibe
             </div>
           </div>
