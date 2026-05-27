@@ -4,6 +4,7 @@ import { Wallet } from 'lucide-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { parseEther } from 'viem';
 import { xLayerMainnet } from '../lib/chain';
+import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 
 interface PrivyWalletStakeButtonProps {
   amountOKB: string;
@@ -20,10 +21,6 @@ interface PrivyWalletStakeButtonProps {
 
 function isEmbeddedWallet(walletClientType: string) {
   return walletClientType === 'privy' || walletClientType === 'privy-v2';
-}
-
-function lowBalanceMessage(required: bigint, balance: bigint): string {
-  return `Low OKB balance. You need at least ${(Number(required) / 1e18).toFixed(4)} OKB, but this wallet has ${(Number(balance) / 1e18).toFixed(4)} OKB.`;
 }
 
 export function PrivyWalletStakeButton({
@@ -83,8 +80,7 @@ export function PrivyWalletStakeButton({
 
       onSuccess?.(hash, amountWei, externalWallet.address);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Wallet stake failed';
-      onError?.(message.includes('User rejected') ? 'Transaction rejected by wallet.' : message);
+      onError?.(walletErrorMessage(err, 'Wallet stake failed'));
     } finally {
       setPending(false);
     }

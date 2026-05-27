@@ -11,6 +11,7 @@ import {
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 import { parseEther } from 'viem';
 import { xLayerMainnet } from '../lib/chain';
+import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 
 interface PrivyStakeButtonProps {
   amountOKB: string;
@@ -29,10 +30,6 @@ const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 
 function isEmbeddedWallet(walletClientType: string) {
   return walletClientType === 'privy' || walletClientType === 'privy-v2';
-}
-
-function lowBalanceMessage(required: bigint, balance: bigint): string {
-  return `Low OKB balance. You need at least ${(Number(required) / 1e18).toFixed(4)} OKB, but this wallet has ${(Number(balance) / 1e18).toFixed(4)} OKB.`;
 }
 
 export function PrivyStakeButton({
@@ -148,8 +145,7 @@ export function PrivyStakeButton({
 
       onSuccess?.(hash, amountWei, wallet.address);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Email wallet stake failed';
-      reportError(message.includes('User rejected') ? 'Transaction rejected by wallet.' : message);
+      reportError(walletErrorMessage(err, 'Email wallet stake failed'));
     } finally {
       setPending(false);
     }

@@ -73,7 +73,7 @@ function PrimaryChampionStakeAction({
   const { authenticated } = usePrivy();
   const { wallets } = useWallets();
   const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
-  const buttonClass = 'inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+  const buttonClass = 'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
   const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB ->` : 'Sign in to stake';
 
   if (externalWallet) {
@@ -331,39 +331,41 @@ export function ChampionPick({
 
           {/* Stake panel */}
           {selected && !isSettled && (
-            <div className="dark:bg-zinc-800/60 bg-zinc-50 border dark:border-zinc-700 border-zinc-200 rounded-xl p-3 flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 text-sm font-bold dark:text-zinc-100 text-zinc-800">
+            <div className="dark:bg-zinc-800/60 bg-zinc-50 border dark:border-zinc-700 border-zinc-200 rounded-xl p-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-bold dark:text-zinc-100 text-zinc-800">
                 {(() => {
                   const team = championTeams.find(t => t.code === selected);
                   return team ? (
                     <>
                       <TeamFlag iso={team.iso} fallback={team.flag} className="h-5 w-7" />
-                      <span>{team.name}</span>
+                      <span className="min-w-0 truncate">{team.name}</span>
                     </>
                   ) : <span>{selected}</span>;
                 })()}
                 <span className="text-xs dark:text-zinc-400 text-zinc-500 font-normal">to win WC 2026</span>
               </div>
-              <div className="flex items-center gap-2 ml-auto">
-                <div className="flex items-center gap-1 dark:bg-zinc-900 bg-white border dark:border-zinc-700 border-zinc-200 rounded-lg px-2 py-1.5">
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    value={amountOKB}
-                    onChange={e => setAmountOKB(e.target.value)}
-                    className="w-20 bg-transparent text-xs dark:text-zinc-100 text-zinc-800 outline-none text-right"
-                  />
-                  <span className="text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(150px,1fr)_auto_auto] sm:items-center">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex h-9 min-w-[120px] items-center gap-1 dark:bg-zinc-900 bg-white border dark:border-zinc-700 border-zinc-200 rounded-lg px-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      value={amountOKB}
+                      onChange={e => setAmountOKB(e.target.value)}
+                      className="w-full min-w-0 bg-transparent text-sm font-semibold dark:text-zinc-100 text-zinc-800 outline-none"
+                    />
+                    <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
+                  </div>
+                  {stakeUsd && (
+                    <span className="shrink-0 text-[11px] font-medium dark:text-zinc-600 text-zinc-400">
+                      {stakeUsd}
+                    </span>
+                  )}
                 </div>
-                {stakeUsd && (
-                  <span className="text-[11px] font-medium dark:text-zinc-600 text-zinc-400">
-                    {stakeUsd}
-                  </span>
-                )}
                 <button
                   onClick={() => setSelected(null)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
+                  className="h-9 rounded-md px-2.5 text-xs font-semibold dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
                 >
                   Cancel
                 </button>
@@ -388,7 +390,7 @@ export function ChampionPick({
                   <button
                     onClick={handleStake}
                     disabled={txPending || !refereeAddress}
-                    className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {txPending ? (
                       <><Zap size={10} className="animate-pulse" />Confirm in wallet...</>
@@ -397,10 +399,10 @@ export function ChampionPick({
                     )}
                   </button>
                 )}
-                {PRIVY_ENABLED && <PrivyBalanceHint amountOKB={amountOKB} />}
               </div>
+              {PRIVY_ENABLED && <div className="mt-2"><PrivyBalanceHint amountOKB={amountOKB} /></div>}
               {txError && (
-                <p className="w-full text-[11px] text-red-400 mt-1">{txError}</p>
+                <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-[11px] font-semibold text-red-400">{txError}</p>
               )}
             </div>
           )}
