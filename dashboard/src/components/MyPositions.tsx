@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ExternalLink, RefreshCw, Wallet } from 'lucide-react';
+import { ArrowRight, Check, Copy, ExternalLink, RefreshCw, Wallet } from 'lucide-react';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, MatchState, UserPosition } from '../types';
 import { explorerTx } from '../lib/chain';
@@ -79,6 +79,10 @@ function pickTone(pick: string): string {
   return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300';
 }
 
+function positionsSyncMessage(): string {
+  return 'Positions are syncing. Try again in a moment.';
+}
+
 interface Props {
   fixtures?: Fixture[];
   matchStates?: Record<string, MatchState>;
@@ -100,6 +104,12 @@ function PrivyPositionsConnect({
   const { wallets } = useWallets();
   const activeWallet = wallets[0];
   const creatingWalletRef = useRef(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (activeWallet?.address) {
@@ -116,18 +126,39 @@ function PrivyPositionsConnect({
         onAddress(wallet.address);
         onError(null);
       })
-      .catch(err => onError(err instanceof Error ? err.message : 'Unable to create FanVibe wallet'))
+      .catch(() => onError('Unable to set up account. Try again in a moment.'))
       .finally(() => {
         creatingWalletRef.current = false;
       });
   }, [activeWallet, authenticated, createWallet, onAddress, onError, ready]);
 
+  const copyAddress = useCallback(() => {
+    navigator.clipboard.writeText(address ?? '').then(() => {
+      setCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 1200);
+    }).catch(() => {});
+  }, [address]);
+
   if (address) {
     return (
       <div className="flex items-center gap-2">
-        <div className="inline-flex items-center gap-2 rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-3 py-2 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-200 text-zinc-800">
-          <Wallet size={13} />
+        <div className="relative inline-flex items-center gap-1.5 rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-2.5 py-2 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-200 text-zinc-800">
           {address.slice(0, 6)}...{address.slice(-4)}
+          <button
+            type="button"
+            onClick={copyAddress}
+            className="grid h-5 w-5 place-items-center rounded border border-transparent text-zinc-400 transition-colors hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-300"
+            aria-label="Copy wallet address"
+            title="Copy wallet address"
+          >
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+          </button>
+          {copied && (
+            <span className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-blue-500/20 bg-blue-600 text-white shadow-sm">
+              <Check size={11} />
+            </span>
+          )}
         </div>
         <button
           onClick={() => {
@@ -175,17 +206,18 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
     setAddress(accounts[0] ?? null);
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (showError = false) => {
     if (!address) return;
     setLoading(true);
-    setError(null);
+    if (showError) setError(null);
     try {
       const res = await fetch(`${BACKEND_HTTP}/positions/${address}`);
       if (!res.ok) throw new Error('Positions unavailable');
       const data = await res.json() as { positions: UserPosition[] };
       setPositions(data.positions ?? []);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(null);
+    } catch {
+      if (showError) setError(positionsSyncMessage());
     } finally {
       setLoading(false);
     }
@@ -248,7 +280,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
           </div>
           <div className="flex items-center gap-2">
             {address && (
-              <button onClick={refresh} className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-semibold dark:text-zinc-300 text-zinc-700 hover:border-blue-500 transition-colors">
+              <button onClick={() => refresh(true)} className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-semibold dark:text-zinc-300 text-zinc-700 hover:border-blue-500 transition-colors">
                 <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               </button>
             )}
