@@ -10,6 +10,7 @@ import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
+const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 
 function shortHash(hash?: string): string {
   if (!hash) return '-';
@@ -86,6 +87,18 @@ function positionsSyncMessage(): string {
   return 'Positions are syncing. Try again in a moment.';
 }
 
+function rememberWallet(address: string | null): void {
+  if (address) {
+    localStorage.setItem(LAST_WALLET_KEY, address);
+  } else {
+    localStorage.removeItem(LAST_WALLET_KEY);
+  }
+}
+
+function getRememberedWallet(): string | null {
+  return localStorage.getItem(LAST_WALLET_KEY);
+}
+
 function formatBalance(balanceWei: bigint | null): string {
   if (balanceWei === null) return '-';
   const value = Number(formatEther(balanceWei));
@@ -139,6 +152,7 @@ function PrivyPositionsConnect({
   useEffect(() => {
     if (activeWallet?.address) {
       onAddress(activeWallet.address);
+      rememberWallet(activeWallet.address);
       onError(null);
     }
   }, [activeWallet?.address, onAddress, onError]);
@@ -149,6 +163,7 @@ function PrivyPositionsConnect({
     createWallet()
       .then(wallet => {
         onAddress(wallet.address);
+        rememberWallet(wallet.address);
         onError(null);
       })
       .catch(() => onError('Unable to set up account. Try again in a moment.'))
@@ -236,6 +251,7 @@ function PrivyPositionsConnect({
             activeWallet?.disconnect();
             logout();
             onAddress(null);
+            rememberWallet(null);
           }}
           className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-bold dark:text-zinc-500 text-zinc-500 transition-colors hover:border-rose-500 hover:text-rose-600"
           title="Sign out"
@@ -288,7 +304,7 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
 
   useEffect(() => {
     refreshBalance();
-    const timer = setInterval(refreshBalance, 12_000);
+    const timer = setInterval(refreshBalance, 3_000);
     return () => clearInterval(timer);
   }, [refreshBalance]);
 
@@ -371,7 +387,7 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
             title="Refresh balance"
             aria-label="Refresh balance"
           >
-            <RefreshCw size={13} />
+            <RefreshCw size={13} className="animate-spin" />
           </button>
         </div>
       ) : (
@@ -415,9 +431,8 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
 }
 
 export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, onWatch }: Props) {
-  const [address, setAddress] = useState<string | null>(null);
+  const [address, setAddress] = useState<string | null>(() => getRememberedWallet());
   const [positions, setPositions] = useState<UserPosition[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
 
@@ -429,11 +444,11 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
     }
     const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
     setAddress(accounts[0] ?? null);
+    rememberWallet(accounts[0] ?? null);
   }, []);
 
   const refresh = useCallback(async (showError = false) => {
     if (!address) return;
-    setLoading(true);
     if (showError) setError(null);
     try {
       const res = await fetch(`${BACKEND_HTTP}/positions/${address}`);
@@ -443,8 +458,6 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
       setError(null);
     } catch {
       if (showError) setError(positionsSyncMessage());
-    } finally {
-      setLoading(false);
     }
   }, [address]);
 
@@ -453,7 +466,10 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
     provider?.request({ method: 'eth_accounts' })
       .then((accounts: unknown) => {
         const list = accounts as string[];
-        if (list?.[0]) setAddress(list[0]);
+        if (list?.[0]) {
+          setAddress(list[0]);
+          rememberWallet(list[0]);
+        }
       })
       .catch(() => {});
   }, []);
@@ -488,9 +504,35 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
       <div className="border-b dark:border-zinc-900 border-zinc-100 px-4 py-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-md bg-zinc-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white dark:bg-white dark:text-zinc-950">
-              <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-              Account
+            <div className="flex items-start justify-between gap-3">
+              <div className="inline-flex items-center gap-2 rounded-md bg-zinc-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white dark:bg-white dark:text-zinc-950">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                Account
+              </div>
+              <div className="flex shrink-0 items-center gap-2 md:hidden">
+                {PRIVY_ENABLED ? (
+                  <PrivyPositionsConnect address={address} onAddress={setAddress} onError={setError} />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button onClick={connect} className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-all active:scale-95 hover:bg-blue-500">
+                      <Wallet size={13} />
+                      {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect'}
+                    </button>
+                    {address && (
+                      <button
+                        onClick={() => {
+                          setAddress(null);
+                          rememberWallet(null);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-bold dark:text-zinc-500 text-zinc-500 transition-colors hover:border-rose-500 hover:text-rose-600"
+                        title="Disconnect"
+                      >
+                        <ArrowRight size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="mt-3 text-xl font-semibold tracking-tight dark:text-zinc-50 text-zinc-950">
               Portfolio
@@ -503,12 +545,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                   : 'Connect your account to view positions.'}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {address && (
-              <button onClick={() => refresh(true)} className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-semibold dark:text-zinc-300 text-zinc-700 hover:border-blue-500 transition-colors">
-                <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              </button>
-            )}
+          <div className="hidden items-center gap-2 md:flex">
             {PRIVY_ENABLED ? (
               <PrivyPositionsConnect address={address} onAddress={setAddress} onError={setError} />
             ) : (
@@ -519,7 +556,10 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                 </button>
                 {address && (
                   <button
-                    onClick={() => setAddress(null)}
+                    onClick={() => {
+                      setAddress(null);
+                      rememberWallet(null);
+                    }}
                     className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-bold dark:text-zinc-500 text-zinc-500 transition-colors hover:border-rose-500 hover:text-rose-600"
                     title="Disconnect"
                   >
