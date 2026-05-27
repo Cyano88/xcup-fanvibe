@@ -14,11 +14,7 @@ const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const BALANCE_CACHE_PREFIX = 'fanvibe.okbBalance.';
-
-function shortHash(hash?: string): string {
-  if (!hash) return '-';
-  return `${hash.slice(0, 8)}...${hash.slice(-6)}`;
-}
+const POSITION_BATCH_SIZE = 10;
 
 function formatOKB(wei: string): string {
   try {
@@ -40,6 +36,16 @@ function formatTime(ts?: number | string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(ms));
+}
+
+function stripUsdPrefix(value: string | null): string | null {
+  return value?.replace(/^US/, '') ?? null;
+}
+
+function positionUpdatedAt(position: UserPosition): number {
+  if (position.type === 'refund') return position.refund.timestamp;
+  if (position.type === 'champion') return position.stake.timestamp;
+  return position.settlement?.settledAt ?? position.stake.timestamp;
 }
 
 function fmtCountdown(ms: number): string {
@@ -499,6 +505,10 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
+  const [visibleCount, setVisibleCount] = useState(POSITION_BATCH_SIZE);
+  const [goalFlashIds, setGoalFlashIds] = useState<Set<string>>(() => new Set());
+  const previousScoresRef = useRef<Record<string, number>>({});
+  const goalFlashTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const okbUsd = useOkbUsdPrice();
 
   const connect = useCallback(async () => {
@@ -550,6 +560,59 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => () => {
+    Object.values(goalFlashTimersRef.current).forEach(clearTimeout);
+  }, []);
+
+  useEffect(() => {
+    setVisibleCount(POSITION_BATCH_SIZE);
+  }, [address]);
+
+  useEffect(() => {
+    const stakedFixtureIds = new Set(
+      positions
+        .filter((position): position is Extract<UserPosition, { type: 'match' }> => position.type === 'match')
+        .map(position => position.stake.fixtureId),
+    );
+    const nextScores: Record<string, number> = {};
+    const flashed: string[] = [];
+
+    Object.entries(matchStates).forEach(([fixtureId, state]) => {
+      const total = state.homeScore + state.awayScore;
+      nextScores[fixtureId] = total;
+      const previous = previousScoresRef.current[fixtureId];
+      if (
+        previous !== undefined
+        && total > previous
+        && stakedFixtureIds.has(fixtureId)
+        && (state.status === 'live' || state.status === 'half_time')
+      ) {
+        flashed.push(fixtureId);
+      }
+    });
+
+    previousScoresRef.current = nextScores;
+    if (flashed.length === 0) return;
+
+    setGoalFlashIds(current => {
+      const next = new Set(current);
+      flashed.forEach(fixtureId => next.add(fixtureId));
+      return next;
+    });
+
+    flashed.forEach(fixtureId => {
+      if (goalFlashTimersRef.current[fixtureId]) clearTimeout(goalFlashTimersRef.current[fixtureId]);
+      goalFlashTimersRef.current[fixtureId] = setTimeout(() => {
+        setGoalFlashIds(current => {
+          const next = new Set(current);
+          next.delete(fixtureId);
+          return next;
+        });
+        delete goalFlashTimersRef.current[fixtureId];
+      }, 2400);
+    });
+  }, [matchStates, positions]);
+
   const summary = useMemo(() => {
     const active = positions.filter(position => {
       const liveFixture = position.type === 'match'
@@ -580,6 +643,33 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
     return { active, paid, totalWei };
   }, [fixtures, matchStates, positions]);
   const volumeUsd = formatOkbUsdFromWei(summary.totalWei, okbUsd);
+  const sortedPositions = useMemo(() => {
+    return [...positions].sort((a, b) => {
+      const contextFor = (position: UserPosition) => {
+        const liveFixture = position.type === 'match'
+          ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
+          : position.type === 'refund'
+            ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
+            : undefined;
+        const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
+        const effectiveStatus = effectiveMatchStatus(position, liveFixture, liveState);
+        const isLive = liveState?.status === 'live' || liveState?.status === 'half_time';
+        const priority = isLive ? 0 : effectiveStatus === 'active' ? 1 : 2;
+        return {
+          priority,
+          updatedAt: positionUpdatedAt(position),
+          liveMinute: liveState?.minute ?? 0,
+        };
+      };
+      const left = contextFor(a);
+      const right = contextFor(b);
+      if (left.priority !== right.priority) return left.priority - right.priority;
+      if (left.priority === 0 && left.liveMinute !== right.liveMinute) return right.liveMinute - left.liveMinute;
+      return right.updatedAt - left.updatedAt;
+    });
+  }, [fixtures, matchStates, positions]);
+  const visiblePositions = sortedPositions.slice(0, visibleCount);
+  const hasMorePositions = visibleCount < sortedPositions.length;
 
   return (
     <section className="overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white shadow-sm">
@@ -677,16 +767,19 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
       {error && <div className="mx-4 mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-500">{error}</div>}
 
       {address && (
-        <div className="space-y-2 p-4">
+        <div className="p-4">
           {positions.length === 0 ? (
             <div className="rounded-md border dark:border-zinc-900 border-zinc-100 px-3 py-6 text-center text-sm dark:text-zinc-500 text-zinc-500">
               No stakes found for this wallet yet.
             </div>
-          ) : positions.map((position) => {
+          ) : (
+            <>
+              <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1 scrollbar-thin">
+          {visiblePositions.map((position) => {
             const txHash = position.type === 'refund' ? position.refund.txHash : position.stake.txHash;
             const actionHash = position.type === 'refund' ? position.refund.refundTxHash : position.type === 'match' ? position.payout?.txHash : undefined;
             const amount = position.type === 'refund' ? position.refund.amountWei : position.stake.amountWei;
-            const amountUsd = formatOkbUsdFromWei(amount, okbUsd);
+            const amountUsd = stripUsdPrefix(formatOkbUsdFromWei(amount, okbUsd));
             const liveFixture = position.type === 'match'
               ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
               : position.type === 'refund'
@@ -728,15 +821,20 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                 liveFixture?.round ? liveFixture.round : liveFixture?.group ? `Group ${liveFixture.group}` : undefined,
                 liveFixture?.matchday ? `MD${liveFixture.matchday}` : undefined,
                 liveFixture?.kickoff ? `Kickoff ${formatTime(liveFixture.kickoff)}` : undefined,
-                effectiveStatus !== 'active' && position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
-                effectiveStatus !== 'active' && (position.settlement?.outcome ?? liveFixture?.result) ? `Result ${(position.settlement?.outcome ?? liveFixture?.result)?.toUpperCase()}` : undefined,
               ].filter(Boolean).join(' - ')
               : position.type === 'refund'
                 ? `Rejected ${formatTime(position.refund.timestamp)} - ${position.refund.reason}`
                 : `Placed ${formatTime(position.stake.timestamp)}${position.winner ? ` - Winner ${position.winner}` : ''}`;
+            const settledMeta = position.type === 'match' && effectiveStatus !== 'active'
+              ? [
+                position.settlement?.settledAt ? `Settled ${formatTime(position.settlement.settledAt)}` : undefined,
+                (position.settlement?.outcome ?? liveFixture?.result) ? `Result ${(position.settlement?.outcome ?? liveFixture?.result)?.toUpperCase()}` : undefined,
+              ].filter(Boolean).join(' - ')
+              : '';
+              const flashGoal = position.type === 'match' && goalFlashIds.has(position.stake.fixtureId);
 
-            return (
-              <div
+              return (
+                <div
                 key={`${position.type}-${txHash}`}
                 role={canOpenMatch ? 'button' : undefined}
                 tabIndex={canOpenMatch ? 0 : undefined}
@@ -746,26 +844,33 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     event.preventDefault();
                     onWatch?.(liveFixture.id);
                   }
-                } : undefined}
-                className={`flex items-center justify-between gap-3 rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950 bg-white px-3 py-3 shadow-sm ${canOpenMatch ? 'cursor-pointer transition-colors dark:hover:border-blue-500 hover:border-blue-500' : ''}`}
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-semibold dark:text-zinc-100 text-zinc-900">{title}</span>
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${pickTone(pickLabel(position))}`}>
-                      {pickLabel(position)}
-                    </span>
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${statusTone(effectiveStatus)}`}>
-                      {statusLabel(position, effectiveStatus)}
-                    </span>
-                    {matchBadge && (
-                      <span className="shrink-0 rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums text-zinc-600 dark:text-zinc-300">
-                        {matchBadge}
+                  } : undefined}
+                  className={`position-row flex items-center justify-between gap-3 rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950 bg-white px-3 py-3 shadow-sm ${canOpenMatch ? 'cursor-pointer transition-colors dark:hover:border-blue-500 hover:border-blue-500' : ''} ${flashGoal ? 'position-goal-flash' : ''}`}
+                >
+                  <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-semibold dark:text-zinc-100 text-zinc-900">{title}</span>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${pickTone(pickLabel(position))}`}>
+                        {pickLabel(position)}
+                      </span>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${statusTone(effectiveStatus)}`}>
+                        {statusLabel(position, effectiveStatus)}
+                      </span>
+                      {matchBadge && (
+                        <span className="shrink-0 rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums text-zinc-600 dark:text-zinc-300">
+                          {matchBadge}
+                        </span>
+                      )}
+                    </div>
+                    {settledMeta && (
+                      <span className="shrink-0 text-[10px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">
+                        {settledMeta}
                       </span>
                     )}
                   </div>
                   <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
-                    {formatOKB(amount)}{amountUsd ? ` (${amountUsd})` : ''} - Stake {shortHash(txHash)}
+                    {formatOKB(amount)}{amountUsd ? ` (${amountUsd})` : ''}
                   </div>
                   <div className="mt-0.5 text-[10px] dark:text-zinc-600 text-zinc-400">
                     {meta}
@@ -785,6 +890,18 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
               </div>
             );
           })}
+              </div>
+              {hasMorePositions && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount(count => Math.min(count + POSITION_BATCH_SIZE, sortedPositions.length))}
+                  className="mt-3 w-full rounded-md border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs font-semibold dark:text-zinc-500 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
+                >
+                  Show 10 more
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
     </section>

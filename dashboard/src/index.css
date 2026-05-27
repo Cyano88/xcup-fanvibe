@@ -196,6 +196,25 @@
   100% { opacity: 0; }
 }
 
+@keyframes positionGoalFlash {
+  0%, 100% {
+    background-color: transparent;
+    border-color: rgba(24, 24, 27, 0.1);
+  }
+  12%, 28%, 44% {
+    background-color: rgba(16, 185, 129, 0.13);
+    border-color: rgba(16, 185, 129, 0.34);
+  }
+  20%, 36%, 52% {
+    background-color: transparent;
+    border-color: rgba(16, 185, 129, 0.16);
+  }
+}
+
+.position-goal-flash {
+  animation: positionGoalFlash 2.25s ease-in-out 1;
+}
+
 .fanvibe-live-panel {
   position: relative;
   overflow: hidden;

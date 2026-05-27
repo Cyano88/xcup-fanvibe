@@ -1340,7 +1340,7 @@ export default function App() {
         )}
 
         {/* Recent settlements strip */}
-        {(activeTab === 'home' || activeTab === 'portfolio') && settledRailItems.length > 0 && (
+        {activeTab === 'home' && settledRailItems.length > 0 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-semibold uppercase tracking-[0.18em]">Settled</span>
             {settledRailItems.map(({ settlement: s, fixture: fix }) => {
