@@ -14,7 +14,8 @@ export async function reportStakeTx(txHash: `0x${string}`): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ txHash }),
       });
-      if (response.ok) lastError = undefined;
+      if (response.ok) return;
+      lastError = new Error(`Stake report failed with status ${response.status}`);
     } catch (err) {
       lastError = err;
     }
