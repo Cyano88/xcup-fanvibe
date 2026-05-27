@@ -4,7 +4,6 @@ import { BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, N
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
-import { StakeModal } from './components/StakeModal';
 import { SettlementToast } from './components/SettlementToast';
 import { MyPositions } from './components/MyPositions';
 import { MatchViewer } from './components/MatchViewer';
@@ -253,7 +252,6 @@ export default function App() {
   const [wsConnected, setWsConnected]           = useState(false);
   const [settlements, setSettlements]           = useState<SettlementResult[]>([]);
   const [pendingToasts, setPendingToasts]       = useState<SettlementResult[]>([]);
-  const [stakeTarget, setStakeTarget]           = useState<{ fixtureId: string; outcome: Outcome } | null>(null);
   const [stakeClosedNotices, setStakeClosedNotices] = useState<Record<string, string>>({});
   const [logOpen, setLogOpen]                   = useState(false);
   const [proofOpen, setProofOpen]               = useState(false);
@@ -750,16 +748,17 @@ export default function App() {
   const handleStake    = useCallback((fixtureId: string, outcome: Outcome) => {
     const fixture = fixtures.find(f => f.id === fixtureId);
     const matchState = matchStates[fixtureId];
-    if (!fixture) return;
+    if (!fixture) return false;
     if (fixture.status === 'locked' || fixture.status === 'settled') {
       showStakeClosedNotice(fixtureId, fixture.status === 'settled' ? 'This match has already settled.' : 'Stake on the next available match.');
-      return;
+      return false;
     }
     if (matchState?.status === 'live' || matchState?.status === 'half_time' || matchState?.status === 'finished') {
       showStakeClosedNotice(fixtureId, 'Stake on the next available match.');
-      return;
+      return false;
     }
-    setStakeTarget({ fixtureId, outcome });
+    void outcome;
+    return true;
   }, [fixtures, matchStates, showStakeClosedNotice]);
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
   const handleWatch    = useCallback((fixtureId: string) => setWatchingId(fixtureId), []);
@@ -784,7 +783,6 @@ export default function App() {
     watchedStateRef.current = { ...watchedStateRef.current, ...matchStates };
   }, [matchStates]);
 
-  const activeFixture  = stakeTarget ? fixtures.find(f => f.id === stakeTarget.fixtureId) ?? null : null;
   const watchingFixture = watchingFixtureId
     ? fixtures.find(f => f.id === watchingFixtureId) ?? watchedFixtureRef.current[watchingFixtureId] ?? null
     : null;
@@ -1576,6 +1574,7 @@ export default function App() {
                   seasonStartedAt={viewMode === 'simulated' ? seasonStartedAt : undefined}
                   seasonFixtureStartsAt={viewMode === 'simulated' ? seasonFixtureStartAtMs(fixtures, fixture, seasonStartedAt, matchStates) : undefined}
                   stakeClosedNotice={stakeClosedNotices[fixture.id]}
+                  refereeAddress={refereeAddress}
                   onStake={handleStake}
                   onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
                 />
@@ -1799,12 +1798,6 @@ export default function App() {
           </div>
         </div>
       </main>
-
-      {stakeTarget && activeFixture && (
-        <StakeModal fixture={activeFixture} defaultOutcome={stakeTarget.outcome}
-          refereeAddress={refereeAddress} onClose={() => setStakeTarget(null)}
-          onStakeClosed={showStakeClosedNotice} />
-      )}
 
       {pendingToasts.map(s => (
         <SettlementToast key={`${s.fixtureId}-${s.blockNumber}`} settlement={s} onDismiss={() => dismissToast(s)} />

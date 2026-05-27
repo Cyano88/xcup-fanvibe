@@ -76,7 +76,7 @@ function PrimaryChampionStakeAction({
   const buttonClass = 'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
   const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB ->` : 'Sign in to stake';
 
-  if (externalWallet) {
+  if (!authenticated && externalWallet) {
     return (
       <PrivyWalletStakeButton
         amountOKB={amountOKB}
@@ -285,7 +285,11 @@ export function ChampionPick({
               return (
                 <button
                   key={team.code}
-                  onClick={() => canStake ? setSelected(s => s === team.code ? null : team.code) : undefined}
+                  onClick={() => {
+                    if (!canStake) return;
+                    setTxError(null);
+                    setSelected(s => s === team.code ? null : team.code);
+                  }}
                   disabled={!canStake}
                   style={team.iso !== 'un' && team.iso !== 'tbd'
                     ? { backgroundImage: `url(${flagUrl(team.iso)})` }
@@ -353,7 +357,10 @@ export function ChampionPick({
                       step="0.001"
                       min="0.001"
                       value={amountOKB}
-                      onChange={e => setAmountOKB(e.target.value)}
+                      onChange={e => {
+                        setTxError(null);
+                        setAmountOKB(e.target.value);
+                      }}
                       className="w-full min-w-0 bg-transparent text-sm font-semibold dark:text-zinc-100 text-zinc-800 outline-none"
                     />
                     <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>

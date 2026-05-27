@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AlarmClock, Lock, MonitorPlay, TrendingUp, Zap } from 'lucide-react';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Pool, Outcome, MatchState } from '../types';
-import { formatPool, countdown } from '../lib/encode';
-import { formatOkbUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { encodeStakeCalldata, formatPool, countdown } from '../lib/encode';
+import { formatOkbUsd, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { PrivyStakeButton } from './PrivyStakeButton';
+import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
+import { PrivyBalanceHint } from './PrivyBalanceHint';
 
 interface Props {
   fixture: Fixture;
@@ -14,9 +18,12 @@ interface Props {
   seasonStartedAt?: number;
   seasonFixtureStartsAt?: number | null;
   stakeClosedNotice?: string;
-  onStake: (fixtureId: string, outcome: Outcome) => void;
+  refereeAddress: string;
+  onStake: (fixtureId: string, outcome: Outcome) => boolean;
   onWatch: (fixtureId: string) => void;
 }
+
+const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 
 const FLAG_URL = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -77,6 +84,64 @@ function formatShortDuration(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function isEmbeddedWallet(walletClientType: string) {
+  return walletClientType === 'privy' || walletClientType === 'privy-v2';
+}
+
+function PrimaryMatchStakeAction({
+  amountOKB,
+  calldata,
+  refereeAddress,
+  disabled,
+  onSuccess,
+  onError,
+}: {
+  amountOKB: string;
+  calldata: `0x${string}`;
+  refereeAddress: string;
+  disabled?: boolean;
+  onSuccess: (hash: `0x${string}`, amountWei: bigint) => void;
+  onError: (message: string) => void;
+}) {
+  const { authenticated } = usePrivy();
+  const { wallets } = useWallets();
+  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const className = 'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+  const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB ->` : 'Sign in to stake';
+
+  if (!authenticated && externalWallet) {
+    return (
+      <PrivyWalletStakeButton
+        amountOKB={amountOKB}
+        calldata={calldata}
+        refereeAddress={refereeAddress}
+        disabled={disabled}
+        pendingLabel="Confirm in wallet..."
+        onSuccess={(hash, amountWei) => onSuccess(hash, amountWei)}
+        onError={(message) => onError(message || '')}
+        className={className}
+      >
+        {label}
+      </PrivyWalletStakeButton>
+    );
+  }
+
+  return (
+    <PrivyStakeButton
+      amountOKB={amountOKB}
+      calldata={calldata}
+      refereeAddress={refereeAddress}
+      disabled={disabled}
+      pendingLabel="Confirm stake..."
+      onSuccess={(hash, amountWei) => onSuccess(hash, amountWei)}
+      onError={(message) => onError(message || '')}
+      className={className}
+    >
+      {label}
+    </PrivyStakeButton>
+  );
+}
+
 export function FixtureCard({
   fixture,
   pool,
@@ -87,6 +152,7 @@ export function FixtureCard({
   seasonStartedAt,
   seasonFixtureStartsAt,
   stakeClosedNotice,
+  refereeAddress,
   onStake,
   onWatch,
 }: Props) {
@@ -97,7 +163,12 @@ export function FixtureCard({
   const [showHome, setShowHome]   = useState(true);
   const [hovered, setHovered]     = useState(false);
   const [tick, setTick]           = useState(0);
+  const [stakeOutcome, setStakeOutcome] = useState<Outcome | null>(null);
+  const [stakeAmount, setStakeAmount] = useState('0.01');
+  const [stakeError, setStakeError] = useState<string | null>(null);
+  const [stakeHash, setStakeHash] = useState<string | null>(null);
   const okbUsd = useOkbUsdPrice();
+  const stakeUsd = formatStakeUsd(stakeAmount, okbUsd);
   const isSeasonPlay = fixture.mode === 'simulated';
   const isLiveMatch = matchState?.status === 'live' || matchState?.status === 'half_time';
   const isFinishedMatch = matchState?.status === 'finished';
@@ -160,6 +231,12 @@ export function FixtureCard({
   const homeOdds = hasPool ? Math.round(fmt.homeShare) : fixture.baseOdds.home;
   const drawOdds = hasPool ? Math.round(fmt.drawShare)  : fixture.baseOdds.draw;
   const awayOdds = hasPool ? Math.round(fmt.awayShare)  : fixture.baseOdds.away;
+
+  const selectStake = useCallback((outcome: Outcome) => {
+    if (!onStake(fixture.id, outcome)) return;
+    setStakeError(null);
+    setStakeOutcome(current => current === outcome ? null : outcome);
+  }, [fixture.id, onStake]);
 
   const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(fixture.kickoff).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
@@ -364,7 +441,7 @@ export function FixtureCard({
           <div className="grid grid-cols-3 gap-1.5">
             {/* Home */}
             <button
-              onClick={() => onStake(fixture.id, 'home')}
+              onClick={() => selectStake('home')}
               onMouseEnter={() => flipTo('home')}
               disabled={!isStakeWindowOpen}
               className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
@@ -384,7 +461,7 @@ export function FixtureCard({
 
             {/* Draw */}
             <button
-              onClick={() => onStake(fixture.id, 'draw')}
+              onClick={() => selectStake('draw')}
               disabled={!isStakeWindowOpen}
               className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
                 dark:bg-zinc-800/50 bg-zinc-100 dark:border-zinc-700/50 border-zinc-200
@@ -403,7 +480,7 @@ export function FixtureCard({
 
             {/* Away */}
             <button
-              onClick={() => onStake(fixture.id, 'away')}
+              onClick={() => selectStake('away')}
               onMouseEnter={() => flipTo('away')}
               disabled={!isStakeWindowOpen}
               className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
@@ -420,6 +497,66 @@ export function FixtureCard({
               </span>
               {hasPool && awayPoolUsd && <span className="text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">{awayPoolUsd}</span>}
             </button>
+          </div>
+        )}
+        {stakeOutcome && isStakeWindowOpen && (
+          <div className="mt-3 rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-900/55 bg-zinc-50 p-3">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-bold dark:text-zinc-100 text-zinc-800">
+                  {stakeOutcome === 'home' ? fixture.home.name : stakeOutcome === 'away' ? fixture.away.name : 'Draw'}
+                </div>
+                <div className="text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
+                  {stakeOutcome === 'draw' ? `${fixture.home.code} vs ${fixture.away.code}` : 'Match stake'}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setStakeError(null);
+                  setStakeOutcome(null);
+                }}
+                className="h-8 rounded-md px-2.5 text-xs font-semibold dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(150px,1fr)_auto] sm:items-center">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="flex h-9 min-w-[120px] items-center gap-1 dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg px-2">
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0.001"
+                    value={stakeAmount}
+                    onChange={event => {
+                      setStakeError(null);
+                      setStakeAmount(event.target.value);
+                    }}
+                    className="w-full min-w-0 bg-transparent text-sm font-semibold dark:text-zinc-100 text-zinc-800 outline-none"
+                  />
+                  <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
+                </div>
+                {stakeUsd && <span className="shrink-0 text-[11px] font-medium dark:text-zinc-600 text-zinc-400">{stakeUsd}</span>}
+              </div>
+              {PRIVY_ENABLED && (
+                <PrimaryMatchStakeAction
+                  amountOKB={stakeAmount}
+                  calldata={encodeStakeCalldata(fixture.id, stakeOutcome)}
+                  refereeAddress={refereeAddress}
+                  disabled={!refereeAddress}
+                  onSuccess={(hash) => {
+                    setStakeHash(hash);
+                    setStakeError(null);
+                    setStakeOutcome(null);
+                  }}
+                  onError={(message) => setStakeError(message || null)}
+                />
+              )}
+            </div>
+            {PRIVY_ENABLED && <div className="mt-2"><PrivyBalanceHint amountOKB={stakeAmount} /></div>}
+            {stakeError && (
+              <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-[11px] font-semibold text-red-400">{stakeError}</p>
+            )}
           </div>
         )}
       </div>
@@ -440,6 +577,20 @@ export function FixtureCard({
             : fixture.venue.split(' -')[0].trim()}
         </span>
       </div>
+      {stakeHash && (
+        <div className="flex items-center gap-2 px-4 pb-3 text-[11px] dark:text-blue-300 text-blue-700">
+          <span>Stake sent</span>
+          <a
+            href={`https://www.okx.com/web3/explorer/xlayer/tx/${stakeHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="truncate underline"
+          >
+            {stakeHash.slice(0, 16)}...
+          </a>
+          <button onClick={() => setStakeHash(null)} className="ml-auto text-zinc-500 hover:text-zinc-300">x</button>
+        </div>
+      )}
     </div>
   );
 }
