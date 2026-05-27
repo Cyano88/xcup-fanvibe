@@ -11,7 +11,7 @@ import {
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 import { parseEther } from 'viem';
 import { xLayerMainnet } from '../lib/chain';
-import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
+import { walletErrorMessage } from '../lib/walletErrors';
 
 interface PrivyStakeButtonProps {
   amountOKB: string;
@@ -90,14 +90,6 @@ export function PrivyStakeButton({
 
       const amountWei = parseEther(amountOKB || '0');
       if (amountWei <= 0n) throw new Error('Invalid stake amount');
-
-      const provider = await wallet.getEthereumProvider();
-      const balanceHex = await provider.request({
-        method: 'eth_getBalance',
-        params: [wallet.address, 'latest'],
-      }) as string;
-      const balance = BigInt(balanceHex);
-      if (balance < amountWei) throw new Error(lowBalanceMessage(amountWei, balance));
 
       try {
         const smartClient = await getClientForChain({ id: xLayerMainnet.id }) ?? smartWalletClient;

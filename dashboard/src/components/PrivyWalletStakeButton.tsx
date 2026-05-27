@@ -4,7 +4,7 @@ import { Wallet } from 'lucide-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { parseEther } from 'viem';
 import { xLayerMainnet } from '../lib/chain';
-import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
+import { walletErrorMessage } from '../lib/walletErrors';
 
 interface PrivyWalletStakeButtonProps {
   amountOKB: string;
@@ -60,13 +60,6 @@ export function PrivyWalletStakeButton({
       if (amountWei <= 0n) throw new Error('Invalid stake amount');
 
       const provider = await externalWallet.getEthereumProvider();
-      const balanceHex = await provider.request({
-        method: 'eth_getBalance',
-        params: [externalWallet.address, 'latest'],
-      }) as string;
-      const balance = BigInt(balanceHex);
-      if (balance < amountWei) throw new Error(lowBalanceMessage(amountWei, balance));
-
       const hash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{

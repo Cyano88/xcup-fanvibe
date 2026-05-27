@@ -21,7 +21,7 @@
   }
 
   *:focus-visible {
-    @apply outline-none ring-1 ring-blue-500/45 ring-offset-1 ring-offset-black;
+    outline: none;
   }
 
   ::selection {

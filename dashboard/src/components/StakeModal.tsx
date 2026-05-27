@@ -187,14 +187,24 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
   }, [fixture.id, outcome, amount, refereeAddress, onClose, onStakeClosed]);
 
   const checkStakeOpen = useCallback(async () => {
-    const statusRes = await fetch(`${import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001'}/stake/status/${fixture.id}`);
-    if (statusRes.ok) {
-      const status = await statusRes.json() as { canStake?: boolean; reason?: string };
-      if (!status.canStake) {
-        onStakeClosed?.(fixture.id, status.reason);
-        onClose();
-        return false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 1800);
+    try {
+      const statusRes = await fetch(`${import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001'}/stake/status/${fixture.id}`, {
+        signal: controller.signal,
+      });
+      if (statusRes.ok) {
+        const status = await statusRes.json() as { canStake?: boolean; reason?: string };
+        if (!status.canStake) {
+          onStakeClosed?.(fixture.id, status.reason);
+          onClose();
+          return false;
+        }
       }
+    } catch {
+      return true;
+    } finally {
+      window.clearTimeout(timer);
     }
     return true;
   }, [fixture.id, onClose, onStakeClosed]);
