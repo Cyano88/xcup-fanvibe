@@ -7,6 +7,7 @@ import { explorerTx, xLayerMainnet } from '../lib/chain';
 import { seasonFixtureStartAtMs } from '../lib/seasonTournament';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
+import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
@@ -276,7 +277,7 @@ function PrivyPositionsConnect({
   );
 }
 
-function PrivyWalletPanel({ address, onError }: { address: string; onError: (message: string | null) => void }) {
+function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUsd: number | null; onError: (message: string | null) => void }) {
   const { wallets } = useWallets();
   const [mode, setMode] = useState<'balance' | 'withdraw'>('balance');
   const [balanceWei, setBalanceWei] = useState<bigint | null>(null);
@@ -288,6 +289,8 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wallet = wallets.find(item => item.address.toLowerCase() === address.toLowerCase()) ?? wallets[0];
+  const balanceUsd = formatOkbUsdFromWei(balanceWei, okbUsd);
+  const transferUsd = formatStakeUsd(amount, okbUsd);
 
   const refreshBalance = useCallback(async (showError = false) => {
     if (!wallet) return;
@@ -370,6 +373,9 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
             <span className="text-2xl font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatBalance(balanceWei)}</span>
             <span className="text-xs font-bold dark:text-zinc-500 text-zinc-400">OKB</span>
           </div>
+          {balanceUsd && (
+            <div className="mt-0.5 text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{balanceUsd}</div>
+          )}
         </div>
         <div className="inline-flex rounded-md border dark:border-zinc-800 border-zinc-200 p-0.5">
           <button
@@ -420,6 +426,7 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">OKB</span>
           </div>
+          {transferUsd && <div className="-mt-1 text-[10px] font-medium tabular-nums text-zinc-400 md:hidden">{transferUsd}</div>}
           <button
             type="button"
             onClick={withdraw}
@@ -429,6 +436,7 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
             <Send size={13} />
             {pending ? 'Confirming' : 'Send'}
           </button>
+          {transferUsd && <div className="hidden text-[10px] font-medium tabular-nums text-zinc-400 md:block md:col-start-2">{transferUsd}</div>}
         </div>
       )}
 
@@ -447,6 +455,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
+  const okbUsd = useOkbUsdPrice();
 
   const connect = useCallback(async () => {
     const provider = (window as typeof window & { ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
@@ -510,6 +519,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
     }, 0n);
     return { active, paid, totalWei };
   }, [positions]);
+  const volumeUsd = formatOkbUsdFromWei(summary.totalWei, okbUsd);
 
   return (
     <section className="overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white shadow-sm">
@@ -595,11 +605,12 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
           <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/50 bg-zinc-50 px-3 py-2">
             <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Volume</div>
             <div className="mt-1 text-lg font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatOKB(summary.totalWei.toString())}</div>
+            {volumeUsd && <div className="mt-0.5 text-[10px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{volumeUsd}</div>}
           </div>
         </div>
 
         {address && PRIVY_ENABLED && (
-          <PrivyWalletPanel address={address} onError={setError} />
+          <PrivyWalletPanel address={address} okbUsd={okbUsd} onError={setError} />
         )}
       </div>
 
@@ -615,6 +626,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
             const txHash = position.type === 'refund' ? position.refund.txHash : position.stake.txHash;
             const actionHash = position.type === 'refund' ? position.refund.refundTxHash : position.type === 'match' ? position.payout?.txHash : undefined;
             const amount = position.type === 'refund' ? position.refund.amountWei : position.stake.amountWei;
+            const amountUsd = formatOkbUsdFromWei(amount, okbUsd);
             const liveFixture = position.type === 'match'
               ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
               : position.type === 'refund'
@@ -692,7 +704,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     )}
                   </div>
                   <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
-                    {formatOKB(amount)} - Stake {shortHash(txHash)}
+                    {formatOKB(amount)}{amountUsd ? ` (${amountUsd})` : ''} - Stake {shortHash(txHash)}
                   </div>
                   <div className="mt-0.5 text-[10px] dark:text-zinc-600 text-zinc-400">
                     {meta}

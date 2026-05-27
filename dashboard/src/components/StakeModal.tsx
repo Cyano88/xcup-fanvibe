@@ -313,7 +313,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
             <div className="flex flex-col items-center gap-3 py-4">
               <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
               <div className="text-sm text-zinc-400 text-center">Confirm in wallet…</div>
-              <div className="text-xs text-zinc-600">Sending {amount} OKB on X Layer Mainnet</div>
+              <div className="text-xs text-zinc-600">Sending {amount} OKB{stakeUsd ? ` (${stakeUsd})` : ''} on X Layer Mainnet</div>
             </div>
           )}
 
@@ -324,7 +324,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                 <span className="text-sm font-medium">Stake confirmed!</span>
               </div>
               <div className="text-xs text-zinc-500">
-                Your stake of <span className="text-zinc-300">{amount} OKB</span> on{' '}
+                Your stake of <span className="text-zinc-300">{amount} OKB{stakeUsd ? ` (${stakeUsd})` : ''}</span> on{' '}
                 <span className="text-zinc-300">{OUTCOME_LABEL[outcome]}</span> is live on-chain.
               </div>
               <a

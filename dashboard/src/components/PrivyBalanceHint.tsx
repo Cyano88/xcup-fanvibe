@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { xLayerMainnet } from '../lib/chain';
+import { formatOkbUsdFromWei, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 
 function isEmbeddedWallet(walletClientType: string) {
   return walletClientType === 'privy' || walletClientType === 'privy-v2';
@@ -17,6 +18,7 @@ export function PrivyBalanceHint({ amountOKB }: { amountOKB: string }) {
   const { wallets } = useWallets();
   const [balance, setBalance] = useState<bigint | null>(null);
   const [checkedAddress, setCheckedAddress] = useState<string | null>(null);
+  const okbUsd = useOkbUsdPrice();
 
   const wallet = useMemo(
     () => wallets.find(candidate => !isEmbeddedWallet(candidate.walletClientType))
@@ -64,10 +66,11 @@ export function PrivyBalanceHint({ amountOKB }: { amountOKB: string }) {
   }, [authenticated, wallet, amountOKB]);
 
   if (!authenticated || !checkedAddress || balance === null || required <= 0n || balance >= required) return null;
+  const balanceUsd = formatOkbUsdFromWei(balance, okbUsd);
 
   return (
     <div className="w-full text-[11px] font-semibold text-red-400">
-      Low OKB balance: {formatOKB(balance)} OKB available.
+      Low OKB balance: {formatOKB(balance)} OKB{balanceUsd ? ` (${balanceUsd})` : ''} available.
     </div>
   );
 }

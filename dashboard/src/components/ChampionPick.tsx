@@ -5,7 +5,7 @@ import type { Fixture, MatchState, ChampionPool } from '../types';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { STRENGTH } from '../lib/clientSim';
 import { encodeChampionStake, CHAMP_TEAM_INDEX } from '../lib/encode';
-import { formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
@@ -156,6 +156,7 @@ export function ChampionPick({
   }, [daemonChampPool, localPool, championTeams]);
 
   const totalWei = Object.values(effectivePool).reduce((s, v) => s + BigInt(v), 0n);
+  const totalUsd = formatOkbUsdFromWei(totalWei, okbUsd);
   const totalCount = (daemonChampPool?.count ?? 0) + Object.values(localPool).filter(v => v > 0n).length;
   const isSettled = daemonChampPool?.settled ?? false;
   const settledWinner = daemonChampPool?.winner;
@@ -251,7 +252,7 @@ export function ChampionPick({
           {!isSettled && (
             <span className="text-[11px] dark:text-zinc-500 text-zinc-400">
               {totalWei > 0n
-                ? `${fmtWei(totalWei)} OKB  - ${totalCount} pick${totalCount !== 1 ? 's' : ''}`
+                ? `${fmtWei(totalWei)} OKB${totalUsd ? ` (${totalUsd})` : ''}  - ${totalCount} pick${totalCount !== 1 ? 's' : ''}`
                 : 'Be the first to stake'}
             </span>
           )}

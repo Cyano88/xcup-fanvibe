@@ -17,6 +17,7 @@ import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
 import { X_LAYER_RPC_URLS, xLayerMainnet, explorerAddr, explorerTx } from './lib/chain';
 import { shortAddr } from './lib/encode';
+import { formatOkbUsd, formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
 import {
   SEASON_GROUPS,
   DEFAULT_SEASON_TIMING,
@@ -229,6 +230,7 @@ function preseasonArchiveRank(fixture: Fixture): number {
 }
 
 export default function App() {
+  const okbUsd = useOkbUsdPrice();
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
   if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
   const initialSeason = initialSeasonRef.current;
@@ -994,6 +996,8 @@ export default function App() {
       return sum;
     }
   }, 0n);
+  const proofPoolUsd = formatOkbUsdFromWei(proofPoolWei, okbUsd);
+  const reserveUsd = formatOkbUsd(metabolism.okbBalanceFormatted, okbUsd);
   const proofStakeTxs = logs
     .filter(log => log.prefix === 'STAKE' && !!log.txHash)
     .slice(-5)
@@ -1703,6 +1707,7 @@ export default function App() {
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Reserve</div>
                   <div className={`mt-1 text-sm font-semibold tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</div>
+                  {reserveUsd && <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{reserveUsd}</div>}
                   <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{metabolism.healthPercent}% ready</div>
                 </div>
                 <div>
@@ -1722,6 +1727,7 @@ export default function App() {
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Pool</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fmtOKBWei(proofPoolWei)}</div>
+                  {proofPoolUsd && <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{proofPoolUsd}</div>}
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Open Markets</div>
@@ -1759,7 +1765,9 @@ export default function App() {
                     {proofPayoutTxs.length > 0 ? proofPayoutTxs.map(payout => (
                       <a key={`${payout.fixtureId}-${payout.txHash}`} href={explorerTx(payout.txHash)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs transition-colors dark:hover:border-blue-500/40 hover:border-blue-300">
                         <span className="min-w-0 truncate dark:text-zinc-300 text-zinc-700">{payout.fixtureId} payout</span>
-                        <span className="shrink-0 font-semibold tabular-nums dark:text-zinc-500 text-zinc-500">{fmtOKBWei(payout.amountWei)} - {shortAddr(payout.txHash)}</span>
+                        <span className="shrink-0 font-semibold tabular-nums dark:text-zinc-500 text-zinc-500">
+                          {fmtOKBWei(payout.amountWei)}{formatOkbUsdFromWei(payout.amountWei, okbUsd) ? ` (${formatOkbUsdFromWei(payout.amountWei, okbUsd)})` : ''} - {shortAddr(payout.txHash)}
+                        </span>
                       </a>
                     )) : (
                       <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs dark:text-zinc-500 text-zinc-500">Payout links appear after a settled match has winners.</div>

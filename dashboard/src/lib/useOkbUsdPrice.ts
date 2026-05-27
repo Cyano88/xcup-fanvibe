@@ -31,3 +31,23 @@ export function formatStakeUsd(amountOKB: string, okbUsd: number | null) {
     maximumFractionDigits: amount * okbUsd >= 1 ? 2 : 4,
   }).format(amount * okbUsd);
 }
+
+export function formatOkbUsd(amountOKB: number | string | null | undefined, okbUsd: number | null) {
+  const amount = Number(amountOKB);
+  if (!okbUsd || !Number.isFinite(amount) || amount <= 0) return null;
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount * okbUsd >= 1 ? 2 : 4,
+  }).format(amount * okbUsd);
+}
+
+export function formatOkbUsdFromWei(wei: bigint | string | number | null | undefined, okbUsd: number | null) {
+  if (wei === null || wei === undefined) return null;
+  try {
+    const value = typeof wei === 'bigint' ? wei : BigInt(wei);
+    return formatOkbUsd(Number(value) / 1e18, okbUsd);
+  } catch {
+    return null;
+  }
+}

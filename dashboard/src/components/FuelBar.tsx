@@ -1,3 +1,5 @@
+import { formatOkbUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+
 interface Props {
   percent: number;
   okbFormatted: string;
@@ -6,6 +8,8 @@ interface Props {
 }
 
 export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Props) {
+  const okbUsd = useOkbUsdPrice();
+  const reserveUsd = formatOkbUsd(okbFormatted, okbUsd);
   const color = isRefuelNeeded
     ? 'bg-red-500'
     : percent < 40
@@ -55,7 +59,7 @@ export function FuelBar({ percent, okbFormatted, isRefuelNeeded, compact }: Prop
       </div>
 
       <div className="flex items-center justify-between">
-        <span className=" text-xs text-zinc-400">{okbFormatted} OKB</span>
+        <span className=" text-xs text-zinc-400">{okbFormatted} OKB{reserveUsd ? ` (${reserveUsd})` : ''}</span>
         <span className=" text-xs text-zinc-600">{percent}%</span>
       </div>
     </div>

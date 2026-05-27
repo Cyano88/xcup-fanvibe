@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle, ExternalLink, Minus, X } from 'lucide-react';
 import type { SettlementResult } from '../types';
 import { formatOKB } from '../lib/encode';
+import { formatOkbUsdFromWei, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 
 interface Props {
   settlement: SettlementResult;
@@ -10,6 +11,7 @@ interface Props {
 
 export function SettlementToast({ settlement, onDismiss }: Props) {
   const [visible, setVisible] = useState(false);
+  const okbUsd = useOkbUsdPrice();
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -21,6 +23,7 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
   }, [onDismiss]);
 
   const totalOKB = formatOKB(settlement.totalPool);
+  const totalUsd = formatOkbUsdFromWei(settlement.totalPool, okbUsd);
   const payoutTx = settlement.payouts.find(p => !!p.txHash)?.txHash;
 
   return (
@@ -54,7 +57,7 @@ export function SettlementToast({ settlement, onDismiss }: Props) {
             <div>
               <div className="text-zinc-100 font-medium capitalize">{settlement.outcome} wins</div>
               <div className="text-xs text-zinc-500">
-                {settlement.winnerCount} winner{settlement.winnerCount !== 1 ? 's' : ''} - {totalOKB} OKB paid
+                {settlement.winnerCount} winner{settlement.winnerCount !== 1 ? 's' : ''} - {totalOKB} OKB{totalUsd ? ` (${totalUsd})` : ''} paid
               </div>
             </div>
           </div>

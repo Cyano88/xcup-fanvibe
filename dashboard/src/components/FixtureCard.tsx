@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { AlarmClock, Lock, MonitorPlay, TrendingUp, Zap } from 'lucide-react';
 import type { Fixture, Pool, Outcome, MatchState } from '../types';
 import { formatPool, countdown } from '../lib/encode';
+import { formatOkbUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 
 interface Props {
   fixture: Fixture;
@@ -96,6 +97,7 @@ export function FixtureCard({
   const [showHome, setShowHome]   = useState(true);
   const [hovered, setHovered]     = useState(false);
   const [tick, setTick]           = useState(0);
+  const okbUsd = useOkbUsdPrice();
   const isSeasonPlay = fixture.mode === 'simulated';
   const isLiveMatch = matchState?.status === 'live' || matchState?.status === 'half_time';
   const isFinishedMatch = matchState?.status === 'finished';
@@ -123,6 +125,10 @@ export function FixtureCard({
   const p   = pool ?? { fixtureId: fixture.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 };
   const fmt = formatPool(p);
   const hasPool   = fmt.totalOKB !== '0.0000';
+  const totalPoolUsd = formatOkbUsd(fmt.totalOKB, okbUsd);
+  const homePoolUsd = formatOkbUsd(fmt.homeOKB, okbUsd);
+  const drawPoolUsd = formatOkbUsd(fmt.drawOKB, okbUsd);
+  const awayPoolUsd = formatOkbUsd(fmt.awayOKB, okbUsd);
   const isSettled = fixture.status === 'settled';
   const isLocked  = fixture.status === 'locked' || isSettled;
   const seasonFixtureStartsIn = seasonPhase === 'preseason'
@@ -373,6 +379,7 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-medium">
                 {hasPool ? `${fmt.homeOKB}` : 'Stake ->'}
               </span>
+              {hasPool && homePoolUsd && <span className="text-[9px] dark:text-emerald-700 text-emerald-600/70 font-medium">{homePoolUsd}</span>}
             </button>
 
             {/* Draw */}
@@ -391,6 +398,7 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-medium">
                 {hasPool ? `${fmt.drawOKB}` : 'Stake ->'}
               </span>
+              {hasPool && drawPoolUsd && <span className="text-[9px] dark:text-zinc-600 text-zinc-500 font-medium">{drawPoolUsd}</span>}
             </button>
 
             {/* Away */}
@@ -410,6 +418,7 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-blue-500 text-blue-600 font-medium">
                 {hasPool ? `${fmt.awayOKB}` : 'Stake ->'}
               </span>
+              {hasPool && awayPoolUsd && <span className="text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">{awayPoolUsd}</span>}
             </button>
           </div>
         )}
@@ -421,7 +430,7 @@ export function FixtureCard({
           <TrendingUp size={10} />
           <span>
             {hasPool
-              ? `${fmt.totalOKB} OKB  - ${p.count} stake${p.count !== 1 ? 's' : ''}`
+              ? `${fmt.totalOKB} OKB${totalPoolUsd ? ` (${totalPoolUsd})` : ''}  - ${p.count} stake${p.count !== 1 ? 's' : ''}`
               : 'No stakes yet'}
           </span>
         </div>
