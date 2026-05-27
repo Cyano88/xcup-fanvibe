@@ -927,7 +927,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
             onChange={e => setNameInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && joinChat()}
             placeholder={walletAddress ? shortWallet(walletAddress) : 'Display name'}
-            className="flex-1 text-sm px-3 py-2 rounded-md dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none focus:ring-1 dark:focus:ring-blue-500/50 focus:ring-blue-500 transition-all"
+            className="flex-1 text-sm px-3 py-2 rounded-md dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none transition-all"
           />
           <button
             onClick={joinChat}
@@ -981,7 +981,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
       <div className="flex gap-2">
         <input value={text} onChange={e => setText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && post()} placeholder="Say something..." maxLength={280}
-          className="flex-1 text-sm px-3 py-2 rounded-lg dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none focus:ring-1 dark:focus:ring-blue-500/50 focus:ring-blue-500 transition-all" />
+          className="flex-1 text-sm px-3 py-2 rounded-lg dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none transition-all" />
         <button onClick={post} disabled={!text.trim() || posting}
           className="px-3 py-2 rounded-lg dark:bg-zinc-800 bg-zinc-100 border dark:border-zinc-700 border-zinc-200 dark:text-zinc-300 text-zinc-700 disabled:opacity-40 dark:hover:bg-zinc-700 hover:bg-zinc-200 transition-colors">
           <Send size={13} />

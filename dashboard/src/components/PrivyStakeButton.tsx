@@ -8,7 +8,6 @@ import {
   useSendTransaction,
   useWallets,
 } from '@privy-io/react-auth';
-import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 import { parseEther } from 'viem';
 import { xLayerMainnet } from '../lib/chain';
 import { walletErrorMessage } from '../lib/walletErrors';
@@ -50,7 +49,6 @@ export function PrivyStakeButton({
   const { wallets, ready: walletsReady } = useWallets();
   const { createWallet } = useCreateWallet();
   const { sendTransaction } = useSendTransaction();
-  const { client: smartWalletClient, getClientForChain } = useSmartWallets();
   const [pending, setPending] = useState(false);
 
   const embeddedWallet = wallets.find(wallet => isEmbeddedWallet(wallet.walletClientType))
@@ -90,32 +88,6 @@ export function PrivyStakeButton({
 
       const amountWei = parseEther(amountOKB || '0');
       if (amountWei <= 0n) throw new Error('Invalid stake amount');
-
-      try {
-        const smartClient = await getClientForChain({ id: xLayerMainnet.id }) ?? smartWalletClient;
-        if (smartClient) {
-          const hash = await smartClient.sendTransaction(
-            {
-              to: refereeAddress as `0x${string}`,
-              value: amountWei,
-              data: calldata,
-            },
-            {
-              uiOptions: {
-                description: `Stake ${amountOKB} OKB from your FanVibe smart wallet.`,
-                buttonText: 'Confirm stake',
-                successHeader: 'Stake sent',
-                successDescription: 'Your FanVibe smart-wallet stake is live on X Layer.',
-              },
-            },
-          );
-
-          onSuccess?.(hash, amountWei, smartClient.account.address);
-          return;
-        }
-      } catch {
-        // Fall through to the embedded signer path if smart wallets are not configured for X Layer yet.
-      }
 
       const { hash } = await sendTransaction(
         {

@@ -1368,7 +1368,7 @@ export default function App() {
                 value={searchQuery}
                 onChange={event => setSearchQuery(event.target.value)}
                 placeholder="Search teams, groups, venues, or match codes"
-                className="h-10 w-full rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-black bg-zinc-50 pl-9 pr-3 text-sm font-medium outline-none transition-colors placeholder:dark:text-zinc-700 placeholder:text-zinc-400 focus:border-blue-500/60 dark:text-zinc-100 text-zinc-900"
+                className="h-10 w-full rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-black bg-zinc-50 pl-9 pr-3 text-sm font-medium outline-none transition-colors placeholder:dark:text-zinc-700 placeholder:text-zinc-400 dark:text-zinc-100 text-zinc-900"
               />
             </label>
             <div className="flex items-center gap-2 text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
