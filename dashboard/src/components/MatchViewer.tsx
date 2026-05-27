@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Send, MessageCircle, BarChart2, List, Users } from 'lucide-react';
+import { useWallets } from '@privy-io/react-auth';
 import type { Fixture, MatchState, MatchEvent } from '../types';
 import { getSquad } from '../lib/squadData';
+import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
@@ -846,11 +848,16 @@ function SquadPanel({ fixture, state }: { fixture: Fixture; state: MatchState })
 
 function MatchChat({ fixtureId }: { fixtureId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [user, setUser] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState(() => getStoredProfileName());
+  const [editingProfile, setEditingProfile] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [text, setText] = useState('');
   const [posting, setPosting] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const { wallets } = useWallets();
+  const activeWallet = wallets[0];
+  const user = fanDisplayName(walletAddress, profileName);
 
   const load = useCallback(async () => {
     try {
@@ -862,10 +869,36 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
   useEffect(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }, [comments.length]);
 
+  useEffect(() => {
+    if (activeWallet?.address) setWalletAddress(activeWallet.address);
+  }, [activeWallet?.address]);
+
+  useEffect(() => {
+    const provider = (window as typeof window & { ethereum?: { request: (args: { method: string }) => Promise<unknown> } }).ethereum;
+    provider?.request({ method: 'eth_accounts' })
+      .then((accounts: unknown) => {
+        const list = accounts as string[];
+        if (list?.[0]) setWalletAddress(list[0]);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const syncProfile = () => setProfileName(getStoredProfileName());
+    window.addEventListener(FAN_PROFILE_EVENT, syncProfile);
+    window.addEventListener('storage', syncProfile);
+    return () => {
+      window.removeEventListener(FAN_PROFILE_EVENT, syncProfile);
+      window.removeEventListener('storage', syncProfile);
+    };
+  }, []);
+
   const joinChat = () => {
     const n = nameInput.trim();
     if (!n) return;
-    setUser(n);
+    setStoredProfileName(n);
+    setProfileName(getStoredProfileName());
+    setEditingProfile(false);
   };
 
   const post = async () => {
@@ -882,23 +915,40 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
     } finally { setPosting(false); }
   };
 
-  if (!user) {
+  if (!user || editingProfile) {
     return (
-      <div className="dark:bg-zinc-900/60 bg-zinc-50 rounded-xl p-4 border dark:border-zinc-800 border-zinc-200">
-        <p className="text-sm font-semibold dark:text-zinc-200 text-zinc-800 mb-3">Join the match chat</p>
+      <div className="dark:bg-zinc-900/60 bg-zinc-50 rounded-lg p-4 border dark:border-zinc-800 border-zinc-200">
+        <p className="mb-3 text-sm font-semibold dark:text-zinc-200 text-zinc-800">
+          {walletAddress ? 'Set match name' : 'Join match chat'}
+        </p>
         <div className="flex gap-2">
           <input
             value={nameInput}
             onChange={e => setNameInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && joinChat()}
-            placeholder="Pick a display name..."
-            className="flex-1 text-sm px-3 py-2 rounded-lg dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none focus:ring-1 dark:focus:ring-emerald-500/50 focus:ring-emerald-400 transition-all"
+            placeholder={walletAddress ? shortWallet(walletAddress) : 'Display name'}
+            className="flex-1 text-sm px-3 py-2 rounded-md dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none focus:ring-1 dark:focus:ring-blue-500/50 focus:ring-blue-500 transition-all"
           />
-          <button onClick={joinChat} disabled={!nameInput.trim()}
-            className="px-4 py-2 rounded-lg bg-emerald-500 text-black text-sm font-semibold disabled:opacity-40 hover:bg-emerald-400 transition-colors">
-            Join
+          <button
+            onClick={joinChat}
+            disabled={!nameInput.trim()}
+            className="px-4 py-2 rounded-md bg-zinc-950 text-white text-sm font-semibold disabled:opacity-40 hover:bg-zinc-800 transition-colors dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+          >
+            Save
           </button>
         </div>
+        {walletAddress && (
+          <button
+            onClick={() => {
+              setStoredProfileName('');
+              setProfileName('');
+              setEditingProfile(false);
+            }}
+            className="mt-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+          >
+            Use wallet
+          </button>
+        )}
       </div>
     );
   }
@@ -907,9 +957,14 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-[11px] dark:text-zinc-500 text-zinc-400 uppercase tracking-widest">Match Chat</span>
-        <button onClick={() => setUser(null)}
-          className="text-[10px] dark:text-zinc-600 text-zinc-400 hover:dark:text-zinc-400 hover:text-zinc-600 transition-colors">
-          {user}  - change
+        <button
+          onClick={() => {
+            setNameInput(profileName || walletAddress || '');
+            setEditingProfile(true);
+          }}
+          className="text-[10px] font-semibold dark:text-zinc-600 text-zinc-400 hover:dark:text-zinc-300 hover:text-zinc-700 transition-colors"
+        >
+          {user}
         </button>
       </div>
       <div ref={listRef} className="h-36 overflow-y-auto space-y-1 scrollbar-thin">
@@ -918,7 +973,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
         )}
         {comments.map(c => (
           <div key={c.id} className="flex items-start gap-2 text-xs dark:bg-zinc-900/40 bg-zinc-50 rounded-lg px-2.5 py-1.5">
-            <span className="font-semibold dark:text-emerald-400 text-emerald-600 shrink-0">{c.name}</span>
+            <span className="font-semibold text-blue-600 dark:text-blue-300 shrink-0">{c.name}</span>
             <span className="dark:text-zinc-300 text-zinc-700 leading-snug">{c.text}</span>
           </div>
         ))}
@@ -926,7 +981,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
       <div className="flex gap-2">
         <input value={text} onChange={e => setText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && post()} placeholder="Say something..." maxLength={280}
-          className="flex-1 text-sm px-3 py-2 rounded-lg dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none focus:ring-1 dark:focus:ring-emerald-500/50 focus:ring-emerald-400 transition-all" />
+          className="flex-1 text-sm px-3 py-2 rounded-lg dark:bg-zinc-800 bg-white border dark:border-zinc-700 border-zinc-200 dark:text-zinc-100 text-zinc-900 dark:placeholder-zinc-600 placeholder-zinc-400 focus:outline-none focus:ring-1 dark:focus:ring-blue-500/50 focus:ring-blue-500 transition-all" />
         <button onClick={post} disabled={!text.trim() || posting}
           className="px-3 py-2 rounded-lg dark:bg-zinc-800 bg-zinc-100 border dark:border-zinc-700 border-zinc-200 dark:text-zinc-300 text-zinc-700 disabled:opacity-40 dark:hover:bg-zinc-700 hover:bg-zinc-200 transition-colors">
           <Send size={13} />

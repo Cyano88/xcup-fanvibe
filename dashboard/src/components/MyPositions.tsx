@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy, ExternalLink, RefreshCw, Wallet } from 'lucide-react';
+import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Wallet } from 'lucide-react';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, MatchState, UserPosition } from '../types';
 import { explorerTx } from '../lib/chain';
 import { seasonFixtureStartAtMs } from '../lib/seasonTournament';
+import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
@@ -106,9 +107,29 @@ function PrivyPositionsConnect({
   const creatingWalletRef = useRef(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copied, setCopied] = useState(false);
+  const [profileName, setProfileName] = useState(() => getStoredProfileName());
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileInput, setProfileInput] = useState('');
+  const [showName, setShowName] = useState(false);
 
   useEffect(() => () => {
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!profileName) return;
+    const timer = setInterval(() => setShowName(value => !value), 2400);
+    return () => clearInterval(timer);
+  }, [profileName]);
+
+  useEffect(() => {
+    const syncProfile = () => setProfileName(getStoredProfileName());
+    window.addEventListener(FAN_PROFILE_EVENT, syncProfile);
+    window.addEventListener('storage', syncProfile);
+    return () => {
+      window.removeEventListener(FAN_PROFILE_EVENT, syncProfile);
+      window.removeEventListener('storage', syncProfile);
+    };
   }, []);
 
   useEffect(() => {
@@ -140,11 +161,41 @@ function PrivyPositionsConnect({
     }).catch(() => {});
   }, [address]);
 
+  const openProfileEditor = useCallback(() => {
+    setProfileInput(profileName || address || '');
+    setEditingProfile(true);
+  }, [address, profileName]);
+
+  const saveProfile = useCallback(() => {
+    const nextName = profileInput.trim() === address ? '' : profileInput;
+    setStoredProfileName(nextName);
+    setProfileName(getStoredProfileName());
+    setEditingProfile(false);
+    setShowName(Boolean(nextName.trim()));
+  }, [address, profileInput]);
+
+  const displayIdentity = profileName && showName ? fanDisplayName(address, profileName) : shortWallet(address);
+
   if (address) {
     return (
       <div className="flex items-center gap-2">
         <div className="relative inline-flex items-center gap-1.5 rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-2.5 py-2 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-200 text-zinc-800">
-          {address.slice(0, 6)}...{address.slice(-4)}
+          {editingProfile ? (
+            <input
+              autoFocus
+              value={profileInput}
+              onChange={event => setProfileInput(event.target.value.slice(0, 24))}
+              onKeyDown={event => {
+                if (event.key === 'Enter') saveProfile();
+                if (event.key === 'Escape') setEditingProfile(false);
+              }}
+              onBlur={saveProfile}
+              className="w-28 bg-transparent text-xs font-semibold outline-none"
+              aria-label="Profile name"
+            />
+          ) : (
+            <span className="min-w-[74px] max-w-28 truncate transition-opacity">{displayIdentity}</span>
+          )}
           <button
             type="button"
             onClick={copyAddress}
@@ -153,6 +204,15 @@ function PrivyPositionsConnect({
             title="Copy wallet address"
           >
             {copied ? <Check size={12} /> : <Copy size={12} />}
+          </button>
+          <button
+            type="button"
+            onClick={openProfileEditor}
+            className="grid h-5 w-5 place-items-center rounded border border-transparent text-zinc-400 transition-colors hover:border-zinc-900/10 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:border-white/10 dark:hover:bg-white/10 dark:hover:text-white"
+            aria-label="Edit profile name"
+            title="Edit profile name"
+          >
+            <Pencil size={11} />
           </button>
           {copied && (
             <span className="absolute -right-1 top-9 rounded-md border border-zinc-900 bg-zinc-950 px-2 py-1 text-[10px] font-semibold text-white shadow-sm dark:border-zinc-100 dark:bg-white dark:text-zinc-950">
