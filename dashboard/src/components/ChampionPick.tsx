@@ -9,6 +9,7 @@ import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useO
 import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
+import { reportStakeTx } from '../lib/stakeReport';
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 
@@ -386,11 +387,15 @@ export function ChampionPick({
                     pendingLabel="Confirm in wallet..."
                     onSuccess={(hash, amountWei) => {
                       setTxHash(hash);
+                      setTxError(null);
                       setLocalPool(prev => ({
                         ...prev,
                         [selected]: (prev[selected] ?? 0n) + amountWei,
                       }));
                       setSelected(null);
+                      reportStakeTx(hash).catch((err: unknown) => {
+                        setTxError(err instanceof Error ? err.message : 'Stake indexing is delayed.');
+                      });
                     }}
                     onError={(message) => setTxError(message || null)}
                   />

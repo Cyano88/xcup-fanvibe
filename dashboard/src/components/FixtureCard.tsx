@@ -7,6 +7,7 @@ import { formatOkbUsd, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPr
 import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
+import { reportStakeTx } from '../lib/stakeReport';
 
 interface Props {
   fixture: Fixture;
@@ -548,6 +549,9 @@ export function FixtureCard({
                     setStakeHash(hash);
                     setStakeError(null);
                     setStakeOutcome(null);
+                    reportStakeTx(hash).catch((err: unknown) => {
+                      setStakeError(err instanceof Error ? err.message : 'Stake indexing is delayed.');
+                    });
                   }}
                   onError={(message) => setStakeError(message || null)}
                 />

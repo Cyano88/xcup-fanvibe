@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Mail } from 'lucide-react';
 import {
@@ -53,10 +53,17 @@ export function PrivyStakeButton({
   const [preparing, setPreparing] = useState(false);
   const [preparedWalletAddress, setPreparedWalletAddress] = useState<string | null>(null);
   const [preparedForNextTap, setPreparedForNextTap] = useState(false);
+  const [walletSyncing, setWalletSyncing] = useState(false);
 
   const embeddedWallet = wallets.find(wallet => isEmbeddedWallet(wallet.walletClientType))
     ?? getEmbeddedConnectedWallet(wallets);
   const stakeWalletAddress = embeddedWallet?.address ?? preparedWalletAddress;
+
+  useEffect(() => {
+    if (!embeddedWallet?.address) return;
+    setWalletSyncing(false);
+    setPreparedForNextTap(false);
+  }, [embeddedWallet?.address]);
 
   const reportError = (message: string) => {
     onError?.(message);
@@ -68,6 +75,7 @@ export function PrivyStakeButton({
     if (!authenticated) {
       setPreparedWalletAddress(null);
       setPreparedForNextTap(false);
+      setWalletSyncing(false);
       login({ loginMethods: ['email'] });
       return;
     }
@@ -81,8 +89,16 @@ export function PrivyStakeButton({
         const wallet = await createWallet();
         setPreparedWalletAddress(wallet.address);
         setPreparedForNextTap(true);
+        setWalletSyncing(false);
       } catch (err) {
-        reportError(walletErrorMessage(err, 'Email wallet setup failed'));
+        const message = walletErrorMessage(err, 'Email wallet setup failed');
+        const lower = message.toLowerCase();
+        if (lower.includes('unable to set up account') || lower.includes('already')) {
+          setWalletSyncing(true);
+          reportError('');
+        } else {
+          reportError(message);
+        }
       } finally {
         setPreparing(false);
       }
@@ -91,6 +107,7 @@ export function PrivyStakeButton({
 
     setPending(true);
     setPreparedForNextTap(false);
+    setWalletSyncing(false);
     reportError('');
 
     try {
@@ -135,7 +152,7 @@ export function PrivyStakeButton({
       className={className}
     >
       <Mail size={14} />
-      {pending ? pendingLabel : preparing ? 'Preparing wallet...' : preparedForNextTap ? 'Tap again to stake' : children}
+      {pending ? pendingLabel : preparing ? 'Preparing wallet...' : walletSyncing ? 'Wallet syncing...' : preparedForNextTap ? 'Tap again to stake' : children}
     </button>
   );
 }
