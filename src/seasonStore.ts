@@ -59,6 +59,7 @@ export interface PersistedRefereeMarket {
   champPool: Record<string, string>;
   champSettled: boolean;
   champWinner?: string;
+  championSeasonNumber?: number;
   lastBlock: number;
   updatedAt: number;
 }

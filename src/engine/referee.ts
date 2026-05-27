@@ -151,6 +151,7 @@ export class RefereeEngine {
   private champPool = new Map<string, bigint>(CHAMP_TEAMS.map(t => [t, 0n]));
   private champSettled = false;
   private champWinner?: string;
+  private championSeasonNumber?: number;
   private simulator: MatchSimulator;
 
   private logs: DaemonLog[] = [];
@@ -241,7 +242,8 @@ export class RefereeEngine {
       .filter(stake => stake.staker.toLowerCase() === wallet)
       .map(stake => {
         const fixture = this.fixtures.find(f => f.id === stake.fixtureId);
-        const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stake.timestamp);
+        const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
+        const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stakeMs);
         const won = settlement ? settlement.outcome === stake.outcome : false;
         const payout = won ? settlement?.payouts.find(p => p.address.toLowerCase() === wallet) : undefined;
         return {
@@ -273,6 +275,28 @@ export class RefereeEngine {
         const bt = 'stake' in b ? b.stake.timestamp : b.refund.timestamp;
         return bt - at;
       });
+  }
+
+  syncChampionSeason(seasonNumber: number): void {
+    if (!Number.isFinite(seasonNumber) || seasonNumber < 1) return;
+
+    if (this.championSeasonNumber === seasonNumber) return;
+
+    const hasOpenChampionExposure = this.champStakes.length > 0 || Array.from(this.champPool.values()).some(value => value > 0n);
+    if (this.championSeasonNumber === undefined && hasOpenChampionExposure && !this.champSettled) {
+      this.championSeasonNumber = seasonNumber;
+      this.persistMarketState();
+      return;
+    }
+
+    this.championSeasonNumber = seasonNumber;
+    this.champStakes = [];
+    this.champPool = new Map(CHAMP_TEAMS.map(team => [team, 0n]));
+    this.champSettled = false;
+    this.champWinner = undefined;
+    this.log('SYSTEM', 'info', `Champion market opened for Season ${seasonNumber}`);
+    this.persistMarketState();
+    this.onUpdate?.();
   }
 
   async start(): Promise<void> {
@@ -311,6 +335,7 @@ export class RefereeEngine {
     this.champPool = new Map(CHAMP_TEAMS.map(team => [team, BigInt(stored.champPool[team] ?? '0')]));
     this.champSettled = stored.champSettled;
     this.champWinner = stored.champWinner;
+    this.championSeasonNumber = stored.championSeasonNumber;
     this.lastBlock = stored.lastBlock;
 
     for (const fixture of this.fixtures) {
@@ -383,6 +408,7 @@ export class RefereeEngine {
       champPool,
       champSettled: this.champSettled,
       champWinner: this.champWinner,
+      championSeasonNumber: this.championSeasonNumber,
       lastBlock: this.lastBlock,
       updatedAt: Date.now(),
     };
@@ -407,6 +433,7 @@ export class RefereeEngine {
     this.champPool = new Map(CHAMP_TEAMS.map(team => [team, 0n]));
     this.champSettled = false;
     this.champWinner = undefined;
+    this.championSeasonNumber = undefined;
     this.logs = [];
     this.logId = 0;
     this.log('SYSTEM', 'success', 'Referee market state reset to a clean slate');

@@ -68,7 +68,10 @@ seasonController = new SeasonController(engine, (prefix, level, message, txHash)
     txHash,
   } satisfies DaemonLog);
 });
-seasonController.onUpdate = state => broadcast('season', compactSeasonState(state));
+seasonController.onUpdate = state => {
+  engine.syncChampionSeason(state.seasonNumber);
+  broadcast('season', compactSeasonState(state));
+};
 
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'state', data: engine.getState(), ts: Date.now() }));
@@ -211,6 +214,7 @@ function outcomeFromMatchState(matchState: MatchState): Outcome {
 async function syncSeasonSnapshotWithReferee(state: PersistedSeasonState): Promise<void> {
   if (!Array.isArray(state.fixtures)) return;
 
+  engine.syncChampionSeason(state.seasonNumber);
   engine.syncFixtures(state.fixtures);
 
   const finished = Object.values(state.matchStates ?? {})
@@ -451,6 +455,7 @@ httpServer.listen(PORT, async () => {
   try {
     await engine.start();
     await seasonController.start();
+    engine.syncChampionSeason(seasonController.getState().seasonNumber);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[FanVibe] Engine start failed: ${msg}`);

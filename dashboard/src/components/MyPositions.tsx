@@ -56,7 +56,8 @@ function statusTone(status: string): string {
 
 function effectiveMatchStatus(position: UserPosition, liveFixture?: Fixture, liveState?: MatchState): UserPosition['status'] | 'active' {
   if (position.type !== 'match') return position.status;
-  const settlementAppliesToStake = !!position.settlement && position.settlement.settledAt >= position.stake.timestamp;
+  const stakeMs = position.stake.timestamp > 10_000_000_000 ? position.stake.timestamp : position.stake.timestamp * 1000;
+  const settlementAppliesToStake = !!position.settlement && position.settlement.settledAt >= stakeMs;
   const currentFixtureIsLive = liveState?.status === 'live' || liveState?.status === 'half_time';
   const currentFixtureUnsettled = liveFixture?.status && liveFixture.status !== 'settled';
   if (!settlementAppliesToStake || currentFixtureIsLive || currentFixtureUnsettled) return 'active';
