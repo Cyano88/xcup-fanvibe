@@ -1,5 +1,6 @@
 import { GitBranch, Zap } from 'lucide-react';
 import type { Fixture, MatchState } from '../types';
+import { baseFixtureId } from '../lib/seasonTournament';
 
 interface Props {
   fixtures: Fixture[];
@@ -75,7 +76,7 @@ function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchSt
 export function BracketView({ fixtures, matchStates, onWatch }: Props) {
   const knockoutFixtures = fixtures.filter(f => f.mode === 'simulated' && !!f.round);
   const liveCount = knockoutFixtures.filter(f => matchStates[f.id]?.status === 'live').length;
-  const qualifiedCount = knockoutFixtures.filter(f => f.id.startsWith('k32-') && f.home.code !== 'TBD' && f.away.code !== 'TBD').length * 2;
+  const qualifiedCount = knockoutFixtures.filter(f => baseFixtureId(f.id).startsWith('k32-') && f.home.code !== 'TBD' && f.away.code !== 'TBD').length * 2;
 
   return (
     <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-900 border-zinc-200 rounded-lg overflow-hidden">

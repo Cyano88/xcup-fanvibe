@@ -4,6 +4,7 @@ import { useWallets } from '@privy-io/react-auth';
 import type { Fixture, MatchState, MatchEvent } from '../types';
 import { getSquad } from '../lib/squadData';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
+import { baseFixtureId } from '../lib/seasonTournament';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
@@ -1098,7 +1099,8 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
     : matchState.awayScore > matchState.homeScore ? 'away'
     : 'draw')
     : null;
-  const nextKnockoutFixture = fixture.round ? fixtures.find(item => item.id === NEXT_KNOCKOUT_MATCH[fixture.id]) : null;
+  const nextKnockoutBaseId = fixture.round ? NEXT_KNOCKOUT_MATCH[baseFixtureId(fixture.id)] : undefined;
+  const nextKnockoutFixture = nextKnockoutBaseId ? fixtures.find(item => baseFixtureId(item.id) === nextKnockoutBaseId) : null;
   const scoreWinner = outcome === 'home' ? fixture.home : outcome === 'away' ? fixture.away : null;
   const advancedTeam = fixture.round
     ? scoreWinner
@@ -1263,11 +1265,11 @@ export function MatchViewer({ fixture, fixtures = [], matchState, onClose }: Pro
         {isFinished && fixture.round && advancedTeam && (
           <div className="mx-5 mb-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-center">
             <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-emerald-500 dark:text-emerald-300">
-              {fixture.id === 'f-1' ? 'Champions' : fixture.id === '3pl-1' ? 'Playoff Winner' : 'Qualified'}
+              {baseFixtureId(fixture.id) === 'f-1' ? 'Champions' : baseFixtureId(fixture.id) === '3pl-1' ? 'Playoff Winner' : 'Qualified'}
             </div>
             <div className="mt-0.5 text-xs font-semibold tracking-tight text-zinc-900 dark:text-white sm:text-sm">
               {advancedTeam.name}
-              {fixture.id !== 'f-1' && fixture.id !== '3pl-1' ? ' advance to the next round' : ''}
+              {baseFixtureId(fixture.id) !== 'f-1' && baseFixtureId(fixture.id) !== '3pl-1' ? ' advance to the next round' : ''}
             </div>
           </div>
         )}

@@ -23,6 +23,7 @@ import {
   TEST_SEASON_TIMING,
   allGroupMatchesFinished,
   advanceKnockout,
+  baseFixtureId,
   createSeasonFixtures,
   currentGroupMatchday,
   isSeasonFixtureDue,
@@ -684,7 +685,7 @@ export default function App() {
     if (seasonMode === 'prod') return;
     if (viewMode !== 'simulated' || phase !== 'playing') return;
     if (!allGroupMatchesFinished(fixtures, matchStates)) return;
-    if (fixtures.some(f => f.id === 'k32-1' && f.home.code !== 'TBD')) return;
+    if (fixtures.some(f => baseFixtureId(f.id) === 'k32-1' && f.home.code !== 'TBD')) return;
     const qualified = new Set(qualifiedTeams(fixtures, matchStates).map(team => team.code));
     const allTeams = new Set(fixtures.filter(isGroupStageFixture).flatMap(f => [f.home.code, f.away.code]));
     setEliminatedTeams(new Set([...allTeams].filter(code => !qualified.has(code))));
@@ -711,11 +712,12 @@ export default function App() {
   useEffect(() => {
     if (seasonMode === 'prod') return;
     if (viewMode !== 'simulated' || phase !== 'playing') return;
-    const ms = matchStates['f-1'];
+    const finalFixture = fixtures.find(f => baseFixtureId(f.id) === 'f-1');
+    const ms = finalFixture ? matchStates[finalFixture.id] : undefined;
     if (ms?.status !== 'finished') return;
     if (championTriggeredRef.current) return;
     championTriggeredRef.current = true;
-    const fx = fixtures.find(f => f.id === 'f-1');
+    const fx = finalFixture;
     if (!fx) return;
     const winner = ms.penaltyWinner === 'home' ? fx.home
       : ms.penaltyWinner === 'away' ? fx.away

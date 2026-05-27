@@ -5,6 +5,7 @@ import {
   TEST_SEASON_TIMING,
   advanceKnockout,
   allGroupMatchesFinished,
+  baseFixtureId,
   createSeasonFixtures,
   currentGroupMatchday,
   isGroupStageFixture,
@@ -272,7 +273,7 @@ export class SeasonController {
 
   private seedGroupKnockoutIfReady(): void {
     if (!allGroupMatchesFinished(this.state.fixtures, this.state.matchStates)) return;
-    if (this.state.fixtures.some(f => f.id === 'k32-1' && f.home.code !== 'TBD')) return;
+    if (this.state.fixtures.some(f => baseFixtureId(f.id) === 'k32-1' && f.home.code !== 'TBD')) return;
     const qualified = new Set(qualifiedTeams(this.state.fixtures, this.state.matchStates).map(team => team.code));
     const allTeams = new Set(this.state.fixtures.filter(isGroupStageFixture).flatMap(f => [f.home.code, f.away.code]));
     this.state.eliminatedTeams = [...allTeams].filter(code => !qualified.has(code));
@@ -295,9 +296,9 @@ export class SeasonController {
       this.referee.syncFixtures(this.state.fixtures);
     }
 
-    if (fixtureId === 'f-1' && !this.championTriggered) {
+    if (baseFixtureId(fixtureId) === 'f-1' && !this.championTriggered) {
       this.championTriggered = true;
-      const final = this.state.fixtures.find(f => f.id === 'f-1');
+      const final = this.state.fixtures.find(f => baseFixtureId(f.id) === 'f-1');
       if (final) {
         const winner = outcomeFromState(matchState) === 'away' ? final.away : final.home;
         if (winner.code === 'TBD' || winner.iso === 'tbd') {

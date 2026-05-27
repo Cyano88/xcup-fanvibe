@@ -50,6 +50,14 @@ export const TBD_TEAM: Team = {
   iso: 'un',
 };
 
+export function seasonFixtureId(seasonNumber: number, baseId: string): string {
+  return `s${Math.max(1, seasonNumber | 0)}-${baseId}`;
+}
+
+export function baseFixtureId(fixtureId: string): string {
+  return fixtureId.replace(/^s\d+-/, '');
+}
+
 interface Standing {
   team: Team;
   group: string;
@@ -127,13 +135,13 @@ function groupTeams(group: string): Team[] {
   return [...teams.values()];
 }
 
-function seasonizeFixture(fixture: Fixture, seed: number, idx: number): Fixture {
+function seasonizeFixture(fixture: Fixture, seasonNumber: number, seed: number, idx: number): Fixture {
   const flip = seededRandom(seed + idx * 97)() > 0.5;
   const home = flip ? fixture.away : fixture.home;
   const away = flip ? fixture.home : fixture.away;
   return {
     ...fixture,
-    id: `season-${fixture.id}`,
+    id: seasonFixtureId(seasonNumber, `season-${fixture.id}`),
     mode: 'simulated',
     status: 'open',
     home,
@@ -144,7 +152,7 @@ function seasonizeFixture(fixture: Fixture, seed: number, idx: number): Fixture 
   };
 }
 
-function createThirdMatchday(group: string, seasonSeed: number): Fixture[] {
+function createThirdMatchday(group: string, seasonNumber: number, seasonSeed: number): Fixture[] {
   const existing = REALTIME_FIXTURES.filter(f => f.group === group);
   const teams = groupTeams(group);
   const played = new Set(existing.map(f => [f.home.code, f.away.code].sort().join('-')));
@@ -167,7 +175,7 @@ function createThirdMatchday(group: string, seasonSeed: number): Fixture[] {
       : KNOCKOUT_VENUES[i % KNOCKOUT_VENUES.length];
     const kickoff = new Date(Date.parse(base?.kickoff ?? '2026-06-27T18:00:00Z') + (7 * 24 * 60 + i * 180) * 60_000).toISOString();
     return {
-      id: `season-wc-${group.toLowerCase()}-${5 + i}`,
+      id: seasonFixtureId(seasonNumber, `season-wc-${group.toLowerCase()}-${5 + i}`),
       matchday: 3,
       group,
       mode: 'simulated',
@@ -181,11 +189,11 @@ function createThirdMatchday(group: string, seasonSeed: number): Fixture[] {
   });
 }
 
-function placeholderFixture(id: string, round: TournamentRound, matchday: number): Fixture {
+function placeholderFixture(seasonNumber: number, id: string, round: TournamentRound, matchday: number): Fixture {
   const venueInfo = KNOCKOUT_VENUES[(matchday - 1) % KNOCKOUT_VENUES.length];
   const date = new Date(Date.UTC(2026, 5, 29 + matchday, 18 + (matchday % 3) * 3, 0, 0)).toISOString();
   return {
-    id,
+    id: seasonFixtureId(seasonNumber, id),
     matchday,
     group: round,
     round,
@@ -203,20 +211,20 @@ export function createSeasonFixtures(seasonSeed = 1): Fixture[] {
   const groupStage = SEASON_GROUPS.flatMap((group, groupIndex) => {
     const known = REALTIME_FIXTURES
       .filter(f => f.group === group)
-      .map((fixture, idx) => seasonizeFixture(fixture, seasonSeed + groupIndex * 101, idx));
+      .map((fixture, idx) => seasonizeFixture(fixture, seasonSeed, seasonSeed + groupIndex * 101, idx));
     const matchdayOne = seededShuffle(known.filter(f => f.matchday === 1), seasonSeed + groupIndex * 17);
     const matchdayTwo = seededShuffle(known.filter(f => f.matchday === 2), seasonSeed + groupIndex * 37);
-    const matchdayThree = createThirdMatchday(group, seasonSeed + groupIndex * 1009);
+    const matchdayThree = createThirdMatchday(group, seasonSeed, seasonSeed + groupIndex * 1009);
     return [...matchdayOne, ...matchdayTwo, ...matchdayThree];
   });
 
   const knockout = [
-    ...Array.from({ length: 16 }, (_, i) => placeholderFixture(`k32-${i + 1}`, 'R32', i + 1)),
-    ...Array.from({ length: 8 }, (_, i) => placeholderFixture(`k16-${i + 1}`, 'R16', i + 1)),
-    ...Array.from({ length: 4 }, (_, i) => placeholderFixture(`qf-${i + 1}`, 'QF', i + 1)),
-    ...Array.from({ length: 2 }, (_, i) => placeholderFixture(`sf-${i + 1}`, 'SF', i + 1)),
-    placeholderFixture('3pl-1', '3PL', 1),
-    placeholderFixture('f-1', 'F', 1),
+    ...Array.from({ length: 16 }, (_, i) => placeholderFixture(seasonSeed, `k32-${i + 1}`, 'R32', i + 1)),
+    ...Array.from({ length: 8 }, (_, i) => placeholderFixture(seasonSeed, `k16-${i + 1}`, 'R16', i + 1)),
+    ...Array.from({ length: 4 }, (_, i) => placeholderFixture(seasonSeed, `qf-${i + 1}`, 'QF', i + 1)),
+    ...Array.from({ length: 2 }, (_, i) => placeholderFixture(seasonSeed, `sf-${i + 1}`, 'SF', i + 1)),
+    placeholderFixture(seasonSeed, '3pl-1', '3PL', 1),
+    placeholderFixture(seasonSeed, 'f-1', 'F', 1),
   ];
 
   return [...groupStage, ...knockout];
@@ -339,8 +347,9 @@ export function seedRoundOf32(fixtures: Fixture[], matchStates: Record<string, M
   const qualifiers = qualifiedTeams(fixtures, matchStates);
   if (qualifiers.length < 32) return fixtures;
   return fixtures.map(f => {
-    if (!f.id.startsWith('k32-')) return f;
-    const idx = Number(f.id.replace('k32-', '')) - 1;
+    const baseId = baseFixtureId(f.id);
+    if (!baseId.startsWith('k32-')) return f;
+    const idx = Number(baseId.replace('k32-', '')) - 1;
     const home = qualifiers[idx];
     const away = qualifiers[31 - idx];
     return {
@@ -362,7 +371,8 @@ const NEXT_ROUND: Record<string, { winner: { matchId: string; slot: 'home' | 'aw
 };
 
 export function advanceKnockout(fixtures: Fixture[], fixtureId: string, matchState: MatchState): { fixtures: Fixture[]; eliminated?: Team } {
-  const entry = NEXT_ROUND[fixtureId];
+  const prefix = fixtureId.match(/^s\d+-/)?.[0] ?? '';
+  const entry = NEXT_ROUND[baseFixtureId(fixtureId)];
   if (!entry || matchState.status !== 'finished') return { fixtures };
   const source = fixtures.find(f => f.id === fixtureId);
   if (!source) return { fixtures };
@@ -375,7 +385,7 @@ export function advanceKnockout(fixtures: Fixture[], fixtureId: string, matchSta
   const loser = winner.code === source.home.code ? source.away : source.home;
 
   const place = (list: Fixture[], target: { matchId: string; slot: 'home' | 'away' }, team: Team) => list.map(f => {
-    if (f.id !== target.matchId) return f;
+    if (f.id !== `${prefix}${target.matchId}`) return f;
     const updated = { ...f, [target.slot]: team };
     const ready = updated.home.code !== 'TBD' && updated.away.code !== 'TBD';
     return {

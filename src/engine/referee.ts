@@ -44,6 +44,7 @@ const PROTOCOL_FEE_BPS = 50n; // 0.5%
 const METABOLISM_INTERVAL_MS = 60_000;
 const OUTCOME_MAP: Record<number, Outcome> = { 0: 'home', 1: 'draw', 2: 'away' };
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
+const baseFixtureId = (fixtureId: string) => fixtureId.replace(/^s\d+-/, '');
 
 const TBD_TEAM: Team = { name: 'TBD', code: 'TBD', flag: '🏆', iso: 'un' };
 const NEXT_SIM_KICKOFF_MS = Number(process.env.SIM_NEXT_KICKOFF_MS ?? '30000');
@@ -860,7 +861,7 @@ export class RefereeEngine {
       await this.persistMarketStateNow();
     }
 
-    if (fixtureId === 'f-1' && !this.champSettled) {
+    if (baseFixtureId(fixtureId) === 'f-1' && !this.champSettled) {
       const champTeam = outcome === 'away' ? fixture.away : fixture.home;
       if (champTeam && CHAMP_TEAMS.includes(champTeam.code)) {
         this.settleChampion(champTeam.code).catch((err: unknown) => {
