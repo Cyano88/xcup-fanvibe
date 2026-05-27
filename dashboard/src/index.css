@@ -182,6 +182,20 @@
   }
 }
 
+.fanvibe-loader-logo {
+  animation: fanvibeLogoZoom 3.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes fanvibeLogoZoom {
+  0%, 100% {
+    transform: scale(0.96);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
 /* TBD card shimmer sweep */
 @keyframes shimmer {
   0%   { transform: translateX(-100%); }

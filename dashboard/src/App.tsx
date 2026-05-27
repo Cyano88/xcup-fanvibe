@@ -1869,8 +1869,8 @@ export default function App() {
               }}
             >
               <div className="absolute inset-3 rounded-full border border-white/10 bg-zinc-700/45" />
-              <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-white/95 p-3 shadow-sm shadow-black/20 sm:h-20 sm:w-20 sm:p-4">
-                <img src={BRAND_E_IMAGE} alt="" className="h-full w-full object-contain" />
+              <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-white/95 p-3 shadow-sm shadow-black/20 sm:h-24 sm:w-24 sm:p-4">
+                <img src={BRAND_E_IMAGE} alt="" className="h-full w-full object-contain fanvibe-loader-logo" />
               </div>
             </div>
             <div className="relative text-sm font-semibold tracking-tight text-white/90">
