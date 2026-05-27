@@ -283,7 +283,9 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [pending, setPending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wallet = wallets.find(item => item.address.toLowerCase() === address.toLowerCase()) ?? wallets[0];
 
@@ -305,7 +307,17 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
   useEffect(() => {
     refreshBalance();
     const timer = setInterval(refreshBalance, 3_000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, [refreshBalance]);
+
+  const manualRefreshBalance = useCallback(() => {
+    setRefreshing(true);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => setRefreshing(false), 2_000);
+    refreshBalance(true);
   }, [refreshBalance]);
 
   const withdraw = useCallback(async () => {
@@ -382,12 +394,12 @@ function PrivyWalletPanel({ address, onError }: { address: string; onError: (mes
           <span className="text-xs dark:text-zinc-500 text-zinc-500">Available for stakes and transfers</span>
           <button
             type="button"
-            onClick={() => refreshBalance(true)}
+            onClick={manualRefreshBalance}
             className="rounded p-1.5 dark:text-zinc-500 text-zinc-500 transition-colors hover:text-blue-500"
             title="Refresh balance"
             aria-label="Refresh balance"
           >
-            <RefreshCw size={13} className="animate-spin" />
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
           </button>
         </div>
       ) : (
