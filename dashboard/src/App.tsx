@@ -177,12 +177,21 @@ function mergeLiveMatchStates(
   incoming: Record<string, MatchState>,
 ): Record<string, MatchState> {
   const merged = { ...incoming };
+  const goalEventCount = (state: MatchState) =>
+    (state.events ?? []).filter(event => event.type === 'goal_home' || event.type === 'goal_away').length;
+
   for (const [fixtureId, currentState] of Object.entries(current)) {
     const incomingState = incoming[fixtureId];
     if (!incomingState) continue;
     const currentEvents = currentState.events?.length ?? 0;
     const incomingEvents = incomingState.events?.length ?? 0;
     if (currentEvents > 0 && incomingEvents === 0) {
+      const currentGoalEvents = goalEventCount(currentState);
+      const incomingScoreGoals = incomingState.homeScore + incomingState.awayScore;
+      if (currentGoalEvents > incomingScoreGoals) {
+        merged[fixtureId] = currentState;
+        continue;
+      }
       merged[fixtureId] = { ...incomingState, events: currentState.events };
       continue;
     }
@@ -800,7 +809,23 @@ export default function App() {
     return true;
   }, [fixtures, matchStates, showStakeClosedNotice]);
   const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
-  const handleWatch    = useCallback((fixtureId: string) => setWatchingId(fixtureId), []);
+  const handleWatch    = useCallback((fixtureId: string) => {
+    setWatchingId(fixtureId);
+    fetch(`${BACKEND_HTTP}/season/match/${encodeURIComponent(fixtureId)}?mode=${seasonMode}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((res: { fixture?: Fixture; matchState?: MatchState | null } | null) => {
+        if (!res) return;
+        if (res.fixture) {
+          watchedFixtureRef.current[fixtureId] = res.fixture;
+          setFixtures(prev => prev.map(fixture => fixture.id === res.fixture!.id ? res.fixture! : fixture));
+        }
+        if (res.matchState) {
+          watchedStateRef.current[fixtureId] = res.matchState;
+          setMatchStates(prev => mergeLiveMatchStates(prev, { ...prev, [fixtureId]: res.matchState! }));
+        }
+      })
+      .catch(() => {});
+  }, [seasonMode]);
   const resetTestSeason = useCallback(() => {
     if (seasonMode !== 'test') return;
     const fresh = freshSeasonState(1, Date.now(), TEST_SEASON_TIMING, 'test');
@@ -868,7 +893,7 @@ export default function App() {
     const kickoffMs = Date.parse(state.simulatedKickoff);
     if (!Number.isFinite(kickoffMs)) return state;
     const minuteMs = Math.max(1000, Math.round(seasonTiming.matchMs / 90));
-    const projectedMinute = Math.min(90, Math.max(state.minute, Math.floor((Date.now() - kickoffMs) / minuteMs)));
+    const projectedMinute = Math.min(89, Math.max(Math.min(state.minute, 89), Math.floor((Date.now() - kickoffMs) / minuteMs)));
     return projectedMinute === state.minute ? state : { ...state, minute: projectedMinute };
   }, [liveUiTick, seasonTiming.matchMs]);
   const displayMatchStates = Object.fromEntries(
