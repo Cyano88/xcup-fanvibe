@@ -84,7 +84,7 @@ export function WorldCupNews() {
           </h2>
         </div>
         <div className="hidden sm:block text-right text-xs dark:text-zinc-500 text-zinc-500">
-          {feed?.mode === 'live' ? `GNews - synced ${feed.freshnessSeconds}s ago` : feed?.error ?? 'Fallback desk feed'}
+          {feed?.mode === 'live' ? `Updated ${feed.freshnessSeconds}s ago` : 'FanVibe desk feed'}
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
 import { BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Newspaper, Search, Volume2, VolumeX } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
@@ -8,7 +8,6 @@ import { SettlementToast } from './components/SettlementToast';
 import { MyPositions } from './components/MyPositions';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
-import { WorldCupNews } from './components/WorldCupNews';
 import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team } from './types';
 import { REALTIME_FIXTURES } from './types';
 import { BracketView } from './components/BracketView';
@@ -43,6 +42,7 @@ const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
 const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
+const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 const isResolvedFixture = (fixture?: Fixture | null) =>
@@ -1019,20 +1019,12 @@ export default function App() {
     }
   }).length;
   const displayedSeasonWinners = seasonWinners;
-  const worldCupSourceLabel = worldCupFeed?.source === 'zafronix'
-    ? 'Zafronix'
-    : worldCupFeed?.source === 'balldontlie'
-      ? 'BallDontLie'
-      : worldCupFeed?.source === 'wc2026api'
-        ? 'WC2026 API'
-        : worldCupFeed?.providerConfigured
-          ? 'Static fallback'
-          : 'Static schedule';
+  const worldCupSourceLabel = worldCupFeed?.mode === 'live' ? 'Live fixture feed' : 'Curated fixture board';
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
-      ? `synced ${worldCupFeed.freshnessSeconds}s ago`
-      : worldCupFeed.error ?? 'provider not configured'
-    : 'sync pending';
+      ? `updated ${worldCupFeed.freshnessSeconds}s ago`
+      : 'ready for staking'
+    : 'updating';
   const appTabs: Array<{ id: AppTab; label: string; icon: typeof Home }> = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
@@ -1437,7 +1429,7 @@ export default function App() {
               <div className="text-xs text-zinc-200/90 leading-relaxed">
                 Official WC 2026 group stage fixtures (MD1 + MD2). Staking is open now for all {realtimeFixtures.length} listed matches.
                 First kick-off <span className="font-semibold text-white">June 11, 2026</span>.
-                Data source: <span className="font-semibold text-white">{worldCupSourceLabel}</span> ({worldCupFreshness}).
+                Fixture board: <span className="font-semibold text-white">{worldCupSourceLabel}</span> ({worldCupFreshness}).
               </div>
             </div>
           </div>
@@ -1665,9 +1657,9 @@ export default function App() {
             className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Match Records</span>
+              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Why X Layer</span>
               <span className="hidden sm:inline-flex min-w-0 text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
-                Stakes, payouts, and settlement history
+                Fast OKB staking, explorer-linked records, autonomous payouts
               </span>
             </span>
             {proofOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -1675,14 +1667,22 @@ export default function App() {
 
           {proofOpen && (
             <div className="border-t dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950/80 bg-white px-4 py-4">
+              <div className="mb-4 max-w-3xl">
+                <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900">
+                  X Layer keeps FanVibe fast, auditable, and payout-ready.
+                </div>
+                <div className="mt-1 text-xs leading-relaxed dark:text-zinc-500 text-zinc-500">
+                  Fans stake with OKB, every position links to explorer records, and completed matches trigger automated payouts or refunds from the referee wallet.
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Market</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Network</div>
                   <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">X Layer Mainnet</div>
                   <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">OKB-powered predictions</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Settlement</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Payout Account</div>
                   {refereeAddress ? (
                     <a href={explorerAddr(refereeAddress)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900 hover:text-blue-500">
                       {shortAddr(refereeAddress)}
@@ -1694,7 +1694,7 @@ export default function App() {
                   <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Account used for verified payouts</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Latest Record</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Latest Block</div>
                   {lastBlock > 0 ? (
                     <a href={explorerBlock(lastBlock)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900 hover:text-blue-500">
                       {lastBlock.toLocaleString()}
@@ -1706,7 +1706,7 @@ export default function App() {
                   <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Most recent verified update</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Reserve</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Payout Float</div>
                   <div className={`mt-1 text-sm font-semibold tabular-nums ${healthColor}`}>{metabolism.okbBalanceFormatted} OKB</div>
                   {reserveUsd && <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{reserveUsd}</div>}
                   <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{metabolism.healthPercent}% ready</div>
@@ -1747,7 +1747,7 @@ export default function App() {
 
               <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Recent Stake Transactions</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Recent Stakes</div>
                   <div className="space-y-2">
                     {proofStakeTxs.length > 0 ? proofStakeTxs.map(log => (
                       <a key={`${log.id}-${log.txHash}`} href={explorerTx(log.txHash!)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs transition-colors dark:hover:border-blue-500/40 hover:border-blue-300">
@@ -1761,7 +1761,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Recent Payout Transactions</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Recent Payouts</div>
                   <div className="space-y-2">
                     {proofPayoutTxs.length > 0 ? proofPayoutTxs.map(payout => (
                       <a key={`${payout.fixtureId}-${payout.txHash}`} href={explorerTx(payout.txHash)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs transition-colors dark:hover:border-blue-500/40 hover:border-blue-300">
@@ -1781,7 +1781,11 @@ export default function App() {
         </div>
         )}
 
-        {activeTab === 'news' && <WorldCupNews />}
+        {activeTab === 'news' && (
+          <Suspense fallback={<div className="rounded-xl border dark:border-zinc-900 border-zinc-200 px-4 py-6 text-sm dark:text-zinc-500 text-zinc-500">Loading match desk...</div>}>
+            <WorldCupNews />
+          </Suspense>
+        )}
 
         {/* Footer */}
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
@@ -1796,7 +1800,7 @@ export default function App() {
             </a>
           </div>
           <div className="text-[11px] dark:text-zinc-600 text-zinc-400">
-            Built on OKX Xlayer . 02
+            Built on OKX X Layer
           </div>
         </div>
       </main>
