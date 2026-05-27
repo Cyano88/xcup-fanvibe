@@ -12,6 +12,7 @@ import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useO
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
+const BALANCE_CACHE_PREFIX = 'fanvibe.okbBalance.';
 
 function shortHash(hash?: string): string {
   if (!hash) return '-';
@@ -116,6 +117,23 @@ function getRememberedWallet(): string | null {
   return localStorage.getItem(LAST_WALLET_KEY);
 }
 
+function cachedBalanceKey(address: string): string {
+  return `${BALANCE_CACHE_PREFIX}${address.toLowerCase()}`;
+}
+
+function getCachedBalance(address: string): bigint | null {
+  try {
+    const value = localStorage.getItem(cachedBalanceKey(address));
+    return value ? BigInt(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedBalance(address: string, balanceWei: bigint): void {
+  localStorage.setItem(cachedBalanceKey(address), balanceWei.toString());
+}
+
 function formatBalance(balanceWei: bigint | null): string {
   if (balanceWei === null) return '-';
   const value = Number(formatEther(balanceWei));
@@ -143,10 +161,12 @@ function PrivyPositionsConnect({
 }) {
   const { ready, authenticated, login, logout } = usePrivy();
   const { createWallet } = useCreateWallet();
-  const { wallets } = useWallets();
+  const { wallets, ready: walletsReady } = useWallets();
   const activeWallet = wallets[0];
   const creatingWalletRef = useRef(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setupRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [setupAttempt, setSetupAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
   const [profileName, setProfileName] = useState(() => getStoredProfileName());
   const [editingProfile, setEditingProfile] = useState(false);
@@ -154,6 +174,7 @@ function PrivyPositionsConnect({
 
   useEffect(() => () => {
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    if (setupRetryRef.current) clearTimeout(setupRetryRef.current);
   }, []);
 
   useEffect(() => {
@@ -175,7 +196,7 @@ function PrivyPositionsConnect({
   }, [activeWallet?.address, onAddress, onError]);
 
   useEffect(() => {
-    if (!ready || !authenticated || activeWallet || creatingWalletRef.current) return;
+    if (!ready || !walletsReady || !authenticated || activeWallet || creatingWalletRef.current) return;
     creatingWalletRef.current = true;
     createWallet()
       .then(wallet => {
@@ -183,11 +204,21 @@ function PrivyPositionsConnect({
         rememberWallet(wallet.address);
         onError(null);
       })
-      .catch(() => onError('Unable to set up account. Try again in a moment.'))
+      .catch((err: unknown) => {
+        const message = walletErrorMessage(err, 'Unable to set up account. Try again in a moment.');
+        const lower = message.toLowerCase();
+        if (lower.includes('unable to set up account') || lower.includes('already')) {
+          onError(null);
+          if (setupRetryRef.current) clearTimeout(setupRetryRef.current);
+          setupRetryRef.current = setTimeout(() => setSetupAttempt(attempt => attempt + 1), 2500);
+        } else {
+          onError(message);
+        }
+      })
       .finally(() => {
         creatingWalletRef.current = false;
       });
-  }, [activeWallet, authenticated, createWallet, onAddress, onError, ready]);
+  }, [activeWallet, authenticated, createWallet, onAddress, onError, ready, setupAttempt, walletsReady]);
 
   const copyAddress = useCallback(() => {
     navigator.clipboard.writeText(address ?? '').then(() => {
@@ -296,7 +327,7 @@ function PrivyPositionsConnect({
 function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUsd: number | null; onError: (message: string | null) => void }) {
   const { wallets } = useWallets();
   const [mode, setMode] = useState<'balance' | 'withdraw'>('balance');
-  const [balanceWei, setBalanceWei] = useState<bigint | null>(null);
+  const [balanceWei, setBalanceWei] = useState<bigint | null>(() => getCachedBalance(address));
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [pending, setPending] = useState(false);
@@ -316,7 +347,9 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
         method: 'eth_getBalance',
         params: [address, 'latest'],
       }) as string;
-      setBalanceWei(BigInt(balanceHex));
+      const nextBalance = BigInt(balanceHex);
+      setBalanceWei(nextBalance);
+      setCachedBalance(address, nextBalance);
       if (showError) onError(null);
     } catch (err) {
       if (showError) onError(walletErrorMessage(err, 'Balance is syncing. Try again in a moment.'));
@@ -338,6 +371,10 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
     refreshTimerRef.current = setTimeout(() => setRefreshing(false), 2_000);
     refreshBalance(true);
   }, [refreshBalance]);
+
+  useEffect(() => {
+    setBalanceWei(getCachedBalance(address));
+  }, [address]);
 
   const withdraw = useCallback(async () => {
     if (!wallet || pending) return;
