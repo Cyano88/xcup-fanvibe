@@ -1,6 +1,6 @@
 # FanVibe
 
-FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on simulated World Cup markets, follow live match play, and review every position, payout, refund, and proof link from one account.
+FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on simulated football markets, follow live match play, and review every position, payout, refund, and proof link from one account.
 
 This repository is a monorepo. It contains the production app, backend referee service, dashboard, public documentation, and an isolated Uniswap v4 hook module for the X Layer Uniswap track.
 
@@ -12,17 +12,17 @@ This repository is a monorepo. It contains the production app, backend referee s
 | Dashboard | `dashboard/` | React/Vite consumer app at `fanvibe.xyz` |
 | Uniswap v4 hook | `contracts/` | Experimental WOKB/USDT dynamic-fee hook and deployment artifacts |
 | Proof scripts | `scripts/` | Hook deployment, pool initialization, liquidity proof, swap proof, and phase updates |
-| Public docs | `docs/` | Submission notes, audit notes, and platform documentation |
+| Public docs | `docs/` | Platform documentation, audit notes, and integration references |
 
 ## What FanVibe Does
 
 - Wallet and email sign-in through Privy smart wallets.
 - OKB staking on match markets and champion markets.
-- Live simulated World Cup seasons with group play, knockouts, and champions.
+- Live simulated football seasons with group play, knockouts, and champions.
 - Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, and total account value.
 - Explorer-linked stake, payout, refund, and proof transactions.
 - A public `Why X Layer` proof panel inside the app.
-- A dedicated `/docs` page for users, judges, and builders.
+- A dedicated `/docs` page for users, builders, and reviewers.
 - An isolated Uniswap v4 hook that connects FanVibe match phases to WOKB/USDT liquidity fees.
 
 ## Live Links
@@ -54,7 +54,7 @@ FanVibe includes an experimental DeFi module that is deliberately separate from 
 | Pool id | `0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b` |
 | Liquidity proof tx | `0x25a163de30aa698bc15bf6760bfc654f81b75dc8c604d2b8e3e7f8d586f24063` |
 | Swap proof tx | `0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c` |
-| Post-demo reset tx | `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494` |
+| Phase reset tx | `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494` |
 
 The swap proof emitted `MatchdayFeeApplied` with the FanVibe pool id, `Live` phase, and `3000` fee. After the proof, the hook was reset to `MatchOpen` with `500` fee.
 
@@ -120,11 +120,11 @@ cd dashboard
 npm run build
 ```
 
-Recent audit status is tracked in [`docs/audit.md`](docs/audit.md). Backend audit is clean. Dashboard has moderate transitive wallet-stack advisories where the available npm fix is a breaking forced downgrade; this is documented and intentionally not applied before demo day.
+Recent audit status is tracked in [`docs/audit.md`](docs/audit.md). Backend audit is clean. Dashboard has moderate transitive wallet-stack advisories where the available npm fix is a breaking forced dependency change; this is documented and intentionally not applied without a full wallet regression pass.
 
 ## Safety Notes
 
 - Do not commit `.env`, `.env.local`, private keys, or wallet secrets.
-- Use small OKB amounts for public testing.
+- Use small OKB amounts while testing.
 - The Uniswap v4 hook is experimental and isolated from user staking and settlement.
-- Judges can verify the hook proof from the app’s `Why X Layer` panel or the docs page.
+- Public proof records are available from the app’s `Why X Layer` panel and the docs page.

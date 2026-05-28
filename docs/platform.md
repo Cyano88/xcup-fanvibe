@@ -1,6 +1,6 @@
 # FanVibe Platform Documentation
 
-FanVibe is a public-facing prediction market and X Layer proof app. It combines a consumer sports experience with verifiable on-chain activity and an experimental Uniswap v4 hook.
+FanVibe is a public-facing prediction market and X Layer proof app. It combines a consumer sports experience with verifiable on-chain activity and an isolated Uniswap v4 hook module.
 
 ## Product Overview
 
@@ -9,7 +9,7 @@ FanVibe lets users:
 - Sign in with a wallet or email smart wallet.
 - Stake OKB on match outcomes.
 - Stake OKB on champion markets.
-- Watch simulated World Cup seasons progress through group stages and knockouts.
+- Watch simulated football seasons progress through group stages and knockouts.
 - Track every position in one portfolio.
 - Review payouts, refunds, wallet balance, and total account value.
 - Follow explorer links for stake, payout, refund, and proof transactions.
@@ -24,7 +24,7 @@ FanVibe lets users:
 | `dashboard/` | React/Vite app deployed to Vercel |
 | `contracts/` | FanVibe Uniswap v4 hook, proof router, deployment artifacts |
 | `scripts/` | Hook deployment, pool initialization, liquidity proof, swap proof, phase update scripts |
-| `docs/` | Public documentation, audit notes, submission notes |
+| `docs/` | Public documentation, audit notes, and integration references |
 
 ## User Flow
 
@@ -106,11 +106,11 @@ FanVibe uses X Layer because it needs:
 - Low-cost OKB staking.
 - Explorer-linked settlement.
 - Public proof for user trust.
-- A path from consumer activity into DeFi liquidity experiments.
+- A path from consumer activity into DeFi liquidity signals.
 
 ## Uniswap v4 Hook Module
 
-The hook module is an isolated monorepo feature for the X Layer Uniswap track. It is not required for staking and does not custody user stakes.
+The hook module is an isolated monorepo feature for WOKB/USDT liquidity on X Layer. It is not required for staking and does not custody user stakes.
 
 The hook connects FanVibe match phases to a WOKB/USDT dynamic-fee v4 pool:
 
@@ -129,7 +129,7 @@ Verified records:
 | Pool id | `0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b` |
 | Liquidity proof tx | `0x25a163de30aa698bc15bf6760bfc654f81b75dc8c604d2b8e3e7f8d586f24063` |
 | Swap proof tx | `0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c` |
-| Post-demo reset tx | `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494` |
+| Phase reset tx | `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494` |
 
 The swap proof emitted `MatchdayFeeApplied` on X Layer with the FanVibe pool id, `Live` phase, and `3000` fee. The hook was then reset to `MatchOpen` with `500` fee.
 
@@ -158,7 +158,7 @@ cd dashboard
 npm run build
 ```
 
-## Public Demo Checklist
+## Public Verification Checklist
 
 - Open `https://fanvibe.xyz`.
 - Sign in by wallet or email.
@@ -170,7 +170,7 @@ npm run build
 
 ## Safety
 
-- Use small amounts for public testing.
+- Use small amounts while testing.
 - Do not share private keys or environment files.
 - The v4 hook is experimental and isolated from consumer funds.
-- The app should be judged on verifiable X Layer activity, account experience, portfolio clarity, and the hook proof.
+- The app exposes verifiable X Layer activity, account history, portfolio state, and hook proof records for public review.

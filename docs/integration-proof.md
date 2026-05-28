@@ -1,6 +1,6 @@
-# FanVibe Hackathon Submission Notes
+# FanVibe Integration Proof
 
-FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with wallet or email smart wallet, stake OKB on simulated World Cup outcomes, and review every position, payout, refund, and transaction from one portfolio.
+FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with wallet or email smart wallet, stake OKB on simulated football outcomes, and review every position, payout, refund, and transaction from one portfolio.
 
 ## X Layer Consumer App
 
@@ -11,7 +11,7 @@ FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with 
 
 ## Uniswap v4 Hook Proof
 
-FanVibe also includes an isolated experimental Uniswap v4 module for the X Layer Uniswap track. It does not custody prediction stakes and does not affect consumer payouts.
+FanVibe also includes an isolated Uniswap v4 module for WOKB/USDT liquidity on X Layer. It does not custody prediction stakes and does not affect consumer payouts.
 
 - Hook: `0x4B6612ca209f07db44f8A651E4217A75106C4080`
 - Proof router: `0x1e950c0b870b974dF997D61C3dF0A6701C489720`
@@ -22,7 +22,7 @@ FanVibe also includes an isolated experimental Uniswap v4 module for the X Layer
 - Pool approval tx: `0xf0b842fa937598ff7b8babd6585a6946020339e6ef3a2119e32f273928d58237`
 - Liquidity proof tx: `0x25a163de30aa698bc15bf6760bfc654f81b75dc8c604d2b8e3e7f8d586f24063`
 - Swap proof tx: `0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c`
-- Post-demo open phase tx: `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494`
+- Phase reset tx: `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494`
 
 The swap proof emitted `MatchdayFeeApplied` on X Layer with:
 

@@ -49,9 +49,9 @@ npm audit --audit-level=high
 npm audit fix
 ```
 
-Status: moderate transitive advisories remain in wallet dependency trees. The available npm fix requires `npm audit fix --force` and would install a breaking Privy version change, so it was not applied before demo day.
+Status: moderate transitive advisories remain in wallet dependency trees. The available npm fix requires `npm audit fix --force` and would install a breaking Privy version change, so it was not applied without a full wallet regression pass.
 
-Assessment: acceptable residual risk for demo use because the unresolved items are transitive wallet-stack advisories and the forced fix is higher release risk than the advisories in this context.
+Assessment: acceptable residual risk for public beta use because the unresolved items are transitive wallet-stack advisories and the forced fix is higher release risk than the advisories in this context.
 
 ## Secret Hygiene
 
@@ -87,4 +87,4 @@ Known non-blocking notes:
 
 - Dashboard bundle remains large because wallet and Privy packages are heavy.
 - Dashboard audit still reports moderate transitive advisories that require a breaking forced dependency change.
-- Use small OKB amounts for public testing.
+- Use small OKB amounts while testing.

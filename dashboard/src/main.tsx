@@ -13,12 +13,18 @@ const isDocsPage = pathname === '/docs';
 
 const app = (
   <StrictMode>
-    {isDocsPage ? <DocsPage /> : <App />}
+    <App />
+  </StrictMode>
+);
+
+const docsApp = (
+  <StrictMode>
+    <DocsPage />
   </StrictMode>
 );
 
 createRoot(document.getElementById('root')!).render(
-  privyAppId ? (
+  isDocsPage ? docsApp : privyAppId ? (
     <PrivyProvider
       appId={privyAppId}
       config={{
