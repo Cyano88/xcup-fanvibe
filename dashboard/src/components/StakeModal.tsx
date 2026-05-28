@@ -20,6 +20,8 @@ interface Props {
 type Step = 'configure' | 'pending' | 'confirmed' | 'error';
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
+const MIN_STAKE_OKB = 0.001;
+const MIN_STAKE_OKB_LABEL = '0.001';
 
 const OUTCOME_LABEL: Record<Outcome, string> = {
   home: 'Home Win',
@@ -37,10 +39,30 @@ function isEmbeddedWallet(walletClientType: string) {
   return walletClientType === 'privy' || walletClientType === 'privy-v2';
 }
 
+function cleanStakeAmountInput(value: string) {
+  const normalized = value.replace(',', '.');
+  if (normalized === '') return '';
+  if (!/^\d*(?:\.\d*)?$/.test(normalized)) return null;
+  const numericValue = Number(normalized);
+  if (Number.isFinite(numericValue) && numericValue > 0 && numericValue < MIN_STAKE_OKB) return MIN_STAKE_OKB_LABEL;
+  const [whole = '', decimals = ''] = normalized.split('.');
+  const trimmedWhole = whole.replace(/^0+(?=\d)/, '') || (whole.startsWith('0') ? '0' : whole);
+  return decimals !== undefined && normalized.includes('.')
+    ? `${trimmedWhole}.${decimals.slice(0, 3)}`
+    : trimmedWhole;
+}
+
+function normalizedStakeAmount(value: string) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return '';
+  return amount < MIN_STAKE_OKB ? MIN_STAKE_OKB_LABEL : amount.toFixed(3).replace(/\.?0+$/, '');
+}
+
 function PrimaryStakeAction({
   amountOKB,
   calldata,
   refereeAddress,
+  disabled,
   onBeforeStake,
   onSuccess,
   onError,
@@ -48,6 +70,7 @@ function PrimaryStakeAction({
   amountOKB: string;
   calldata: `0x${string}`;
   refereeAddress: string;
+  disabled?: boolean;
   onBeforeStake: () => Promise<boolean>;
   onSuccess: (hash: `0x${string}`) => void;
   onError: (message: string) => void;
@@ -64,6 +87,7 @@ function PrimaryStakeAction({
         amountOKB={amountOKB}
         calldata={calldata}
         refereeAddress={refereeAddress}
+        disabled={disabled}
         onBeforeStake={onBeforeStake}
         onSuccess={(hash) => onSuccess(hash)}
         onError={onError}
@@ -79,6 +103,7 @@ function PrimaryStakeAction({
       amountOKB={amountOKB}
       calldata={calldata}
       refereeAddress={refereeAddress}
+      disabled={disabled}
       onBeforeStake={onBeforeStake}
       onSuccess={(hash) => onSuccess(hash)}
       onError={onError}
@@ -97,8 +122,15 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
   const [error, setError] = useState<string | null>(null);
   const okbUsd = useOkbUsdPrice();
   const stakeUsd = formatStakeUsd(amount, okbUsd);
+  const amountNumber = Number(amount);
+  const amountValid = Number.isFinite(amountNumber) && amountNumber >= MIN_STAKE_OKB;
 
   const handleStake = useCallback(async () => {
+    if (!amountValid) {
+      setError(`Minimum stake is ${MIN_STAKE_OKB_LABEL} OKB.`);
+      setStep('error');
+      return;
+    }
     const provider = (window as typeof window & { ethereum?: unknown }).ethereum as
       | {
           request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -184,9 +216,13 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
       setError(msg.includes('User rejected') ? 'Transaction rejected by wallet.' : msg);
       setStep('error');
     }
-  }, [fixture.id, outcome, amount, refereeAddress, onClose, onStakeClosed]);
+  }, [fixture.id, outcome, amount, amountValid, refereeAddress, onClose, onStakeClosed]);
 
   const checkStakeOpen = useCallback(async () => {
+    if (!amountValid) {
+      setError(`Minimum stake is ${MIN_STAKE_OKB_LABEL} OKB.`);
+      return false;
+    }
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 1800);
     try {
@@ -207,7 +243,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
       window.clearTimeout(timer);
     }
     return true;
-  }, [fixture.id, onClose, onStakeClosed]);
+  }, [amountValid, fixture.id, onClose, onStakeClosed]);
 
   const handlePrivySuccess = useCallback((hash: `0x${string}`) => {
     setTxHash(hash);
@@ -271,9 +307,14 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                   <input
                     type="number"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    min="0.001"
-                    step="0.01"
+                    onChange={(e) => {
+                      const next = cleanStakeAmountInput(e.target.value);
+                      if (next !== null) setAmount(next);
+                    }}
+                    onBlur={() => setAmount(current => normalizedStakeAmount(current) || MIN_STAKE_OKB_LABEL)}
+                    min={MIN_STAKE_OKB_LABEL}
+                    step="0.001"
+                    inputMode="decimal"
                     className="flex-1 bg-zinc-950/78 border border-white/10 rounded-lg px-3 py-2 text-sm font-semibold text-white
                       focus:outline-none transition-colors"
                   />
@@ -293,6 +334,11 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                   </div>
                 )}
                 {PRIVY_ENABLED && <PrivyBalanceHint amountOKB={amount} />}
+                {!amountValid && (
+                  <div className="text-[11px] font-medium text-zinc-500">
+                    Minimum stake is {MIN_STAKE_OKB_LABEL} OKB.
+                  </div>
+                )}
               </div>
 
               {/* Protocol fee note */}
@@ -303,6 +349,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                   amountOKB={amount}
                   calldata={encodeStakeCalldata(fixture.id, outcome)}
                   refereeAddress={refereeAddress}
+                  disabled={!amountValid}
                   onBeforeStake={checkStakeOpen}
                   onSuccess={handlePrivySuccess}
                   onError={(message) => {
@@ -311,7 +358,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                   }}
                 />
               ) : (
-                <button onClick={handleStake} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-500">
+                <button onClick={handleStake} disabled={!amountValid} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
                   <Wallet size={14} />
                   Stake via Wallet
                 </button>

@@ -26,6 +26,8 @@ interface Props {
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
+const MIN_STAKE_OKB = 0.001;
+const MIN_STAKE_OKB_LABEL = '0.001';
 
 const FLAG_URL = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -88,6 +90,25 @@ function formatShortDuration(totalSeconds: number): string {
 
 function isEmbeddedWallet(walletClientType: string) {
   return walletClientType === 'privy' || walletClientType === 'privy-v2';
+}
+
+function cleanStakeAmountInput(value: string) {
+  const normalized = value.replace(',', '.');
+  if (normalized === '') return '';
+  if (!/^\d*(?:\.\d*)?$/.test(normalized)) return null;
+  const numericValue = Number(normalized);
+  if (Number.isFinite(numericValue) && numericValue > 0 && numericValue < MIN_STAKE_OKB) return MIN_STAKE_OKB_LABEL;
+  const [whole = '', decimals = ''] = normalized.split('.');
+  const trimmedWhole = whole.replace(/^0+(?=\d)/, '') || (whole.startsWith('0') ? '0' : whole);
+  return decimals !== undefined && normalized.includes('.')
+    ? `${trimmedWhole}.${decimals.slice(0, 3)}`
+    : trimmedWhole;
+}
+
+function normalizedStakeAmount(value: string) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return '';
+  return amount < MIN_STAKE_OKB ? MIN_STAKE_OKB_LABEL : amount.toFixed(3).replace(/\.?0+$/, '');
 }
 
 function PrimaryMatchStakeAction({
@@ -175,6 +196,8 @@ export function FixtureCard({
   const [stakeHash, setStakeHash] = useState<string | null>(null);
   const okbUsd = useOkbUsdPrice();
   const stakeUsd = formatStakeUsd(stakeAmount, okbUsd);
+  const stakeAmountNumber = Number(stakeAmount);
+  const stakeAmountValid = Number.isFinite(stakeAmountNumber) && stakeAmountNumber >= MIN_STAKE_OKB;
   const isSeasonPlay = fixture.mode === 'simulated';
   const isLiveMatch = matchState?.status === 'live' || matchState?.status === 'half_time';
   const isFinishedMatch = matchState?.status === 'finished';
@@ -252,6 +275,10 @@ export function FixtureCard({
   }, [fixture.id, onStake]);
 
   const checkStakeOpen = useCallback(async () => {
+    if (!stakeAmountValid) {
+      setStakeError(`Minimum stake is ${MIN_STAKE_OKB_LABEL} OKB.`);
+      return false;
+    }
     if (!onStake(fixture.id, stakeOutcome ?? 'home')) return false;
     try {
       const statusRes = await fetch(`${BACKEND_HTTP}/stake/status/${encodeURIComponent(fixture.id)}`);
@@ -266,7 +293,7 @@ export function FixtureCard({
       return true;
     }
     return true;
-  }, [fixture.id, onStake, stakeOutcome]);
+  }, [fixture.id, onStake, stakeAmountValid, stakeOutcome]);
 
   const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(fixture.kickoff).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
@@ -571,12 +598,15 @@ export function FixtureCard({
                   <input
                     type="number"
                     step="0.001"
-                    min="0.001"
+                    min={MIN_STAKE_OKB_LABEL}
+                    inputMode="decimal"
                     value={stakeAmount}
                     onChange={event => {
                       setStakeError(null);
-                      setStakeAmount(event.target.value);
+                      const next = cleanStakeAmountInput(event.target.value);
+                      if (next !== null) setStakeAmount(next);
                     }}
+                    onBlur={() => setStakeAmount(current => normalizedStakeAmount(current) || MIN_STAKE_OKB_LABEL)}
                     className="w-full min-w-0 bg-transparent text-sm font-semibold dark:text-zinc-100 text-zinc-800 outline-none"
                   />
                   <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
@@ -588,7 +618,7 @@ export function FixtureCard({
                   amountOKB={stakeAmount}
                   calldata={encodeStakeCalldata(fixture.id, stakeOutcome)}
                   refereeAddress={refereeAddress}
-                  disabled={!refereeAddress}
+                  disabled={!refereeAddress || !stakeAmountValid}
                   onBeforeStake={checkStakeOpen}
                   onSuccess={(hash) => {
                     setStakeHash(hash);
@@ -602,6 +632,11 @@ export function FixtureCard({
                 />
               )}
             </div>
+            {!stakeAmountValid && (
+              <p className="mt-2 text-[11px] font-medium dark:text-zinc-600 text-zinc-500">
+                Minimum stake is {MIN_STAKE_OKB_LABEL} OKB.
+              </p>
+            )}
             {PRIVY_ENABLED && <div className="mt-2"><PrivyBalanceHint amountOKB={stakeAmount} /></div>}
             {stakeError && (
               <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-[11px] font-semibold text-red-400">{stakeError}</p>

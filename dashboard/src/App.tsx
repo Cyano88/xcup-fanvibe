@@ -1295,12 +1295,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href="/docs"
-              className="inline-flex rounded-lg border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-600 transition-colors hover:border-blue-300 hover:text-blue-600 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-blue-500 dark:hover:text-blue-300"
-            >
-              Docs
-            </a>
             <button
               onClick={toggleSound}
               aria-label={soundMuted ? 'Unmute theme song' : 'Mute theme song'}
