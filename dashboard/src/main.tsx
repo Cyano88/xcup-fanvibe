@@ -4,13 +4,16 @@ import { PrivyProvider } from '@privy-io/react-auth';
 import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
 import './index.css';
 import App from './App';
+import { DocsPage } from './components/DocsPage';
 import { xLayerMainnet } from './lib/chain';
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string | undefined;
+const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
+const isDocsPage = pathname === '/docs';
 
 const app = (
   <StrictMode>
-    <App />
+    {isDocsPage ? <DocsPage /> : <App />}
   </StrictMode>
 );
 

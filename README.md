@@ -1,134 +1,130 @@
-# X Cup FanVibe
+# FanVibe
 
-**Autonomous World Cup 2026 prediction market on X Layer Mainnet (Chain 196).**
+FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on simulated World Cup markets, follow live match play, and review every position, payout, refund, and proof link from one account.
 
-Predict match outcomes, stake OKB, and settle pools through an autonomous referee engine powered by the O2 Metabolic Engine.
+This repository is a monorepo. It contains the production app, backend referee service, dashboard, public documentation, and an isolated Uniswap v4 hook module for the X Layer Uniswap track.
 
-[![X Layer](https://img.shields.io/badge/X%20Layer-Mainnet%20%23196-00d4aa)](https://www.okx.com/xlayer)
-[![OKX Hackathon](https://img.shields.io/badge/OKX-X%20Cup%20Hackathon%202026-blue)](https://okx.com)
+## Monorepo Map
 
----
+| Area | Path | Purpose |
+| --- | --- | --- |
+| Backend service | `src/` | X Layer indexing, stake reports, settlement, season state, comments, news, and API routes |
+| Dashboard | `dashboard/` | React/Vite consumer app at `fanvibe.xyz` |
+| Uniswap v4 hook | `contracts/` | Experimental WOKB/USDT dynamic-fee hook and deployment artifacts |
+| Proof scripts | `scripts/` | Hook deployment, pool initialization, liquidity proof, swap proof, and phase updates |
+| Public docs | `docs/` | Submission notes, audit notes, and platform documentation |
 
-## Architecture
+## What FanVibe Does
 
-```mermaid
-graph TD
-  USER[Fan] -->|eth_sendTransaction: OKB + encoded calldata| REFEREE_WALLET[Referee Wallet on X Layer Mainnet]
-  REFEREE_WALLET -->|block watcher decodes bytes32 fixtureId + uint8 outcome| ENGINE[RefereeEngine in src/engine/referee.ts]
-  ENGINE -->|indexes stake| POOL[(Pool State in memory)]
-  ADMIN[Admin / Oracle] -->|POST /oracle/override with ECDSA signature| SERVER[Express Server in src/server.ts]
-  SERVER -->|verifyMessageAddress| ENGINE
-  ENGINE -->|walletClient.sendTransaction| PAYOUTS[OKB payouts to winners]
-  ENGINE -->|60s interval| METABOLISM[O2 Metabolism in src/engine/metabolism.ts]
-  METABOLISM -->|getBalance below 0.02 OKB| DEX[OKX DEX Aggregator: USDT to OKB]
-  DEX -->|signed swap tx| REFEREE_WALLET
-  ENGINE -->|WebSocket broadcast| DASHBOARD[Dashboard in dashboard/src/App.tsx]
-```
+- Wallet and email sign-in through Privy smart wallets.
+- OKB staking on match markets and champion markets.
+- Live simulated World Cup seasons with group play, knockouts, and champions.
+- Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, and total account value.
+- Explorer-linked stake, payout, refund, and proof transactions.
+- A public `Why X Layer` proof panel inside the app.
+- A dedicated `/docs` page for users, judges, and builders.
+- An isolated Uniswap v4 hook that connects FanVibe match phases to WOKB/USDT liquidity fees.
 
----
+## Live Links
 
-## X Layer Mainnet Integration Map
+- App: https://fanvibe.xyz
+- Docs: https://fanvibe.xyz/docs
+- GitHub docs: [`docs/platform.md`](docs/platform.md)
+- Hook docs: [`contracts/README.md`](contracts/README.md)
+- Audit notes: [`docs/audit.md`](docs/audit.md)
 
-| Component | File | SDK / Contract |
-|-----------|------|----------------|
-| Chain definition | `src/chain.ts` | viem custom chain, ID 196 |
-| Stake TX broadcast | `src/engine/referee.ts` | `walletClient.sendTransaction` |
-| Block watcher | `src/engine/referee.ts` | `publicClient.watchBlocks` |
-| Payout execution | `src/engine/referee.ts` | `walletClient.sendTransaction` |
-| Metabolism balance | `src/engine/metabolism.ts` | `publicClient.getBalance` |
-| DEX swap route | `src/engine/metabolism.ts` | OKX DEX Aggregator API |
-| Swap broadcast | `src/engine/metabolism.ts` | `walletClient.sendTransaction` |
-| PancakeSwap V3 Factory | `src/chain.ts` | `0xDf38F24fE153761634Be942F9d859f3DBA857E95` |
-| Oracle verification | `src/engine/referee.ts` | `recoverMessageAddress` from viem |
-| Frontend RPC read | `dashboard/src/lib/chain.ts` | viem `createPublicClient` |
+## X Layer App Flow
 
----
+1. A user signs in with wallet or email.
+2. The user picks a fixture or champion market.
+3. The user stakes OKB from the connected account.
+4. The backend indexes the transaction and ties it to the account.
+5. Completed markets settle to payouts or refunds.
+6. The portfolio keeps a permanent account-level history with explorer links.
 
-## How It Works
+## Uniswap v4 Hook Proof
 
-### 1. Fan places a stake
+FanVibe includes an experimental DeFi module that is deliberately separate from staking and payouts. It proves that a consumer app state can affect liquidity behavior on X Layer.
 
-The fan opens the dashboard, picks a World Cup fixture and outcome, then sends a wallet transaction to the referee address on X Layer Mainnet. The transaction data contains ABI-encoded `(bytes32 fixtureId, uint8 outcome)`.
+| Item | Value |
+| --- | --- |
+| Hook | `0x4B6612ca209f07db44f8A651E4217A75106C4080` |
+| Proof router | `0x1e950c0b870b974dF997D61C3dF0A6701C489720` |
+| Pool | WOKB/USDT dynamic-fee v4 pool |
+| Pool id | `0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b` |
+| Liquidity proof tx | `0x25a163de30aa698bc15bf6760bfc654f81b75dc8c604d2b8e3e7f8d586f24063` |
+| Swap proof tx | `0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c` |
+| Post-demo reset tx | `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494` |
 
-### 2. Referee daemon indexes the stake
+The swap proof emitted `MatchdayFeeApplied` with the FanVibe pool id, `Live` phase, and `3000` fee. After the proof, the hook was reset to `MatchOpen` with `500` fee.
 
-The daemon listens for incoming blocks, detects valid referee-wallet transactions, decodes calldata, validates that the fixture is open, deducts the protocol fee, and updates the in-memory pool.
+## Run Locally
 
-### 3. Oracle override settles the match
-
-An admin signs `X-Cup-Oracle:{fixtureId}:{outcome}:{nonce}` offline and posts the signature to `/oracle/override`. The engine verifies the signer, calculates proportional payouts, and broadcasts OKB transfers to winning stakers.
-
-### 4. O2 Metabolism keeps the agent alive
-
-Every 60 seconds, the daemon checks the referee wallet OKB balance. If it falls below `MIN_GAS_LEVEL`, the metabolism flow can request a USDT-to-OKB swap route and broadcast a refuel transaction so the agent can keep operating.
-
----
-
-## Setup
-
-### Prerequisites
-
-- Node.js 20+
-- An X Layer Mainnet wallet with OKB for gas
-- OKX API key for DEX aggregator swaps
-
-### Backend
+Install backend dependencies:
 
 ```bash
-cd xcup-fanvibe
 npm install
-cp .env.example .env
-# Edit .env and fill in REFEREE_PRIVATE_KEY, ADMIN_ADDRESS, and OKX_API_KEY.
+```
+
+Run the backend:
+
+```bash
 npm run dev
 ```
 
-### Dashboard
+Install and run the dashboard:
 
 ```bash
 cd dashboard
 npm install
-# Create dashboard/.env with:
-# VITE_BACKEND_WS=ws://localhost:3001
-# VITE_BACKEND_HTTP=http://localhost:3001
-# VITE_REFEREE_ADDRESS=0xYourRefereeWallet
 npm run dev
 ```
 
 Open `http://localhost:5173`.
 
-### Oracle Override Demo
+## Environment
+
+Backend:
+
+| Variable | Purpose |
+| --- | --- |
+| `X_LAYER_MAINNET_RPC` | X Layer RPC URL |
+| `REFEREE_PRIVATE_KEY` | Referee wallet signer for payouts and refunds |
+| `ADMIN_ADDRESS` | Settlement signer address |
+| `ADMIN_TEST_SECRET` | Admin-only season reset secret |
+| `NEWS_API_KEY` | Optional news feed key |
+| `PORT` | Backend port, defaults to `3001` |
+
+Dashboard:
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_BACKEND_HTTP` | Backend HTTP endpoint |
+| `VITE_BACKEND_WS` | Backend WebSocket endpoint |
+| `VITE_REFEREE_ADDRESS` | Public payout/referee account |
+| `VITE_PRIVY_APP_ID` | Privy app id |
+
+Hook scripts:
+
+| Variable | Purpose |
+| --- | --- |
+| `HOOK_DEPLOYER_PRIVATE_KEY` | Dedicated hook/proof signer |
+| `HOOK_PHASE` | `preseason`, `open`, `live`, or `settled` |
+| `HOOK_PROOF_MODE` | `liquidity` or `swap` |
+
+## Verification
 
 ```bash
-curl -X POST http://localhost:3001/oracle/override \
-  -H 'Content-Type: application/json' \
-  -d '{"fixtureId":"grp-b-1","outcome":"home","signature":"0x...","nonce":1}'
+npm run build
+cd dashboard
+npm run build
 ```
 
----
+Recent audit status is tracked in [`docs/audit.md`](docs/audit.md). Backend audit is clean. Dashboard has moderate transitive wallet-stack advisories where the available npm fix is a breaking forced downgrade; this is documented and intentionally not applied before demo day.
 
-## Scoring Criteria Alignment
+## Safety Notes
 
-| Criterion | Implementation |
-|-----------|----------------|
-| Innovation | O2 autonomous metabolism embedded in a prediction market |
-| Market potential | World Cup 2026 opens a global sports market for on-chain prediction pools |
-| Completion | Mainnet staking, oracle settlement, OKB payouts, WebSocket dashboard, and metabolism loop |
-| On-chain verifiability | Stakes, payouts, and refuel transactions are verifiable on OKX Explorer |
-
----
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `X_LAYER_MAINNET_RPC` | X Layer Mainnet RPC, defaults to `https://rpc.xlayer.tech` |
-| `REFEREE_PRIVATE_KEY` | Agent wallet private key, 0x-prefixed |
-| `ADMIN_ADDRESS` | Admin wallet address for Oracle Override verification |
-| `MIN_GAS_LEVEL` | OKB threshold that triggers metabolism, defaults to `0.02` |
-| `OKX_API_KEY` | OKX API key for DEX aggregator swap routes |
-| `PANCAKE_ROUTER_ADDRESS` | PancakeSwap V3 SmartRouter on X Layer Mainnet |
-| `PORT` | Backend HTTP and WebSocket port, defaults to `3001` |
-
----
-
-Built for the OKX X Layer Build X Hackathon, May 2026.
+- Do not commit `.env`, `.env.local`, private keys, or wallet secrets.
+- Use small OKB amounts for public testing.
+- The Uniswap v4 hook is experimental and isolated from user staking and settlement.
+- Judges can verify the hook proof from the app’s `Why X Layer` panel or the docs page.
