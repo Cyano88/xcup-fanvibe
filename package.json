@@ -10,7 +10,10 @@
     "railway:start": "npm run build && npm run start",
     "hook:compile": "hardhat compile",
     "hook:deploy": "node scripts/deployFanVibeHook.mjs",
-    "hook:init-pool": "node scripts/initFanVibeHookPool.mjs"
+    "hook:init-pool": "node scripts/initFanVibeHookPool.mjs",
+    "hook:deploy-router": "node scripts/deployFanVibeProofRouter.mjs",
+    "hook:set-phase": "node scripts/setFanVibeHookPhase.mjs",
+    "hook:proof": "node scripts/runFanVibeHookProof.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -21,5 +21,41 @@
     "approvePoolTxHash": "0xf0b842fa937598ff7b8babd6585a6946020339e6ef3a2119e32f273928d58237",
     "approvePoolStatus": "success"
   },
-  "poolId": "0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b"
+  "poolId": "0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b",
+  "proofRouter": {
+    "address": "0x1e950c0b870b974dF997D61C3dF0A6701C489720",
+    "deployTxHash": "0x6bac174d5fc62d04024235afe6dcbf34ec4146d29c033ebae1008e33d24cc213",
+    "deployStatus": "success",
+    "owner": "0x3183d8AE90a802F6D0EB7Ec8a4801b68eddcc26d"
+  },
+  "proof": {
+    "liquidityTxHash": "0x25a163de30aa698bc15bf6760bfc654f81b75dc8c604d2b8e3e7f8d586f24063",
+    "liquidityStatus": "success",
+    "tickLower": -887220,
+    "tickUpper": 887220,
+    "liquidityDelta": "1000000",
+    "tokenApprovalTxs": [
+      {
+        "hash": "0x8854d1065f785144a2a7e91f65e53bcadcfdd9336ff9e5f178387856bc037366",
+        "status": "success"
+      }
+    ],
+    "phaseTxHash": "0xcc493f2eff233e26f338913e0a2b306cf93eb0769c8f040598d15aaa5301cf0f",
+    "phaseStatus": "success",
+    "swapApprovalTx": null,
+    "swapTxHash": "0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c",
+    "swapStatus": "success",
+    "swapToken": "WOKB",
+    "swapAmount": "0.000001",
+    "phase": 2,
+    "currentFee": 3000,
+    "matchdayFeeApplied": [
+      {
+        "poolId": "0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b",
+        "sender": "0x1e950c0b870b974dF997D61C3dF0A6701C489720",
+        "phase": 2,
+        "fee": 3000
+      }
+    ]
+  }
 }

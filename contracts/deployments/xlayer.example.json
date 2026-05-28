@@ -13,6 +13,18 @@
     "currency0": null,
     "currency1": null
   },
+  "proofRouter": {
+    "address": null,
+    "deployTxHash": null,
+    "deployStatus": null,
+    "owner": null
+  },
+  "proof": {
+    "liquidityTxHash": null,
+    "swapTxHash": null,
+    "phaseTxHash": null,
+    "matchdayFeeApplied": []
+  },
   "notes": [
     "Use WOKB rather than native OKB because Uniswap v4 pool currencies are ERC20/native currency values and this module targets a WOKB/USDT ERC20 pool.",
     "The hook address must be mined so its lower 14 permission bits match beforeSwap only: 0x0080."

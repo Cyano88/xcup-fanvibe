@@ -42,6 +42,12 @@ const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
 const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
+const FANVIBE_V4_HOOK = '0x4B6612ca209f07db44f8A651E4217A75106C4080';
+const FANVIBE_V4_POOL_ID = '0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b';
+const FANVIBE_V4_DEPLOY_TX = '0xeff4a1213e9324508461375f49889aa1e3c49dd25c9cdfd2040cae18771080c8';
+const FANVIBE_V4_INIT_TX = '0x1ad16c9894db8ad8b1a1e29c9f7425170dc20188f81eb20b0ad77f32f4d95306';
+const FANVIBE_V4_APPROVE_TX = '0xf0b842fa937598ff7b8babd6585a6946020339e6ef3a2119e32f273928d58237';
+const FANVIBE_V4_SWAP_PROOF_TX = '0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c';
 const SEASON_CACHE_KEY = 'fanvibe.seasonSnapshot.prod';
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const ACCOUNT_VALUE_CACHE_KEY = 'fanvibe.accountUsdValue';
@@ -1957,6 +1963,41 @@ export default function App() {
 
               <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-3 text-xs leading-relaxed dark:text-zinc-400 text-zinc-600">
                 FanVibe keeps every stake, result, and payout easy to review. Completed payouts link to public records so users can confirm market outcomes.
+              </div>
+
+              <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Experimental v4 Hook</div>
+                    <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">WOKB/USDT matchday liquidity</div>
+                    <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">Open 0.05% - Live 0.30% - Settled 0.10%</div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <a href={explorerAddr(FANVIBE_V4_HOOK)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1 font-semibold dark:text-zinc-300 text-zinc-700 hover:text-blue-500">
+                      Hook {shortAddr(FANVIBE_V4_HOOK)}
+                      <ExternalLink size={11} />
+                    </a>
+                    <a href={explorerTx(FANVIBE_V4_DEPLOY_TX)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1 font-semibold dark:text-zinc-300 text-zinc-700 hover:text-blue-500">
+                      Deploy
+                      <ExternalLink size={11} />
+                    </a>
+                    <a href={explorerTx(FANVIBE_V4_INIT_TX)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1 font-semibold dark:text-zinc-300 text-zinc-700 hover:text-blue-500">
+                      Pool init
+                      <ExternalLink size={11} />
+                    </a>
+                    <a href={explorerTx(FANVIBE_V4_APPROVE_TX)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1 font-semibold dark:text-zinc-300 text-zinc-700 hover:text-blue-500">
+                      Approval
+                      <ExternalLink size={11} />
+                    </a>
+                    <a href={explorerTx(FANVIBE_V4_SWAP_PROOF_TX)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1 font-semibold dark:text-zinc-300 text-zinc-700 hover:text-blue-500">
+                      Swap proof
+                      <ExternalLink size={11} />
+                    </a>
+                  </div>
+                </div>
+                <div className="mt-3 truncate text-[10px] font-semibold dark:text-zinc-600 text-zinc-400">
+                  Pool {FANVIBE_V4_POOL_ID}
+                </div>
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
