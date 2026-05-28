@@ -22,6 +22,8 @@ This repository is a monorepo. It contains the production app, backend referee s
 - Upcoming and live World Cup match coverage alongside FanVibe markets.
 - World Cup news and OKX/X Layer news in the News tab.
 - Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, and total account value.
+- Autonomous settlement for completed fixture and champion markets.
+- O2-style gas insurance for the referee wallet, with reserve rebalancing when gas capacity drops below threshold.
 - Explorer-linked stake, payout, refund, and proof transactions.
 - A public `Why X Layer` proof panel inside the app.
 - A dedicated `/docs` page for users, builders, and reviewers.
@@ -41,9 +43,15 @@ This repository is a monorepo. It contains the production app, backend referee s
 2. The user picks a fixture or champion market.
 3. The user stakes OKB from the connected account.
 4. The backend indexes the transaction and ties it to the account.
-5. Completed markets settle to payouts or refunds.
+5. Completed markets are processed by the autonomous referee service.
 6. The portfolio keeps a permanent account-level history with explorer links.
 7. The News tab keeps users current with World Cup, OKX, and X Layer updates.
+
+## Autonomous Settlement And Gas Insurance
+
+FanVibe uses a backend referee service to keep settlement independent of the user session. When a fixture or champion market resolves, the referee records the outcome, creates a persisted payout or refund job, sends OKB from the referee wallet, stores the transaction record, and resumes incomplete jobs after a restart.
+
+The referee also runs an O2-style metabolism loop as fallback gas insurance. Every 60 seconds it checks the referee wallet's OKB gas position. If the balance falls below the configured threshold, the service checks USDT reserve value and attempts to rebalance toward gas capacity. The route tries OKX DEX Aggregator first and keeps a PancakeSwap V3 WOKB reserve route as fallback. A profitability guard blocks uneconomic refuels, and the loop stays separate from user stake accounting.
 
 ## Public Use Guide
 
@@ -65,6 +73,7 @@ Benefits:
 - X Layer gets both retail app activity and liquidity-pool proof activity from the same product.
 - WOKB/USDT liquidity can respond to market phases: open, live, and settled.
 - Prediction-market funds remain separate from the experimental liquidity module.
+- Autonomous settlement and O2-style gas insurance keep the consumer app operational while the v4 hook shows how app state can become DeFi infrastructure.
 
 | Item | Value |
 | --- | --- |

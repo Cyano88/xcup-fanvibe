@@ -6,8 +6,15 @@ FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with 
 
 - Users stake OKB on match and champion markets.
 - Portfolio history stays tied to the connected account.
+- Completed fixture and champion markets are processed by the autonomous referee service.
 - Payouts and refunds are explorer-linked for public review.
-- The referee wallet handles completed-market payouts and refunds.
+- The referee wallet handles completed-market payouts and refunds through persisted settlement jobs.
+
+## Autonomous Settlement And O2 Gas Insurance
+
+FanVibe's referee service keeps market settlement independent of the browser session. When a market resolves, the service records the outcome, builds a payout or refund job, sends OKB from the referee wallet, stores the transaction hash, and resumes incomplete jobs after backend restart.
+
+The same service includes an O2-style metabolism loop for gas insurance. It checks the referee wallet's OKB gas position every 60 seconds. If gas capacity falls below threshold, it checks USDT reserve value and attempts to rebalance reserves toward gas capacity, using OKX DEX Aggregator first and a PancakeSwap V3 WOKB reserve route as fallback. A cost guard prevents uneconomic refuels, and this loop remains separate from user stake accounting.
 
 ## Uniswap v4 Hook Proof
 
@@ -20,6 +27,8 @@ The module plugs the consumer app into DeFi by turning FanVibe match phases into
 - Settled phase: `0.10%`
 
 This creates a clear consumer-to-DeFi path: football users create market activity, X Layer records that activity, and the v4 hook proves that app state can influence liquidity behavior in a WOKB/USDT pool.
+
+The result is one X Layer product with two connected layers: a consumer prediction market with autonomous settlement, and an experimental DeFi module where match phase state becomes swap-time fee behavior.
 
 - Hook: `0x4B6612ca209f07db44f8A651E4217A75106C4080`
 - Proof router: `0x1e950c0b870b974dF997D61C3dF0A6701C489720`

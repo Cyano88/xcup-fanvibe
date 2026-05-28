@@ -13,6 +13,8 @@ FanVibe lets users:
 - Follow upcoming and live World Cup match coverage alongside FanVibe markets.
 - Track every position in one portfolio.
 - Review payouts, refunds, wallet balance, and total account value.
+- Rely on autonomous settlement for completed fixture and champion markets.
+- Use an O2-style gas insurance loop that helps keep the referee wallet payout-ready.
 - Follow explorer links for stake, payout, refund, and proof transactions.
 - Read World Cup and OKX/X Layer news from the News tab.
 - Use the public `/docs` page for product and proof documentation.
@@ -83,6 +85,23 @@ Completed markets resolve to:
 
 Settlements are linked to X Layer records when a payout or refund transaction exists.
 
+FanVibe settlement is autonomous at the service level. The backend referee records completed fixture outcomes, creates persisted payout or refund jobs, signs OKB transfers from the referee wallet, stores transaction records, and resumes pending settlement jobs after restart. Champion markets are settled after the final and remain part of the same portfolio history.
+
+## O2 Gas Insurance
+
+FanVibe includes an O2-style metabolism loop inside the referee service. This is used as fallback gas insurance for payout and refund operations.
+
+Verified behavior:
+
+- The referee checks its OKB gas position every 60 seconds.
+- If gas health drops below the configured threshold, the service checks USDT reserve value.
+- The refuel path tries OKX DEX Aggregator first.
+- A PancakeSwap V3 WOKB reserve route is available as fallback.
+- A profitability guard prevents uneconomic refuels.
+- The gas insurance loop is separate from user stake accounting and does not change portfolio balances.
+
+This gives FanVibe an operational layer for gas rebalancing: user stakes remain visible as positions, while the payout account has a monitored fallback path for maintaining gas capacity.
+
 ## Live Simulation
 
 FanVibe seasons include:
@@ -118,6 +137,18 @@ FanVibe uses X Layer because it needs:
 - Explorer-linked settlement.
 - Public proof for user trust.
 - A path from consumer activity into DeFi liquidity signals.
+- Automated payout operations with a gas-insurance loop.
+
+## Implementation Coverage
+
+| Area | FanVibe implementation |
+| --- | --- |
+| World Cup consumer surface | Upcoming and live World Cup match coverage, football news, and FanVibe simulated seasons |
+| Prediction markets | OKB fixture markets, champion markets, portfolio history, wallet and email smart-wallet sign-in |
+| X Layer proof | Stake indexing, payout/refund records, explorer links, public proof panel |
+| Autonomous operations | Referee settlement jobs, restart recovery, champion settlement, refund queue |
+| Gas resilience | O2-style metabolism loop, threshold monitoring, reserve rebalancing, OKX route plus fallback route |
+| DeFi bridge | Experimental Uniswap v4 WOKB/USDT dynamic-fee hook driven by FanVibe match phases |
 
 ## Uniswap v4 Hook Module
 

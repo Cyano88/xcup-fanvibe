@@ -22,6 +22,8 @@ const navItems = [
   ['Account', '#account'],
   ['Markets', '#markets'],
   ['Portfolio', '#portfolio'],
+  ['Settlement', '#settlement'],
+  ['Gas Insurance', '#gas-insurance'],
   ['How To Test', '#how-to-test'],
   ['X Layer Proof', '#x-layer'],
   ['v4 Hook', '#v4-hook'],
@@ -33,7 +35,7 @@ const featureRows = [
   ['Stake', 'OKB-denominated fixture and champion markets on X Layer Mainnet.'],
   ['Watch', 'Continuous FanVibe seasons with live match state, comments, and market movement.'],
   ['Follow', 'Upcoming and live World Cup match coverage keeps the product tied to the real football calendar.'],
-  ['Settle', 'Payouts, refunds, lost positions, and active markets remain tied to the account.'],
+  ['Settle', 'Completed markets are processed by an autonomous referee service, then remain tied to the account.'],
   ['Verify', 'Stake, payout, refund, and hook proof records link to X Layer explorers.'],
 ];
 
@@ -61,6 +63,20 @@ const defiBenefits = [
   ['Network activity', 'The app drives wallet sign-in, OKB staking, settlement records, and v4 pool interactions on X Layer.'],
   ['Liquidity context', 'A WOKB/USDT pool can price liquidity differently when markets are open, live, or settled.'],
   ['Clear separation', 'The hook is experimental and does not custody user prediction stakes or affect payout accounting.'],
+];
+
+const settlementRows = [
+  ['Match resolution', 'Finished FanVibe fixtures and synced match states are handed to the backend referee for outcome recording.'],
+  ['Payout jobs', 'The referee creates persisted settlement jobs, sends OKB payouts or refunds, and records transaction hashes for review.'],
+  ['Restart recovery', 'Pending settlement jobs resume after a backend restart so payouts are not dependent on a single page session.'],
+  ['Champion markets', 'Outright champion markets resolve after the final and stay visible in the same portfolio ledger.'],
+];
+
+const gasRows = [
+  ['Health check', 'The O2-style metabolism loop checks the referee wallet gas position every 60 seconds.'],
+  ['Refuel trigger', 'If the OKB gas balance drops below the configured threshold, the service checks USDT reserves for a refuel path.'],
+  ['Routing', 'The rebalancing path tries OKX DEX Aggregator first and uses a PancakeSwap V3 WOKB reserve route as fallback.'],
+  ['Cost guard', 'A profitability guard blocks uneconomic refuels, keeping the insurance loop separate from user stake accounting.'],
 ];
 
 function short(value: string): string {
@@ -266,6 +282,40 @@ export function DocsPage() {
             </div>
           </section>
 
+          <section id="settlement" className="grid gap-8 border-b border-zinc-200 py-10 dark:border-zinc-900 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight">Autonomous settlement</h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                FanVibe does not require users to claim after every market. When a market finishes, the referee service records the outcome, builds the payout or refund job, signs the OKB transfer from the referee wallet, and keeps the result visible in Portfolio.
+              </p>
+            </div>
+            <div className="divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-900 dark:border-zinc-900">
+              {settlementRows.map(([title, body]) => (
+                <div key={title} className="grid gap-2 py-4 sm:grid-cols-[150px_1fr]">
+                  <div className="text-sm font-semibold">{title}</div>
+                  <div className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{body}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section id="gas-insurance" className="grid gap-8 border-b border-zinc-200 py-10 dark:border-zinc-900 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight">O2 gas insurance</h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                FanVibe plugs an O2-style metabolism loop into the referee service as fallback gas insurance. It monitors the payout wallet, rebalances reserve value toward gas capacity when needed, and keeps payout operations resilient without touching user position accounting.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {gasRows.map(([title, body]) => (
+                <div key={title} className="border border-zinc-200 p-5 dark:border-zinc-900">
+                  <div className="text-sm font-semibold">{title}</div>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{body}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section id="x-layer" className="grid gap-8 border-b border-zinc-200 py-10 dark:border-zinc-900 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">X Layer proof layer</h2>
@@ -280,7 +330,7 @@ export function DocsPage() {
               </div>
               <div className="border border-zinc-200 p-4 dark:border-zinc-900">
                 <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Settlement</div>
-                <div className="mt-2 text-sm font-semibold">Payouts and refunds link to explorer records</div>
+                <div className="mt-2 text-sm font-semibold">Autonomous payouts and refunds link to explorer records</div>
               </div>
               <div className="border border-zinc-200 p-4 dark:border-zinc-900">
                 <div className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Liquidity</div>
