@@ -1,6 +1,6 @@
 # FanVibe Platform Documentation
 
-FanVibe is a public-facing prediction market and X Layer proof app. It combines a consumer sports experience with verifiable on-chain activity and an isolated Uniswap v4 hook module.
+FanVibe is a public-facing prediction market and X Layer proof app. It combines a consumer sports experience, World Cup coverage, verifiable on-chain activity, and an experimental Uniswap v4 hook module that connects app activity to DeFi liquidity behavior.
 
 ## Product Overview
 
@@ -10,6 +10,7 @@ FanVibe lets users:
 - Stake OKB on match outcomes.
 - Stake OKB on champion markets.
 - Watch simulated football seasons progress through group stages and knockouts.
+- Follow upcoming and live World Cup match coverage alongside FanVibe markets.
 - Track every position in one portfolio.
 - Review payouts, refunds, wallet balance, and total account value.
 - Follow explorer links for stake, payout, refund, and proof transactions.
@@ -35,6 +36,7 @@ FanVibe lets users:
 5. Confirm the wallet transaction.
 6. Watch the match or season progress.
 7. Open Portfolio to review position status, account value, payouts, refunds, and proof links.
+8. Open News to follow World Cup, OKX, and X Layer updates.
 
 ## Account And Wallets
 
@@ -94,9 +96,18 @@ FanVibe seasons include:
 
 The simulation is consumer-facing; it is separate from real FIFA results and is labeled as FanVibe season play inside the product.
 
+## Live World Cup Coverage
+
+FanVibe also includes upcoming and live World Cup match coverage so the app is not only a simulation surface. Users can follow the football calendar and live World Cup-facing information while using FanVibe markets.
+
+This gives the product two layers:
+
+- FanVibe markets: simulated seasons, fixture markets, champion picks, and account settlement.
+- World Cup coverage: upcoming and live match context plus news that keeps users engaged between market actions.
+
 ## News
 
-The News tab mixes football news with OKX/X Layer updates. OKX and X Layer news are included to show the ecosystem context without making the product feel like a pure crypto feed.
+The News tab mixes World Cup news, football updates, and OKX/X Layer updates. It gives users a reason to keep checking the app even when they are not actively staking.
 
 ## Why X Layer
 
@@ -110,15 +121,22 @@ FanVibe uses X Layer because it needs:
 
 ## Uniswap v4 Hook Module
 
-The hook module is an isolated monorepo feature for WOKB/USDT liquidity on X Layer. It is not required for staking and does not custody user stakes.
+The hook module is an experimental monorepo feature for WOKB/USDT liquidity on X Layer. It is not required for staking and does not custody user stakes.
 
-The hook connects FanVibe match phases to a WOKB/USDT dynamic-fee v4 pool:
+The hook connects FanVibe match phases to a WOKB/USDT dynamic-fee v4 pool. This is the bridge from consumer app to DeFi: FanVibe creates consumer activity around football markets, X Layer records that activity, and the v4 hook converts match-state changes into fee behavior for liquidity.
 
 | Phase | Fee |
 | --- | --- |
 | Preseason / open | `0.05%` |
 | Live | `0.30%` |
 | Settled | `0.10%` |
+
+Benefits:
+
+- Consumer activity becomes an on-chain DeFi signal.
+- X Layer receives both prediction-market transactions and liquidity-pool proof activity.
+- Liquidity fees can respond to match phases without touching user prediction stakes.
+- The experimental module stays isolated from settlement and payouts.
 
 Verified records:
 
@@ -165,8 +183,19 @@ npm run build
 - Stake a small OKB amount on a fixture.
 - Stake a small OKB amount on a champion market.
 - Open Portfolio and verify the position appears.
+- Open News and review World Cup plus OKX/X Layer updates.
 - Expand `Why X Layer` and open the v4 hook proof links.
 - Open `https://fanvibe.xyz/docs`.
+
+## Public Use Guide
+
+1. Open `https://fanvibe.xyz`.
+2. Connect a wallet or sign in with email.
+3. Choose a fixture market or champion market.
+4. Enter a small OKB amount while testing.
+5. Confirm the wallet prompt.
+6. Use Portfolio to track positions, wallet balance, total account value, settlement status, and explorer links.
+7. Use News to follow World Cup coverage and OKX/X Layer updates.
 
 ## Safety
 

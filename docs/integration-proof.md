@@ -1,6 +1,6 @@
 # FanVibe Integration Proof
 
-FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with wallet or email smart wallet, stake OKB on simulated football outcomes, and review every position, payout, refund, and transaction from one portfolio.
+FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with wallet or email smart wallet, stake OKB on simulated football outcomes, follow upcoming and live World Cup match coverage and news, and review every position, payout, refund, and transaction from one portfolio.
 
 ## X Layer Consumer App
 
@@ -11,7 +11,15 @@ FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with 
 
 ## Uniswap v4 Hook Proof
 
-FanVibe also includes an isolated Uniswap v4 module for WOKB/USDT liquidity on X Layer. It does not custody prediction stakes and does not affect consumer payouts.
+FanVibe also includes an experimental Uniswap v4 module for WOKB/USDT liquidity on X Layer. It does not custody prediction stakes and does not affect consumer payouts.
+
+The module plugs the consumer app into DeFi by turning FanVibe match phases into liquidity-fee signals:
+
+- Open markets: `0.05%`
+- Live match phase: `0.30%`
+- Settled phase: `0.10%`
+
+This creates a clear consumer-to-DeFi path: football users create market activity, X Layer records that activity, and the v4 hook proves that app state can influence liquidity behavior in a WOKB/USDT pool.
 
 - Hook: `0x4B6612ca209f07db44f8A651E4217A75106C4080`
 - Proof router: `0x1e950c0b870b974dF997D61C3dF0A6701C489720`

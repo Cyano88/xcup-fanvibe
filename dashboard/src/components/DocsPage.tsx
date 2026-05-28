@@ -17,10 +17,12 @@ const phaseResetTx = '0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a
 
 const navItems = [
   ['Overview', '#overview'],
+  ['World Cup', '#world-cup'],
   ['Product Flow', '#flow'],
   ['Account', '#account'],
   ['Markets', '#markets'],
   ['Portfolio', '#portfolio'],
+  ['How To Test', '#how-to-test'],
   ['X Layer Proof', '#x-layer'],
   ['v4 Hook', '#v4-hook'],
   ['Safety', '#safety'],
@@ -30,8 +32,17 @@ const featureRows = [
   ['Sign in', 'Wallet connect or email smart-wallet sign-in through Privy.'],
   ['Stake', 'OKB-denominated fixture and champion markets on X Layer Mainnet.'],
   ['Watch', 'Continuous FanVibe seasons with live match state, comments, and market movement.'],
+  ['Follow', 'Upcoming and live World Cup match coverage keeps the product tied to the real football calendar.'],
   ['Settle', 'Payouts, refunds, lost positions, and active markets remain tied to the account.'],
   ['Verify', 'Stake, payout, refund, and hook proof records link to X Layer explorers.'],
+];
+
+const testSteps = [
+  ['1', 'Open the app', 'Go to fanvibe.xyz and choose a market from Home or Search.'],
+  ['2', 'Sign in', 'Use wallet connect or email sign-in. Both create the same account-level portfolio experience.'],
+  ['3', 'Stake a small amount', 'Enter a small OKB amount, confirm from your wallet, and wait for the stake to appear.'],
+  ['4', 'Track the result', 'Open Portfolio to watch active positions, settlement state, payouts, refunds, and explorer links.'],
+  ['5', 'Use News', 'Open News to follow World Cup coverage alongside OKX and X Layer updates.'],
 ];
 
 const proofRows = [
@@ -43,6 +54,13 @@ const proofRows = [
   ['Liquidity tx', liquidityTx, explorerTx(liquidityTx)],
   ['Swap proof tx', swapProofTx, explorerTx(swapProofTx)],
   ['Phase reset tx', phaseResetTx, explorerTx(phaseResetTx)],
+];
+
+const defiBenefits = [
+  ['Consumer signal', 'Match phase data from a consumer football app becomes a transparent input for DeFi fee behavior.'],
+  ['Network activity', 'The app drives wallet sign-in, OKB staking, settlement records, and v4 pool interactions on X Layer.'],
+  ['Liquidity context', 'A WOKB/USDT pool can price liquidity differently when markets are open, live, or settled.'],
+  ['Clear separation', 'The hook is experimental and does not custody user prediction stakes or affect payout accounting.'],
 ];
 
 function short(value: string): string {
@@ -83,7 +101,8 @@ export function DocsPage() {
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <a href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-800 transition-colors hover:text-blue-600 dark:text-zinc-200 dark:hover:text-blue-300">
             <ArrowLeft size={16} />
-            FanVibe
+            <span>FanVibe</span>
+            <span className="hidden h-1.5 w-1.5 rounded-full bg-blue-600 sm:inline-block" />
           </a>
           <div className="flex items-center gap-3">
             <a href="https://github.com/Cyano88/xcup-fanvibe" target="_blank" rel="noopener noreferrer" className="hidden text-sm font-semibold text-zinc-500 transition-colors hover:text-zinc-950 dark:text-zinc-500 dark:hover:text-zinc-100 sm:inline-flex">
@@ -98,7 +117,7 @@ export function DocsPage() {
         <aside className="hidden lg:block">
           <nav className="sticky top-24 space-y-1 text-sm">
             {navItems.map(([label, href]) => (
-              <a key={href} href={href} className="block rounded-md px-3 py-2 font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-950 dark:hover:text-zinc-100">
+              <a key={href} href={href} className="block rounded-md border-l-2 border-transparent px-3 py-2 font-medium text-zinc-500 transition-colors hover:border-blue-600 hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-950 dark:hover:text-zinc-100">
                 {label}
               </a>
             ))}
@@ -107,14 +126,14 @@ export function DocsPage() {
 
         <div className="min-w-0">
           <section id="overview" className="border-b border-zinc-200 pb-10 dark:border-zinc-900">
-            <div className="mb-5 inline-flex rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            <div className="mb-5 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
               X Layer prediction markets
             </div>
             <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-6xl">
-              A live football market with transparent settlement.
+              A live football market with transparent X Layer settlement.
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              FanVibe lets users sign in, stake OKB on simulated football markets, follow live match state, and review every position from one portfolio. The platform keeps account activity visible, compact, and verifiable on X Layer.
+              FanVibe lets users sign in, stake OKB on simulated football markets, follow upcoming and live World Cup match coverage, read football and OKX/X Layer news, and review every position from one portfolio. The platform keeps account activity visible, compact, and verifiable on X Layer.
             </p>
             <div className="mt-8 grid gap-3 border-y border-zinc-200 py-4 dark:border-zinc-900 sm:grid-cols-3">
               <div>
@@ -126,8 +145,31 @@ export function DocsPage() {
                 <div className="mt-1 text-sm font-semibold">OKB</div>
               </div>
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">DeFi module</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">DeFi module</div>
                 <div className="mt-1 text-sm font-semibold">WOKB/USDT v4 hook</div>
+              </div>
+            </div>
+          </section>
+
+          <section id="world-cup" className="grid gap-8 border-b border-zinc-200 py-10 dark:border-zinc-900 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight">World Cup coverage</h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                FanVibe is built around football attention. The app combines FanVibe simulated seasons with upcoming and live World Cup match coverage plus a news feed that keeps users current between markets.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="border border-zinc-200 p-5 dark:border-zinc-900">
+                <div className="text-sm font-semibold">Live World Cup matches</div>
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">The product includes a real World Cup section so users can follow upcoming and live match coverage alongside FanVibe markets.</p>
+              </div>
+              <div className="border border-blue-200 bg-blue-50/70 p-5 dark:border-blue-500/25 dark:bg-blue-500/10">
+                <div className="text-sm font-semibold text-blue-700 dark:text-blue-300">World Cup news</div>
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Football news cards help users stay entertained and informed while seasons and markets move.</p>
+              </div>
+              <div className="border border-zinc-200 p-5 dark:border-zinc-900">
+                <div className="text-sm font-semibold">OKX and X Layer updates</div>
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">The News tab also surfaces OKX and X Layer ecosystem updates so the app feels connected to its network.</p>
               </div>
             </div>
           </section>
@@ -136,7 +178,7 @@ export function DocsPage() {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">Product flow</h2>
               <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-                The app is designed around one account and one portfolio. Users do not need to understand backend indexing to follow their stake lifecycle.
+                The app is designed around one account, one portfolio, and a football-first experience. Users do not need to understand backend indexing to follow their stake lifecycle.
               </p>
             </div>
             <div className="divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-900 dark:border-zinc-900">
@@ -187,6 +229,24 @@ export function DocsPage() {
             </div>
           </section>
 
+          <section id="how-to-test" className="grid gap-8 border-b border-zinc-200 py-10 dark:border-zinc-900 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight">How to use FanVibe</h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                Public users can test the full flow with a small amount of OKB. The safest path is to start small, confirm each wallet prompt, and use Portfolio as the source of truth.
+              </p>
+            </div>
+            <div className="divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-900 dark:border-zinc-900">
+              {testSteps.map(([number, title, body]) => (
+                <div key={number} className="grid gap-3 py-4 sm:grid-cols-[44px_140px_1fr]">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-sm font-semibold text-white">{number}</div>
+                  <div className="text-sm font-semibold">{title}</div>
+                  <div className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{body}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section id="portfolio" className="grid gap-8 border-b border-zinc-200 py-10 dark:border-zinc-900 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">Portfolio ledger</h2>
@@ -223,7 +283,7 @@ export function DocsPage() {
                 <div className="mt-2 text-sm font-semibold">Payouts and refunds link to explorer records</div>
               </div>
               <div className="border border-zinc-200 p-4 dark:border-zinc-900">
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Liquidity</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Liquidity</div>
                 <div className="mt-2 text-sm font-semibold">Match phase data powers a v4 fee proof</div>
               </div>
             </div>
@@ -233,16 +293,24 @@ export function DocsPage() {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">Uniswap v4 hook module</h2>
               <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-                The v4 module is isolated from user staking. It connects FanVibe match phases to a WOKB/USDT dynamic-fee pool, showing how consumer activity can become a DeFi signal.
+                This experimental module plugs a consumer app on X Layer into DeFi. FanVibe match phases are written into a Uniswap v4 hook, and the hook applies phase-aware fees to a WOKB/USDT dynamic-fee pool.
               </p>
               <div className="mt-5 grid gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                 <div>Open markets: 0.05%</div>
                 <div>Live match phase: 0.30%</div>
                 <div>Settled phase: 0.10%</div>
               </div>
+              <div className="mt-6 grid gap-3">
+                {defiBenefits.map(([title, body]) => (
+                  <div key={title} className="border-l-2 border-blue-600 pl-4">
+                    <div className="text-sm font-semibold">{title}</div>
+                    <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{body}</div>
+                  </div>
+                ))}
+              </div>
             </div>
             <div>
-              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Verified records</div>
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Verified records</div>
               <div className="border-y border-zinc-200 dark:border-zinc-900">
                 {proofRows.map(([label, value, href]) => (
                   <DetailLink key={label} label={label} value={value} href={href} />

@@ -1,8 +1,8 @@
 # FanVibe
 
-FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on simulated football markets, follow live match play, and review every position, payout, refund, and proof link from one account.
+FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on simulated football markets, follow upcoming and live World Cup match coverage, read football and OKX/X Layer news, and review every position, payout, refund, and proof link from one account.
 
-This repository is a monorepo. It contains the production app, backend referee service, dashboard, public documentation, and an isolated Uniswap v4 hook module for the X Layer Uniswap track.
+This repository is a monorepo. It contains the production app, backend referee service, dashboard, public documentation, and an experimental Uniswap v4 hook module that connects FanVibe consumer activity on X Layer to DeFi liquidity behavior.
 
 ## Monorepo Map
 
@@ -19,11 +19,13 @@ This repository is a monorepo. It contains the production app, backend referee s
 - Wallet and email sign-in through Privy smart wallets.
 - OKB staking on match markets and champion markets.
 - Live simulated football seasons with group play, knockouts, and champions.
+- Upcoming and live World Cup match coverage alongside FanVibe markets.
+- World Cup news and OKX/X Layer news in the News tab.
 - Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, and total account value.
 - Explorer-linked stake, payout, refund, and proof transactions.
 - A public `Why X Layer` proof panel inside the app.
 - A dedicated `/docs` page for users, builders, and reviewers.
-- An isolated Uniswap v4 hook that connects FanVibe match phases to WOKB/USDT liquidity fees.
+- An experimental Uniswap v4 hook that connects FanVibe match phases to WOKB/USDT liquidity fees.
 
 ## Live Links
 
@@ -41,10 +43,28 @@ This repository is a monorepo. It contains the production app, backend referee s
 4. The backend indexes the transaction and ties it to the account.
 5. Completed markets settle to payouts or refunds.
 6. The portfolio keeps a permanent account-level history with explorer links.
+7. The News tab keeps users current with World Cup, OKX, and X Layer updates.
+
+## Public Use Guide
+
+1. Open `https://fanvibe.xyz`.
+2. Connect a wallet or sign in with email.
+3. Pick a fixture market or champion market.
+4. Enter a small OKB amount while testing.
+5. Confirm the wallet prompt.
+6. Open Portfolio to track active positions, settlement status, payouts, refunds, and explorer links.
+7. Open News to follow World Cup coverage and OKX/X Layer updates.
 
 ## Uniswap v4 Hook Proof
 
-FanVibe includes an experimental DeFi module that is deliberately separate from staking and payouts. It proves that a consumer app state can affect liquidity behavior on X Layer.
+FanVibe includes an experimental DeFi module that is deliberately separate from staking and payouts. It shows how a consumer app on X Layer can plug into DeFi: FanVibe match phases become transparent inputs for a Uniswap v4 dynamic-fee hook, and that hook applies phase-aware fees to a WOKB/USDT pool.
+
+Benefits:
+
+- Consumer activity becomes a DeFi signal without changing the user-facing staking flow.
+- X Layer gets both retail app activity and liquidity-pool proof activity from the same product.
+- WOKB/USDT liquidity can respond to market phases: open, live, and settled.
+- Prediction-market funds remain separate from the experimental liquidity module.
 
 | Item | Value |
 | --- | --- |
