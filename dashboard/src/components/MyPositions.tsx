@@ -17,6 +17,10 @@ const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const BALANCE_CACHE_PREFIX = 'fanvibe.okbBalance.';
 const POSITION_BATCH_SIZE = 10;
 
+function isPrivyWallet(wallet: { walletClientType?: string | null }): boolean {
+  return wallet.walletClientType === 'privy' || wallet.walletClientType === 'privy-v2';
+}
+
 function formatOKB(wei: string): string {
   try {
     const whole = BigInt(wei);
@@ -188,9 +192,10 @@ function PrivyPositionsConnect({
   const { ready, authenticated, login, logout } = usePrivy();
   const { createWallet } = useCreateWallet();
   const { wallets, ready: walletsReady } = useWallets();
+  const preferredWallet = wallets.find(isPrivyWallet) ?? wallets[0];
   const activeWallet = (address
     ? wallets.find(wallet => wallet.address.toLowerCase() === address.toLowerCase())
-    : undefined) ?? wallets[0];
+    : undefined) ?? preferredWallet;
   const creatingWalletRef = useRef(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setupRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -227,7 +232,7 @@ function PrivyPositionsConnect({
       return;
     }
 
-    const nextWallet = wallets[0];
+    const nextWallet = wallets.find(isPrivyWallet) ?? wallets[0];
     if (nextWallet?.address) {
       onAddress(nextWallet.address);
       rememberWallet(nextWallet.address);

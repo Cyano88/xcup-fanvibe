@@ -25,7 +25,10 @@ createRoot(document.getElementById('root')!).render(
         appearance: {
           theme: 'dark',
           accentColor: '#2563eb',
-          logo: '/assets/fanvibe-hero-logo.jpeg',
+          logo: 'https://fanvibe.xyz/assets/fanvibe-hero-logo.jpeg',
+          landingHeader: 'FanVibe',
+          loginMessage:
+            'FanVibe staff will never ask for this code. Only enter it on fanvibe.xyz.',
         },
         embeddedWallets: {
           ethereum: {

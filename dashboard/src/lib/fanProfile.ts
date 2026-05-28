@@ -26,8 +26,10 @@ export function setStoredProfileName(name: string, address?: string | null): voi
   const key = profileKey(address);
   if (value) {
     localStorage.setItem(key, value);
+    localStorage.setItem(FAN_PROFILE_NAME_KEY, value);
   } else {
     localStorage.removeItem(key);
+    localStorage.removeItem(FAN_PROFILE_NAME_KEY);
   }
   window.dispatchEvent(new Event(FAN_PROFILE_EVENT));
 }
