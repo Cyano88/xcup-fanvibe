@@ -56,6 +56,20 @@ function friendlyFixtureId(fixtureId: string): string {
   return normalized.replace(/-/g, ' ').toUpperCase();
 }
 
+function seasonBadge(position: UserPosition): string | null {
+  const seasonNumber = position.type === 'champion' ? position.seasonNumber : undefined;
+  const fixtureId = position.type === 'match'
+    ? position.stake.fixtureId
+    : position.type === 'refund'
+      ? position.refund.fixtureId
+      : '';
+  const match = fixtureId.match(/^s(\d+)-/i);
+  const parsedSeason = seasonNumber ?? (match ? Number(match[1]) : undefined);
+  return parsedSeason && Number.isFinite(parsedSeason)
+    ? `S${String(parsedSeason).padStart(2, '0')}`
+    : null;
+}
+
 function refundReasonLabel(reason: string): string {
   const lower = reason.toLowerCase();
   if (lower.includes('not open') || lower.includes('already live') || lower.includes('already settled')) {
@@ -898,7 +912,8 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                   ].filter(Boolean).join(' - ')
                   : ''
               : '';
-              const flashGoal = position.type === 'match' && goalFlashIds.has(position.stake.fixtureId);
+            const season = seasonBadge(position);
+            const flashGoal = position.type === 'match' && goalFlashIds.has(position.stake.fixtureId);
 
               return (
                 <div
@@ -930,11 +945,18 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                         </span>
                       )}
                     </div>
-                    {settledMeta && (
-                      <span className="shrink-0 text-[10px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">
-                        {settledMeta}
-                      </span>
-                    )}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {settledMeta && (
+                        <span className="text-[10px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">
+                          {settledMeta}
+                        </span>
+                      )}
+                      {season && (
+                        <span className="rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums dark:text-zinc-400 text-zinc-500">
+                          {season}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
                     {formatOKB(amount)}{amountUsd ? ` (${amountUsd})` : ' ($...)'}

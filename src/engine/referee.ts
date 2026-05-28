@@ -271,6 +271,7 @@ export class RefereeEngine {
           status: this.champSettled ? (this.champWinner === stake.teamCode ? 'settled_winner' : 'settled_lost') : 'active',
           stake,
           winner: this.champWinner,
+          seasonNumber: this.championSeasonNumber,
           payout,
         };
       });
