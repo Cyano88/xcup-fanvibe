@@ -47,7 +47,18 @@ function friendlyFixtureId(fixtureId: string): string {
   const normalized = baseFixtureId(fixtureId).replace(/^season-/, '');
   const known = REALTIME_FIXTURES.find(fixture => fixture.id === normalized);
   if (known) return `${known.home.code} vs ${known.away.code}`;
+  const seasonGroup = normalized.match(/^wc-([a-l])-/i)?.[1];
+  if (seasonGroup) return `Season Group ${seasonGroup.toUpperCase()} match`;
   return normalized.replace(/-/g, ' ').toUpperCase();
+}
+
+function refundReasonLabel(reason: string): string {
+  const lower = reason.toLowerCase();
+  if (lower.includes('not open') || lower.includes('already live') || lower.includes('already settled')) {
+    return 'Market closed before confirmation';
+  }
+  if (lower.includes('not resolved')) return 'Match not ready for staking';
+  return 'Stake returned automatically';
 }
 
 function positionUpdatedAt(position: UserPosition): number {
@@ -854,7 +865,9 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
             const title = position.type === 'champion'
               ? `${position.stake.teamCode} to win`
               : position.type === 'refund'
-                ? `${position.refund.fixtureId} - ${position.refund.outcome.toUpperCase()}`
+                ? liveFixture
+                  ? `${liveFixture.home.code} vs ${liveFixture.away.code}`
+                  : friendlyFixtureId(position.refund.fixtureId)
                 : liveFixture
                   ? `${liveFixture.home.code} vs ${liveFixture.away.code}`
                   : friendlyFixtureId(position.stake.fixtureId);
@@ -865,7 +878,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                 liveFixture?.kickoff ? `Kickoff ${formatTime(liveFixture.kickoff)}` : undefined,
               ].filter(Boolean).join(' - ')
               : position.type === 'refund'
-                ? `Rejected ${formatTime(position.refund.timestamp)} - ${position.refund.reason}`
+                ? `${refundReasonLabel(position.refund.reason)} - ${formatTime(position.refund.timestamp)}`
                 : `Placed ${formatTime(position.stake.timestamp)}`;
             const settledMeta = effectiveStatus !== 'active'
               ? position.type === 'match'
@@ -926,9 +939,11 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="text-xs font-semibold dark:text-zinc-400 text-zinc-500 hover:text-blue-500">
-                    Stake
-                  </a>
+                  {position.type !== 'refund' || !actionHash ? (
+                    <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="text-xs font-semibold dark:text-zinc-400 text-zinc-500 hover:text-blue-500">
+                      Stake
+                    </a>
+                  ) : null}
                   {actionHash && (
                     <a href={explorerTx(actionHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-600 dark:text-blue-300">
                       <ExternalLink size={11} />

@@ -25,6 +25,7 @@ interface Props {
 }
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
+const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 
 const FLAG_URL = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -94,6 +95,7 @@ function PrimaryMatchStakeAction({
   calldata,
   refereeAddress,
   disabled,
+  onBeforeStake,
   onSuccess,
   onError,
 }: {
@@ -101,6 +103,7 @@ function PrimaryMatchStakeAction({
   calldata: `0x${string}`;
   refereeAddress: string;
   disabled?: boolean;
+  onBeforeStake?: () => Promise<boolean> | boolean;
   onSuccess: (hash: `0x${string}`, amountWei: bigint) => void;
   onError: (message: string) => void;
 }) {
@@ -118,6 +121,7 @@ function PrimaryMatchStakeAction({
         refereeAddress={refereeAddress}
         disabled={disabled}
         pendingLabel="Confirm in wallet..."
+        onBeforeStake={onBeforeStake}
         onSuccess={(hash, amountWei) => onSuccess(hash, amountWei)}
         onError={(message) => onError(message || '')}
         className={className}
@@ -134,6 +138,7 @@ function PrimaryMatchStakeAction({
       refereeAddress={refereeAddress}
       disabled={disabled}
       pendingLabel="Confirm stake..."
+      onBeforeStake={onBeforeStake}
       onSuccess={(hash, amountWei) => onSuccess(hash, amountWei)}
       onError={(message) => onError(message || '')}
       className={className}
@@ -238,6 +243,23 @@ export function FixtureCard({
     setStakeError(null);
     setStakeOutcome(current => current === outcome ? null : outcome);
   }, [fixture.id, onStake]);
+
+  const checkStakeOpen = useCallback(async () => {
+    if (!onStake(fixture.id, stakeOutcome ?? 'home')) return false;
+    try {
+      const statusRes = await fetch(`${BACKEND_HTTP}/stake/status/${encodeURIComponent(fixture.id)}`);
+      if (!statusRes.ok) return true;
+      const status = await statusRes.json() as { canStake?: boolean; reason?: string };
+      if (status.canStake === false) {
+        setStakeError(status.reason ?? 'This market is closed.');
+        setStakeOutcome(null);
+        return false;
+      }
+    } catch {
+      return true;
+    }
+    return true;
+  }, [fixture.id, onStake, stakeOutcome]);
 
   const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(fixture.kickoff).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
@@ -545,6 +567,7 @@ export function FixtureCard({
                   calldata={encodeStakeCalldata(fixture.id, stakeOutcome)}
                   refereeAddress={refereeAddress}
                   disabled={!refereeAddress}
+                  onBeforeStake={checkStakeOpen}
                   onSuccess={(hash) => {
                     setStakeHash(hash);
                     setStakeError(null);
