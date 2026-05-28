@@ -291,6 +291,7 @@ app.post('/season/reset', async (req, res) => {
   const schema = z.object({
     mode: z.enum(['prod', 'test']).default('test'),
     secret: z.string().optional(),
+    resetMarket: z.boolean().default(false),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -298,11 +299,13 @@ app.post('/season/reset', async (req, res) => {
   if (!expected || parsed.data.secret !== expected) return res.status(401).json({ error: 'unauthorized' });
   if (parsed.data.mode === 'prod') {
     const state = await seasonController.resetToFreshSeason(1);
-    await engine.resetMarketState(state.fixtures);
+    if (parsed.data.resetMarket) {
+      await engine.resetMarketState(state.fixtures);
+    }
     broadcast('season', state);
     broadcast('state', engine.getState());
     broadcast('season-reset', { mode: 'prod' });
-    return res.json({ ok: true, state });
+    return res.json({ ok: true, state, marketReset: parsed.data.resetMarket });
   }
   await clearSeasonState(parsed.data.mode);
   broadcast('season-reset', { mode: parsed.data.mode });
