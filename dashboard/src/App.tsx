@@ -8,7 +8,7 @@ import { SettlementToast } from './components/SettlementToast';
 import { MyPositions } from './components/MyPositions';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
-import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team } from './types';
+import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team, UserPosition } from './types';
 import { REALTIME_FIXTURES } from './types';
 import { BracketView } from './components/BracketView';
 import { ChampionPick } from './components/ChampionPick';
@@ -44,6 +44,8 @@ const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
 const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
 const SEASON_CACHE_KEY = 'fanvibe.seasonSnapshot.prod';
+const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
+const ACCOUNT_VALUE_CACHE_KEY = 'fanvibe.accountUsdValue';
 const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -117,6 +119,54 @@ function fmtOKBWei(wei: bigint | string | number): string {
     return `${formatted.toFixed(formatted >= 10 ? 2 : 4)} OKB`;
   } catch {
     return '0 OKB';
+  }
+}
+
+function stripUsdPrefix(value: string | null): string | null {
+  return value ? value.replace(/^US/, '') : null;
+}
+
+function cachedAccountValue(): string {
+  try {
+    return window.localStorage.getItem(ACCOUNT_VALUE_CACHE_KEY) ?? '$0.00';
+  } catch {
+    return '$0.00';
+  }
+}
+
+function positionPortfolioWei(position: UserPosition, fixtures: Fixture[], matchStates: Record<string, MatchState>): bigint {
+  try {
+    if (position.type === 'refund') {
+      return position.status === 'queued' ? BigInt(position.refund.amountWei) : 0n;
+    }
+
+    if (position.type === 'champion') {
+      if (position.status === 'active') return BigInt(position.stake.amountWei);
+      if (position.status === 'settled_winner' && !position.payout) return BigInt(position.stake.amountWei);
+      return 0n;
+    }
+
+    const stakeWei = BigInt(position.stake.amountWei);
+    const liveFixture = fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture;
+    const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
+    const stakeMs = position.stake.timestamp > 10_000_000_000 ? position.stake.timestamp : position.stake.timestamp * 1000;
+    const settlementAppliesToStake = !!position.settlement && position.settlement.settledAt >= stakeMs;
+    const currentFixtureIsLive = liveState?.status === 'live' || liveState?.status === 'half_time';
+    const currentFixtureUnsettled = !!liveFixture?.status && liveFixture.status !== 'settled';
+
+    if (currentFixtureIsLive || currentFixtureUnsettled) return stakeWei;
+    if (liveFixture?.status === 'settled' && liveFixture.result) {
+      return liveFixture.result === position.stake.outcome && position.status !== 'paid'
+        ? BigInt(position.payout?.amountWei ?? position.stake.amountWei)
+        : 0n;
+    }
+    if (!settlementAppliesToStake) return stakeWei;
+    if (position.status === 'active' || position.status === 'won_pending_payout') {
+      return BigInt(position.payout?.amountWei ?? position.stake.amountWei);
+    }
+    return 0n;
+  } catch {
+    return 0n;
   }
 }
 
@@ -264,6 +314,7 @@ function preseasonArchiveRank(fixture: Fixture): number {
 
 export default function App() {
   const okbUsd = useOkbUsdPrice();
+  const [accountValueLabel, setAccountValueLabel] = useState(() => cachedAccountValue());
 
   useEffect(() => {
     flushPendingStakeReports().catch(() => {});
@@ -908,6 +959,55 @@ export default function App() {
   const displayMatchStates = Object.fromEntries(
     Object.entries(matchStates).map(([id, state]) => [id, projectMatchState(state) ?? state])
   ) as Record<string, MatchState>;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshAccountValue = async () => {
+      let address: string | null = null;
+      try {
+        address = window.localStorage.getItem(LAST_WALLET_KEY);
+      } catch {
+        address = null;
+      }
+
+      if (!address) {
+        setAccountValueLabel('$0.00');
+        return;
+      }
+
+      try {
+        const [balanceWei, positionsResponse] = await Promise.all([
+          rpcClient.getBalance({ address: address as `0x${string}` }),
+          fetch(`${BACKEND_HTTP}/positions/${address}`),
+        ]);
+        if (!positionsResponse.ok) throw new Error(`positions ${positionsResponse.status}`);
+        const data = await positionsResponse.json() as { positions?: UserPosition[] };
+        const openExposureWei = (data.positions ?? []).reduce((sum, position) => {
+          return sum + positionPortfolioWei(position, fixtures, matchStates);
+        }, 0n);
+        const nextLabel = stripUsdPrefix(formatOkbUsdFromWei(balanceWei + openExposureWei, okbUsd)) ?? '$0.00';
+        if (cancelled) return;
+        setAccountValueLabel(nextLabel);
+        try {
+          window.localStorage.setItem(ACCOUNT_VALUE_CACHE_KEY, nextLabel);
+        } catch {
+          /* keep UI value only */
+        }
+      } catch {
+        if (cancelled) return;
+        setAccountValueLabel(prev => prev || cachedAccountValue());
+      }
+    };
+
+    refreshAccountValue();
+    const timer = window.setInterval(refreshAccountValue, 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [fixtures, matchStates, okbUsd]);
+
   const displayWatchingMatchState = watchingMatchState ? projectMatchState(watchingMatchState) ?? watchingMatchState : null;
   const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
   const fixtureRoundFilter = activeTab === 'search' ? roundFilter : 'all';
@@ -1060,14 +1160,22 @@ export default function App() {
       return !!fixture && hasPayoutTx && !!settlement.explorerUrl && (hasSettledFixture || hasFinishedMatch);
     })
     .slice(0, 5);
-  const proofPoolWei = Object.values(pools).reduce((sum, pool) => {
+  const settledFixtureIds = new Set(settlements.map(settlement => settlement.fixtureId));
+  const proofPlatformVolumeWei = Object.values(pools).reduce((sum, pool) => {
     try {
+      if (settledFixtureIds.has(pool.fixtureId)) return sum;
       return sum + BigInt(pool.home) + BigInt(pool.draw) + BigInt(pool.away) + BigInt(pool.fees);
     } catch {
       return sum;
     }
-  }, 0n);
-  const proofPoolUsd = formatOkbUsdFromWei(proofPoolWei, okbUsd);
+  }, settlements.reduce((sum, settlement) => {
+    try {
+      return sum + BigInt(settlement.totalPool);
+    } catch {
+      return sum;
+    }
+  }, 0n));
+  const proofPoolUsd = formatOkbUsdFromWei(proofPlatformVolumeWei, okbUsd);
   const reserveUsd = formatOkbUsd(metabolism.okbBalanceFormatted, okbUsd);
   const proofStakeTxs = logs
     .filter(log => log.prefix === 'STAKE' && !!log.txHash)
@@ -1100,7 +1208,7 @@ export default function App() {
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'news', label: 'News', icon: Newspaper },
-    { id: 'portfolio', label: 'Portfolio', icon: BriefcaseBusiness },
+    { id: 'portfolio', label: accountValueLabel || '$0.00', icon: BriefcaseBusiness },
   ];
 
   return (
@@ -1797,8 +1905,8 @@ export default function App() {
 
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Pool</div>
-                  <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fmtOKBWei(proofPoolWei)}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Platform Volume</div>
+                  <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fmtOKBWei(proofPlatformVolumeWei)}</div>
                   {proofPoolUsd && <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{proofPoolUsd}</div>}
                 </div>
                 <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">

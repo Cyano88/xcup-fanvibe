@@ -203,9 +203,7 @@ export function FixtureCard({
   const fmt = formatPool(p);
   const hasPool   = fmt.totalOKB !== '0.0000';
   const totalPoolUsd = formatOkbUsd(fmt.totalOKB, okbUsd);
-  const homePoolUsd = formatOkbUsd(fmt.homeOKB, okbUsd);
-  const drawPoolUsd = formatOkbUsd(fmt.drawOKB, okbUsd);
-  const awayPoolUsd = formatOkbUsd(fmt.awayOKB, okbUsd);
+  const totalPoolUsdLabel = totalPoolUsd?.replace(/^US/, '');
   const isSettled = fixture.status === 'settled';
   const isLocked  = fixture.status === 'locked' || isSettled;
   const seasonFixtureStartsIn = seasonPhase === 'preseason'
@@ -479,7 +477,12 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-medium">
                 {hasPool ? `${fmt.homeOKB}` : 'Stake ->'}
               </span>
-              {hasPool && homePoolUsd && <span className="text-[9px] dark:text-emerald-700 text-emerald-600/70 font-medium">{homePoolUsd}</span>}
+              {hasPool && totalPoolUsdLabel && (
+                <span className="inline-flex items-center gap-1 text-[9px] dark:text-emerald-700 text-emerald-600/70 font-medium">
+                  <TrendingUp size={8} />
+                  {totalPoolUsdLabel}
+                </span>
+              )}
             </button>
 
             {/* Draw */}
@@ -498,7 +501,12 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-medium">
                 {hasPool ? `${fmt.drawOKB}` : 'Stake ->'}
               </span>
-              {hasPool && drawPoolUsd && <span className="text-[9px] dark:text-zinc-600 text-zinc-500 font-medium">{drawPoolUsd}</span>}
+              {hasPool && totalPoolUsdLabel && (
+                <span className="inline-flex items-center gap-1 text-[9px] dark:text-zinc-600 text-zinc-500 font-medium">
+                  <TrendingUp size={8} />
+                  {totalPoolUsdLabel}
+                </span>
+              )}
             </button>
 
             {/* Away */}
@@ -518,7 +526,12 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-blue-500 text-blue-600 font-medium">
                 {hasPool ? `${fmt.awayOKB}` : 'Stake ->'}
               </span>
-              {hasPool && awayPoolUsd && <span className="text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">{awayPoolUsd}</span>}
+              {hasPool && totalPoolUsdLabel && (
+                <span className="inline-flex items-center gap-1 text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">
+                  <TrendingUp size={8} />
+                  {totalPoolUsdLabel}
+                </span>
+              )}
             </button>
           </div>
         )}
@@ -590,14 +603,12 @@ export function FixtureCard({
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pb-3 dark:bg-zinc-950 bg-white">
-        <div className="flex items-center gap-1.5 text-[11px] dark:text-zinc-500 text-zinc-500 font-medium">
-          <TrendingUp size={10} />
-          <span>
-            {hasPool
-              ? `${fmt.totalOKB} OKB${totalPoolUsd ? ` (${totalPoolUsd})` : ''}  - ${p.count} stake${p.count !== 1 ? 's' : ''}`
-              : 'No stakes yet'}
-          </span>
-        </div>
+        {!hasPool ? (
+          <div className="flex items-center gap-1.5 text-[11px] dark:text-zinc-500 text-zinc-500 font-medium">
+            <TrendingUp size={10} />
+            <span>No stakes yet</span>
+          </div>
+        ) : <div />}
         <span className="text-[11px] dark:text-zinc-500 text-zinc-500 truncate max-w-[160px]">
           {fixture.stadium
             ? `${fixture.stadium.city.split(',')[0]}  - ${fixture.stadium.capacity.toLocaleString()}`
