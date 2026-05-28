@@ -40,15 +40,15 @@
         "status": "success"
       }
     ],
-    "phaseTxHash": "0xcc493f2eff233e26f338913e0a2b306cf93eb0769c8f040598d15aaa5301cf0f",
+    "phaseTxHash": "0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494",
     "phaseStatus": "success",
     "swapApprovalTx": null,
     "swapTxHash": "0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c",
     "swapStatus": "success",
     "swapToken": "WOKB",
     "swapAmount": "0.000001",
-    "phase": 2,
-    "currentFee": 3000,
+    "phase": "open",
+    "currentFee": 500,
     "matchdayFeeApplied": [
       {
         "poolId": "0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b",
@@ -56,6 +56,7 @@
         "phase": 2,
         "fee": 3000
       }
-    ]
+    ],
+    "fixtureId": "fanvibe-post-demo"
   }
 }

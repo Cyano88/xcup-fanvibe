@@ -84,7 +84,9 @@ The script writes `poolId`, pool currencies, initialization tx, and approval tx 
 - Liquidity proof tx: `0x25a163de30aa698bc15bf6760bfc654f81b75dc8c604d2b8e3e7f8d586f24063`
 - Live phase tx: `0xcc493f2eff233e26f338913e0a2b306cf93eb0769c8f040598d15aaa5301cf0f`
 - Swap proof tx: `0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c`
+- Post-demo open phase tx: `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494`
 - Verified hook state after swap proof: `approvedPool(poolId) == true`, `phase == Live`, `currentFee == 3000`
+- Current hook state after post-demo reset: `phase == MatchOpen`, `currentFee == 500`
 - Verified event: `MatchdayFeeApplied(poolId, 0x1e950c0b870b974dF997D61C3dF0A6701C489720, Live, 3000)`
 
 ## Judge Demo Proof

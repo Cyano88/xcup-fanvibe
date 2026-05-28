@@ -22,12 +22,15 @@ FanVibe also includes an isolated experimental Uniswap v4 module for the X Layer
 - Pool approval tx: `0xf0b842fa937598ff7b8babd6585a6946020339e6ef3a2119e32f273928d58237`
 - Liquidity proof tx: `0x25a163de30aa698bc15bf6760bfc654f81b75dc8c604d2b8e3e7f8d586f24063`
 - Swap proof tx: `0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c`
+- Post-demo open phase tx: `0xa997a130a0f1c5366b5fa26727aff891f767a5d5a24269f778ea642a994d9494`
 
 The swap proof emitted `MatchdayFeeApplied` on X Layer with:
 
 - Pool id: `0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b`
 - Phase: `Live`
 - Fee: `3000` / `0.30%`
+
+After the proof swap, the hook was reset to `MatchOpen` with `currentFee` back to `500` / `0.05%`.
 
 ## Why It Matters
 
