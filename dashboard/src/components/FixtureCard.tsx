@@ -132,7 +132,7 @@ function PrimaryMatchStakeAction({
   const { wallets } = useWallets();
   const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
   const className = 'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
-  const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB ->` : 'Sign in to stake';
+  const label = authenticated || externalWallet ? 'Stake ->' : 'Sign in to stake';
 
   if (!authenticated && externalWallet) {
     return (
