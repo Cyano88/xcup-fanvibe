@@ -53,6 +53,18 @@ function friendlyFixtureId(fixtureId: string): string {
   if (known) return `${known.home.code} vs ${known.away.code}`;
   const seasonGroup = normalized.match(/^wc-([a-l])-/i)?.[1];
   if (seasonGroup) return `Season Group ${seasonGroup.toUpperCase()} match`;
+  const knockoutMatch = normalized.match(/^(k32|k16|qf|sf)-(\d+)$/i);
+  if (knockoutMatch) {
+    const roundLabel: Record<string, string> = {
+      k32: 'Round of 32',
+      k16: 'Round of 16',
+      qf: 'Quarter-final',
+      sf: 'Semi-final',
+    };
+    return `${roundLabel[knockoutMatch[1].toLowerCase()] ?? 'Knockout'} match ${knockoutMatch[2]}`;
+  }
+  if (/^3pl-1$/i.test(normalized)) return 'Third-place playoff';
+  if (/^f-1$/i.test(normalized)) return 'Final';
   return normalized.replace(/-/g, ' ').toUpperCase();
 }
 

@@ -601,7 +601,9 @@ export default function App() {
           const s = msg.data as DaemonState;
           setRefereeAddress(s.refereeAddress || REFEREE_ADDR);
           setMetabolism(s.metabolism);
-          setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
+          if (seasonMode !== 'prod' && !seasonHydratedRef.current) {
+            setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
+          }
           setPools(s.pools);
           setLogs(s.recentLogs);
           setLastBlock(s.lastBlock);
@@ -616,6 +618,7 @@ export default function App() {
         } else if (msg.type === 'season-reset') {
           const data = msg.data as { mode?: SeasonStorageMode };
           if (data.mode === seasonMode) {
+            if (seasonMode === 'prod') return;
             applySeasonSnapshot(freshSeasonState(1, Date.now(), seasonMode === 'test' ? TEST_SEASON_TIMING : DEFAULT_SEASON_TIMING, seasonMode), seasonMode);
           }
         } else if (msg.type === 'season') {
@@ -640,7 +643,9 @@ export default function App() {
         setEngineOnline(true);
         setRefereeAddress(s.refereeAddress || REFEREE_ADDR);
         setMetabolism(s.metabolism);
-        setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
+        if (seasonMode !== 'prod' && !seasonHydratedRef.current) {
+          setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
+        }
         setPools(s.pools);
         setLogs(s.recentLogs);
         setLastBlock(s.lastBlock);
