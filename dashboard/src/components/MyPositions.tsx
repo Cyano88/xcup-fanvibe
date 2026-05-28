@@ -879,6 +879,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                         : liveFixture?.status === 'open'
                           ? 'Staking open'
                           : undefined;
+            const displayMatchBadge = position.type === 'refund' ? undefined : matchBadge;
             const title = position.type === 'champion'
               ? `${position.stake.teamCode} to win`
               : position.type === 'refund'
@@ -937,9 +938,9 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${statusTone(effectiveStatus)}`}>
                         {statusLabel(position, effectiveStatus)}
                       </span>
-                      {matchBadge && (
+                      {displayMatchBadge && (
                         <span className="shrink-0 rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums text-zinc-600 dark:text-zinc-300">
-                          {matchBadge}
+                          {displayMatchBadge}
                         </span>
                       )}
                     </div>

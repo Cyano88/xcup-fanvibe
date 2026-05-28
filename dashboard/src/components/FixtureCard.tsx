@@ -3,7 +3,7 @@ import { AlarmClock, Lock, MonitorPlay, TrendingUp, Zap } from 'lucide-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Pool, Outcome, MatchState } from '../types';
 import { encodeStakeCalldata, formatPool, countdown } from '../lib/encode';
-import { formatOkbUsd, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
@@ -202,8 +202,17 @@ export function FixtureCard({
   const p   = pool ?? { fixtureId: fixture.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 };
   const fmt = formatPool(p);
   const hasPool   = fmt.totalOKB !== '0.0000';
-  const totalPoolUsd = formatOkbUsd(fmt.totalOKB, okbUsd);
-  const totalPoolUsdLabel = totalPoolUsd?.replace(/^US/, '');
+  const outcomePoolUsdLabel = (wei: string) => {
+    try {
+      if (BigInt(wei) <= 0n) return null;
+    } catch {
+      return null;
+    }
+    return formatOkbUsdFromWei(wei, okbUsd)?.replace(/^US/, '') ?? null;
+  };
+  const homePoolUsdLabel = outcomePoolUsdLabel(p.home);
+  const drawPoolUsdLabel = outcomePoolUsdLabel(p.draw);
+  const awayPoolUsdLabel = outcomePoolUsdLabel(p.away);
   const isSettled = fixture.status === 'settled';
   const isLocked  = fixture.status === 'locked' || isSettled;
   const seasonFixtureStartsIn = seasonPhase === 'preseason'
@@ -477,10 +486,10 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-medium">
                 {hasPool ? `${fmt.homeOKB}` : 'Stake ->'}
               </span>
-              {hasPool && totalPoolUsdLabel && (
+              {homePoolUsdLabel && (
                 <span className="inline-flex items-center gap-1 text-[9px] dark:text-emerald-700 text-emerald-600/70 font-medium">
                   <TrendingUp size={8} />
-                  {totalPoolUsdLabel}
+                  {homePoolUsdLabel}
                 </span>
               )}
             </button>
@@ -501,10 +510,10 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-medium">
                 {hasPool ? `${fmt.drawOKB}` : 'Stake ->'}
               </span>
-              {hasPool && totalPoolUsdLabel && (
+              {drawPoolUsdLabel && (
                 <span className="inline-flex items-center gap-1 text-[9px] dark:text-zinc-600 text-zinc-500 font-medium">
                   <TrendingUp size={8} />
-                  {totalPoolUsdLabel}
+                  {drawPoolUsdLabel}
                 </span>
               )}
             </button>
@@ -526,10 +535,10 @@ export function FixtureCard({
               <span className="text-[10px] dark:text-blue-500 text-blue-600 font-medium">
                 {hasPool ? `${fmt.awayOKB}` : 'Stake ->'}
               </span>
-              {hasPool && totalPoolUsdLabel && (
+              {awayPoolUsdLabel && (
                 <span className="inline-flex items-center gap-1 text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">
                   <TrendingUp size={8} />
-                  {totalPoolUsdLabel}
+                  {awayPoolUsdLabel}
                 </span>
               )}
             </button>
