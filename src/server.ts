@@ -15,10 +15,20 @@ import { getWorldCupNews } from './newsData.js';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
-const corsOrigins = (process.env.CORS_ORIGIN ?? '')
+const defaultCorsOrigins = [
+  'https://fanvibe.xyz',
+  'https://www.fanvibe.xyz',
+  'https://dashboard-one-zeta-45.vercel.app',
+  'http://localhost:5173',
+];
+
+const corsOrigins = [
+  ...defaultCorsOrigins,
+  ...(process.env.CORS_ORIGIN ?? '')
   .split(',')
   .map(origin => origin.trim())
-  .filter(Boolean);
+  .filter(Boolean),
+];
 app.use(cors(corsOrigins.length ? { origin: corsOrigins } : { origin: true }));
 
 const httpServer = createServer(app);

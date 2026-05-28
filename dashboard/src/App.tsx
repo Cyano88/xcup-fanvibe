@@ -15,6 +15,7 @@ import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
 import { X_LAYER_RPC_URLS, xLayerMainnet, explorerAddr, explorerTx } from './lib/chain';
 import { shortAddr } from './lib/encode';
+import { flushPendingStakeReports } from './lib/stakeReport';
 import { formatOkbUsd, formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
 import {
   SEASON_GROUPS,
@@ -263,6 +264,14 @@ function preseasonArchiveRank(fixture: Fixture): number {
 
 export default function App() {
   const okbUsd = useOkbUsdPrice();
+
+  useEffect(() => {
+    flushPendingStakeReports().catch(() => {});
+    const timer = window.setInterval(() => {
+      flushPendingStakeReports().catch(() => {});
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
   if (!initialSeasonRef.current) initialSeasonRef.current = readCachedSeasonSnapshot() ?? freshSeasonState(1);
   const initialSeason = initialSeasonRef.current;

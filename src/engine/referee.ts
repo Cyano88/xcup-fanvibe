@@ -548,6 +548,8 @@ export class RefereeEngine {
         }
 
         // Scan every missed block since last poll (cap at 20 to avoid overload)
+        // and always rescan the latest window so short RPC/report outages do
+        // not leave newly sent stakes invisible until a later manual report.
         const from = this.lastBlock + 1;
         const to   = Math.min(latestNum, from + 20);
 
@@ -556,7 +558,13 @@ export class RefereeEngine {
           this.scanBlock(block as Block & { transactions: Transaction[] });
         }
 
-        this.lastBlock = to;
+        const recentFrom = Math.max(to + 1, latestNum - 24);
+        for (let n = recentFrom; n <= latestNum; n++) {
+          const block = await this.httpClient.getBlock({ blockNumber: BigInt(n), includeTransactions: true });
+          this.scanBlock(block as Block & { transactions: Transaction[] });
+        }
+
+        this.lastBlock = Math.max(to, latestNum - 24);
         this.onUpdate?.();
       } catch {
         this.log('RPC', 'warn', 'Block range poll failed');
