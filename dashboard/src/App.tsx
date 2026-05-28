@@ -2080,17 +2080,22 @@ export default function App() {
         <div className="border-t dark:border-zinc-900 border-zinc-100 pt-4 pb-4 text-center space-y-2">
           <div className="flex items-center justify-center gap-4">
             <a
-              href="https://x.com/xcupfanvibe"
+              href="https://x.com/FanVibeOnX"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs dark:text-zinc-600 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
+              className="text-xs dark:text-zinc-600 text-zinc-400 underline decoration-transparent underline-offset-4 transition-colors hover:text-zinc-600 hover:decoration-zinc-400 dark:hover:text-zinc-300 dark:hover:decoration-zinc-500"
             >
               X/Twitter
             </a>
           </div>
-          <div className="text-[11px] dark:text-zinc-600 text-zinc-400">
+          <a
+            href={explorerAddr(refereeAddress)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex text-[11px] dark:text-zinc-600 text-zinc-400 underline decoration-transparent underline-offset-4 transition-colors hover:text-zinc-600 hover:decoration-zinc-400 dark:hover:text-zinc-300 dark:hover:decoration-zinc-500"
+          >
             Built on OKX X Layer
-          </div>
+          </a>
         </div>
       </main>
 
