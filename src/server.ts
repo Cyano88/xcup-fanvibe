@@ -299,14 +299,15 @@ app.post('/season/reset', async (req, res) => {
   if (!expected || parsed.data.secret !== expected) return res.status(401).json({ error: 'unauthorized' });
   if (parsed.data.mode === 'prod') {
     const currentSeason = seasonController.getState().seasonNumber;
-    const state = await seasonController.resetToFreshSeason(currentSeason + 1);
+    const nextSeason = parsed.data.resetMarket ? 1 : currentSeason + 1;
+    const state = await seasonController.resetToFreshSeason(nextSeason);
     if (parsed.data.resetMarket) {
       await engine.resetMarketState(state.fixtures);
     }
     broadcast('season', state);
     broadcast('state', engine.getState());
     broadcast('season-reset', { mode: 'prod' });
-    return res.json({ ok: true, state, marketReset: parsed.data.resetMarket });
+    return res.json({ ok: true, state, marketReset: parsed.data.resetMarket, seasonNumber: nextSeason });
   }
   await clearSeasonState(parsed.data.mode);
   broadcast('season-reset', { mode: parsed.data.mode });
