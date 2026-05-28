@@ -965,18 +965,25 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     {meta}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {position.type !== 'refund' || !actionHash ? (
-                    <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="text-xs font-semibold dark:text-zinc-400 text-zinc-500 hover:text-blue-500">
-                      Stake
-                    </a>
-                  ) : null}
-                  {actionHash && (
-                    <a href={explorerTx(actionHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-600 dark:text-blue-300">
-                      <ExternalLink size={11} />
-                      {position.type === 'refund' ? 'Refund' : 'Payout'}
-                    </a>
+                <div className="flex shrink-0 self-start flex-col items-end gap-2">
+                  {season && (
+                    <span className="rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums text-zinc-600 dark:text-zinc-300">
+                      {season}
+                    </span>
                   )}
+                  <div className="flex items-center gap-2">
+                    {position.type !== 'refund' || !actionHash ? (
+                      <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="text-xs font-semibold dark:text-zinc-400 text-zinc-500 hover:text-blue-500">
+                        Stake
+                      </a>
+                    ) : null}
+                    {actionHash && (
+                      <a href={explorerTx(actionHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-600 dark:text-blue-300">
+                        <ExternalLink size={11} />
+                        {position.type === 'refund' ? 'Refund' : 'Payout'}
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             );
