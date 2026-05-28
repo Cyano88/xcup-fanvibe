@@ -49,7 +49,7 @@ const OFFICIAL_OKX_NEWS: WorldCupNewsItem[] = [
     title: 'X Layer details Flashblocks engineering for 200ms finality and zero-reorg protection',
     description: 'Official X Layer engineering post covering flashblocks, low-latency RPC updates and real-time app infrastructure.',
     source: 'OKX Learn',
-    image: '/assets/okx-xlayer-news.webp',
+    image: '/assets/okx-layer-x.jpg',
     url: 'https://www.okx.com/en-ae/learn/flashblocks-on-x-layer',
     publishedAt: '2026-05-27T00:00:00.000Z',
     tag: 'Infrastructure',
@@ -58,7 +58,7 @@ const OFFICIAL_OKX_NEWS: WorldCupNewsItem[] = [
     title: 'Build X: X Cup Hackathon is live for World Cup markets on X Layer',
     description: 'Official OKX Web3 hackathon track for football prediction experiences, running May 19-28 with a 14,000 USDT prize pool.',
     source: 'OKX Web3',
-    image: '/assets/okx-hackathon.webp',
+    image: '/assets/okx-layer-x.jpg',
     url: 'https://web3.okx.com/zh-hans/xlayer/build-x-hackathon/xcup',
     publishedAt: '2026-05-19T23:59:00.000Z',
     tag: 'Hackathon',
@@ -67,7 +67,7 @@ const OFFICIAL_OKX_NEWS: WorldCupNewsItem[] = [
     title: 'Build X: Hook the Future brings Uniswap v4 hooks to X Layer builders',
     description: 'Official OKX Web3 hackathon track for X Layer and Uniswap v4 hook applications, running May 22-28 with a 14,000 USDT prize pool.',
     source: 'OKX Web3',
-    image: '/assets/okx-hackathon.webp',
+    image: '/assets/okx-layer-x.jpg',
     url: 'https://web3.okx.com/ar/xlayer/build-x-hackathon/hook',
     publishedAt: '2026-05-22T23:59:00.000Z',
     tag: 'Hackathon',
@@ -99,14 +99,31 @@ function fallbackFeed(error?: string): WorldCupNewsFeed {
 
 function mergeOfficialNews(articles: WorldCupNewsItem[]): WorldCupNewsItem[] {
   const seen = new Set<string>();
-  return [...OFFICIAL_OKX_NEWS, ...articles]
-    .filter(article => {
+  const dedupe = (article: WorldCupNewsItem) => {
       const key = article.url || article.title;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    })
-    .slice(0, 12);
+  };
+  const liveArticles = articles.filter(dedupe);
+  const officialArticles = OFFICIAL_OKX_NEWS.filter(dedupe);
+  const merged: WorldCupNewsItem[] = [];
+  let officialIndex = 0;
+
+  liveArticles.forEach((article, index) => {
+    merged.push(article);
+    if ((index + 1) % 2 === 0 && officialIndex < officialArticles.length) {
+      merged.push(officialArticles[officialIndex]);
+      officialIndex += 1;
+    }
+  });
+
+  while (officialIndex < officialArticles.length) {
+    merged.push(officialArticles[officialIndex]);
+    officialIndex += 1;
+  }
+
+  return merged.slice(0, 12);
 }
 
 function normalizeArticles(articles: GNewsArticle[]): WorldCupNewsItem[] {
