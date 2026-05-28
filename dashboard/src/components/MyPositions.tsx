@@ -53,19 +53,21 @@ function friendlyFixtureId(fixtureId: string): string {
   if (known) return `${known.home.code} vs ${known.away.code}`;
   const seasonGroup = normalized.match(/^wc-([a-l])-/i)?.[1];
   if (seasonGroup) return `Season Group ${seasonGroup.toUpperCase()} match`;
-  const knockoutMatch = normalized.match(/^(k32|k16|qf|sf)-(\d+)$/i);
-  if (knockoutMatch) {
-    const roundLabel: Record<string, string> = {
-      k32: 'Round of 32',
-      k16: 'Round of 16',
-      qf: 'Quarter-final',
-      sf: 'Semi-final',
-    };
-    return `${roundLabel[knockoutMatch[1].toLowerCase()] ?? 'Knockout'} match ${knockoutMatch[2]}`;
+  return 'Updating match';
+}
+
+function positionFixture(position: UserPosition, fixtures: Fixture[]): Fixture | undefined {
+  if (position.type === 'match') {
+    return fixtures.find(fixture => fixture.id === position.stake.fixtureId)
+      ?? position.fixture
+      ?? position.stake.fixture
+      ?? position.settlement?.fixture;
   }
-  if (/^3pl-1$/i.test(normalized)) return 'Third-place playoff';
-  if (/^f-1$/i.test(normalized)) return 'Final';
-  return normalized.replace(/-/g, ' ').toUpperCase();
+  if (position.type === 'refund') {
+    return fixtures.find(fixture => fixture.id === position.refund.fixtureId)
+      ?? position.refund.fixture;
+  }
+  return undefined;
 }
 
 function seasonBadge(position: UserPosition): string | null {
@@ -697,20 +699,12 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
 
   const summary = useMemo(() => {
     const active = positions.filter(position => {
-      const liveFixture = position.type === 'match'
-        ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
-        : position.type === 'refund'
-          ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
-          : undefined;
+      const liveFixture = positionFixture(position, fixtures);
       const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
       return statusLabel(position, effectiveMatchStatus(position, liveFixture, liveState)).toLowerCase().includes('active');
     }).length;
     const paid = positions.filter(position => {
-      const liveFixture = position.type === 'match'
-        ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
-        : position.type === 'refund'
-          ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
-          : undefined;
+      const liveFixture = positionFixture(position, fixtures);
       const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
       return ['paid', 'refunded', 'settled_winner'].includes(effectiveMatchStatus(position, liveFixture, liveState));
     }).length;
@@ -728,11 +722,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   const sortedPositions = useMemo(() => {
     return [...positions].sort((a, b) => {
       const contextFor = (position: UserPosition) => {
-        const liveFixture = position.type === 'match'
-          ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
-          : position.type === 'refund'
-            ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
-            : undefined;
+        const liveFixture = positionFixture(position, fixtures);
         const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
         const effectiveStatus = effectiveMatchStatus(position, liveFixture, liveState);
         const isLive = liveState?.status === 'live' || liveState?.status === 'half_time';
@@ -862,11 +852,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
             const actionHash = position.type === 'refund' ? position.refund.refundTxHash : position.type === 'match' ? position.payout?.txHash : undefined;
             const amount = position.type === 'refund' ? position.refund.amountWei : position.stake.amountWei;
             const amountUsd = stripUsdPrefix(formatOkbUsdFromWei(amount, okbUsd));
-            const liveFixture = position.type === 'match'
-              ? fixtures.find(fixture => fixture.id === position.stake.fixtureId) ?? position.fixture
-              : position.type === 'refund'
-                ? fixtures.find(fixture => fixture.id === position.refund.fixtureId)
-                : undefined;
+            const liveFixture = positionFixture(position, fixtures);
             const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
             const effectiveStatus = effectiveMatchStatus(position, liveFixture, liveState);
             const canOpenMatch = position.type === 'match'

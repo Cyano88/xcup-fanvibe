@@ -86,6 +86,7 @@ export interface PersistedSettlementJob {
   type: 'match' | 'champion';
   status: 'paying' | 'complete';
   fixtureId?: string;
+  fixture?: Fixture;
   outcome?: SettlementResult['outcome'];
   teamCode?: string;
   totalPool: string;

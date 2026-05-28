@@ -108,6 +108,7 @@ export interface PayoutRecord {
 
 export interface SettlementResult {
   fixtureId: string;
+  fixture?: Fixture;
   outcome: Outcome;
   totalPool: string;
   winnerCount: number;
@@ -121,6 +122,7 @@ export interface Stake {
   txHash: string;
   staker: string;
   fixtureId: string;
+  fixture?: Fixture;
   outcome: Outcome;
   amountWei: string;
   blockNumber: number;
@@ -140,6 +142,7 @@ export interface RejectedStakeRefund {
   txHash: string;
   staker: string;
   fixtureId: string;
+  fixture?: Fixture;
   outcome: Outcome;
   amountWei: string;
   reason: string;

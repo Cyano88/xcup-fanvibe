@@ -243,7 +243,7 @@ export class RefereeEngine {
     const stakePositions = Array.from(this.stakes.values())
       .filter(stake => stake.staker.toLowerCase() === wallet)
       .map(stake => {
-        const fixture = this.fixtures.find(f => f.id === stake.fixtureId);
+        const fixture = stake.fixture ?? this.fixtures.find(f => f.id === stake.fixtureId);
         const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
         const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stakeMs);
         const settledOutcome = settlement?.outcome ?? (fixture?.status === 'settled' ? fixture.result : undefined);
@@ -253,7 +253,7 @@ export class RefereeEngine {
           type: 'match' as const,
           status: payout ? 'paid' : settledOutcome ? (won ? 'won_pending_payout' : 'lost') : 'active',
           stake,
-          fixture,
+          fixture: fixture ?? settlement?.fixture,
           settlement,
           payout,
         };
@@ -655,6 +655,7 @@ export class RefereeEngine {
         txHash: tx.hash,
         staker: tx.from,
         fixtureId,
+        fixture: structuredClone(fixture),
         outcome,
         amountWei: gross.toString(),
         blockNumber: Number(tx.blockNumber ?? 0n),
@@ -679,11 +680,13 @@ export class RefereeEngine {
 
   private refundRejectedStake(tx: Transaction, fixtureId: string, outcome: Outcome, reason: string): void {
     if (this.rejectedStakeRefunds.has(tx.hash)) return;
+    const fixture = this.fixtures.find(f => f.id === fixtureId);
 
     const record: RejectedStakeRefund = {
       txHash: tx.hash,
       staker: tx.from,
       fixtureId,
+      fixture: fixture ? structuredClone(fixture) : undefined,
       outcome,
       amountWei: tx.value.toString(),
       reason,
@@ -760,12 +763,14 @@ export class RefereeEngine {
 
   private resultFromSettlementJob(job: PersistedSettlementJob): SettlementResult {
     if (!job.fixtureId || !job.outcome) throw new Error(`Invalid match settlement job ${job.id}`);
+    const fixture = job.fixture ?? this.fixtures.find(f => f.id === job.fixtureId);
     const payouts = job.payouts
       .filter(payout => payout.status === 'sent' && payout.txHash)
       .map(payout => ({ address: payout.address, amountWei: payout.amountWei, txHash: payout.txHash! }));
 
     return {
       fixtureId: job.fixtureId,
+      fixture: fixture ? structuredClone(fixture) : undefined,
       outcome: job.outcome,
       totalPool: job.totalPool,
       winnerCount: job.winnerCount,
@@ -891,6 +896,7 @@ export class RefereeEngine {
         type: 'match',
         status: 'paying',
         fixtureId,
+        fixture: structuredClone(fixture),
         outcome,
         totalPool: totalPool.toString(),
         winnerCount: winners.length,
