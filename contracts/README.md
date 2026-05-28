@@ -76,6 +76,20 @@ The script writes `poolId`, pool currencies, initialization tx, and approval tx 
 - Deployer / owner: `0x3183d8AE90a802F6D0EB7Ec8a4801b68eddcc26d`
 - Permission bits: `beforeSwap`
 - Target pool: WOKB/USDT dynamic fee, tick spacing `10`
+- Pool id: `0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b`
+- Pool init tx: `0x1ad16c9894db8ad8b1a1e29c9f7425170dc20188f81eb20b0ad77f32f4d95306`
+- Hook pool approval tx: `0xf0b842fa937598ff7b8babd6585a6946020339e6ef3a2119e32f273928d58237`
+- Verified hook state after approval: `approvedPool(poolId) == true`, `phase == Preseason`, `currentFee == 500`
+
+## Judge Demo Proof
+
+The Uniswap v4 track proof is intentionally minimal:
+
+- FanVibe deployed a real v4 hook on X Layer mainnet.
+- A real dynamic-fee WOKB/USDT pool was initialized through the canonical X Layer PoolManager.
+- The hook approves only that pool and returns a fee override from `beforeSwap`.
+- Match phases map to fee behavior: preseason/open `0.05%`, live `0.30%`, settled `0.10%`.
+- The hook is separate from the consumer prediction market, so staking and payouts remain unaffected by this experimental liquidity module.
 
 ## Sources Checked
 

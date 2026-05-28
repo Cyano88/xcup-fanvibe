@@ -11,6 +11,15 @@
   "pool": {
     "pair": "WOKB/USDT",
     "fee": "0x800000",
-    "tickSpacing": 10
-  }
+    "tickSpacing": 10,
+    "currency0": "0x1E4a5963aBFD975d8c9021ce480b42188849D41d",
+    "currency1": "0xe538905cf8410324e03A5A23C1c177a474D59b2b",
+    "initialOkbUsdtPrice": "88",
+    "sqrtPriceX96": "8445750501789939134287016318561541",
+    "initializeTxHash": "0x1ad16c9894db8ad8b1a1e29c9f7425170dc20188f81eb20b0ad77f32f4d95306",
+    "initializeStatus": "success",
+    "approvePoolTxHash": "0xf0b842fa937598ff7b8babd6585a6946020339e6ef3a2119e32f273928d58237",
+    "approvePoolStatus": "success"
+  },
+  "poolId": "0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b"
 }
