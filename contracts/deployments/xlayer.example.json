@@ -1,0 +1,20 @@
+{
+  "chainId": 196,
+  "status": "not-deployed",
+  "poolManager": "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32",
+  "create2Deployer": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+  "wokb": "0xe538905cf8410324E03A5A23C1c177a474D59b2b",
+  "usdt": "0x1E4a5963AbFd975d8c9021ce480b42188849D41d",
+  "hookAddress": null,
+  "poolId": null,
+  "pool": {
+    "fee": "0x800000",
+    "tickSpacing": 10,
+    "currency0": null,
+    "currency1": null
+  },
+  "notes": [
+    "Use WOKB rather than native OKB because Uniswap v4 pool currencies are ERC20/native currency values and this module targets a WOKB/USDT ERC20 pool.",
+    "The hook address must be mined so its lower 14 permission bits match beforeSwap only: 0x0080."
+  ]
+}

@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "railway:start": "npm run build && npm run start"
+    "railway:start": "npm run build && npm run start",
+    "hook:compile": "hardhat compile",
+    "hook:deploy": "node scripts/deployFanVibeHook.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -20,10 +22,14 @@
   "devDependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
+    "@openzeppelin/contracts": "^5.6.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.2",
     "@types/ws": "^8.5.10",
+    "@uniswap/v4-core": "^1.0.2",
+    "@uniswap/v4-periphery": "^1.0.3",
+    "hardhat": "^3.6.0",
     "tsx": "^4.15.6",
     "typescript": "^5.4.5"
   }

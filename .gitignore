@@ -4,6 +4,8 @@ dist/
 dashboard/node_modules/
 dashboard/dist/
 dashboard/.vercel/
+contracts/artifacts/
+contracts/cache/
 *.log
 .DS_Store
 
