@@ -1,10 +1,9 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Newspaper, Search, Volume2, VolumeX } from 'lucide-react';
+import { BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Newspaper, Search, Volume2, VolumeX, X } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
-import { SettlementToast } from './components/SettlementToast';
 import { MyPositions } from './components/MyPositions';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
@@ -46,6 +45,8 @@ const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
 const SEASON_CACHE_KEY = 'fanvibe.seasonSnapshot.prod';
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const ACCOUNT_VALUE_CACHE_KEY = 'fanvibe.accountUsdValue';
+const ACTIVE_TAB_KEY = 'fanvibe.activeTab';
+const SETTLEMENT_NOTICE_MS = 5 * 60 * 1000;
 const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -134,6 +135,37 @@ function cachedAccountValue(): string {
   }
 }
 
+function readActiveTab(): AppTab {
+  try {
+    const tab = window.localStorage.getItem(ACTIVE_TAB_KEY);
+    return tab === 'home' || tab === 'search' || tab === 'news' || tab === 'portfolio' ? tab : 'home';
+  } catch {
+    return 'home';
+  }
+}
+
+function getRememberedWalletAddress(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_WALLET_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function settlementHasPayoutForAddress(settlement: SettlementResult, address: string | null): boolean {
+  if (!address) return false;
+  const normalized = address.toLowerCase();
+  return settlement.payouts.some(payout => !!payout.txHash && payout.address.toLowerCase() === normalized);
+}
+
+function settlementKey(settlement: SettlementResult): string {
+  return `${settlement.fixtureId}-${settlement.blockNumber}-${settlement.settledAt}`;
+}
+
+function settlementTimeMs(settlement: SettlementResult): number {
+  return settlement.settledAt > 10_000_000_000 ? settlement.settledAt : settlement.settledAt * 1000;
+}
+
 function positionPortfolioWei(position: UserPosition, fixtures: Fixture[], matchStates: Record<string, MatchState>): bigint {
   try {
     if (position.type === 'refund') {
@@ -199,15 +231,6 @@ function freshSeasonState(
     timings,
     updatedAt: now,
   };
-}
-
-function readCachedSeasonSnapshot(): InitialSeasonState | null {
-  try {
-    const raw = window.localStorage.getItem(SEASON_CACHE_KEY);
-    return raw ? JSON.parse(raw) as InitialSeasonState : null;
-  } catch {
-    return null;
-  }
 }
 
 function writeCachedSeasonSnapshot(snapshot: InitialSeasonState, mode: SeasonStorageMode): void {
@@ -324,7 +347,7 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, []);
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
-  if (!initialSeasonRef.current) initialSeasonRef.current = readCachedSeasonSnapshot() ?? freshSeasonState(1);
+  if (!initialSeasonRef.current) initialSeasonRef.current = freshSeasonState(1);
   const initialSeason = initialSeasonRef.current;
 
   const [dark, setDark] = useState(() => {
@@ -344,7 +367,6 @@ export default function App() {
   const [lastBlock, setLastBlock]               = useState(0);
   const [wsConnected, setWsConnected]           = useState(false);
   const [settlements, setSettlements]           = useState<SettlementResult[]>([]);
-  const [pendingToasts, setPendingToasts]       = useState<SettlementResult[]>([]);
   const [stakeClosedNotices, setStakeClosedNotices] = useState<Record<string, string>>({});
   const [logOpen, setLogOpen]                   = useState(false);
   const [proofOpen, setProofOpen]               = useState(false);
@@ -355,7 +377,7 @@ export default function App() {
   const [liveUiTick, setLiveUiTick]             = useState(0);
   const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
   const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
-  const [activeTab, setActiveTab]               = useState<AppTab>('home');
+  const [activeTab, setActiveTab]               = useState<AppTab>(() => readActiveTab());
   const [soundMuted, setSoundMuted]             = useState(false);
   const [seasonMode, setSeasonMode]             = useState<SeasonStorageMode>('prod');
   const [seasonTiming, setSeasonTimingState]    = useState<SeasonTiming>(DEFAULT_SEASON_TIMING);
@@ -367,6 +389,9 @@ export default function App() {
   const [previousKnockoutResults, setPreviousKnockoutResults] = useState(initialSeason.previousKnockoutResults ?? null);
   const [seasonWinners, setSeasonWinners]       = useState(initialSeason.seasonWinners ?? []);
   const [tournamentGen, setTournamentGen]       = useState(initialSeason.tournamentGen);
+  const [settlementWalletAddress, setSettlementWalletAddress] = useState<string | null>(() => getRememberedWalletAddress());
+  const [settlementNoticeTick, setSettlementNoticeTick] = useState(Date.now());
+  const [dismissedSettlementNotices, setDismissedSettlementNotices] = useState<Set<string>>(() => new Set());
 
   // Season / phase system
   const [seasonNumber, setSeasonNumber]         = useState<number>(() => {
@@ -393,6 +418,25 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
     window.localStorage.setItem('fanvibe-theme', dark ? 'dark' : 'light');
   }, [dark]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(ACTIVE_TAB_KEY, activeTab);
+    } catch {
+      /* tab memory is a convenience */
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const refreshWallet = () => setSettlementWalletAddress(getRememberedWalletAddress());
+    refreshWallet();
+    const walletTimer = window.setInterval(refreshWallet, 3000);
+    const noticeTimer = window.setInterval(() => setSettlementNoticeTick(Date.now()), 1000);
+    return () => {
+      window.clearInterval(walletTimer);
+      window.clearInterval(noticeTimer);
+    };
+  }, []);
 
   useEffect(() => {
     setSeasonTiming(seasonTiming);
@@ -485,13 +529,6 @@ export default function App() {
     if (showLoading) setSeasonHydrated(false);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 8000);
-    const applyCachedProdSeason = () => {
-      const cached = readCachedSeasonSnapshot();
-      if (!cached) return false;
-      applySeasonSnapshot(cached, seasonMode, preserveWatching);
-      setSeasonHydrated(true);
-      return true;
-    };
     const applyFreshSeason = () => {
       const previousSnapshotUpdatedAt = seasonSnapshotUpdatedAtRef.current;
       const fresh = freshSeasonState(1, Date.now(), seasonMode === 'test' ? TEST_SEASON_TIMING : DEFAULT_SEASON_TIMING, seasonMode);
@@ -511,7 +548,7 @@ export default function App() {
           return;
         }
         if (seasonMode === 'prod') {
-          if (!seasonHydratedRef.current) applyCachedProdSeason();
+          if (!seasonHydratedRef.current) setSeasonHydrated(true);
           return;
         }
         const fresh = applyFreshSeason();
@@ -523,7 +560,7 @@ export default function App() {
       })
       .catch(() => {
         if (seasonMode === 'prod') {
-          if (!seasonHydratedRef.current) applyCachedProdSeason();
+          if (!seasonHydratedRef.current) setSeasonHydrated(true);
           return;
         }
         if (!seasonHydratedRef.current) applyFreshSeason();
@@ -569,11 +606,6 @@ export default function App() {
         } else if (msg.type === 'settlement') {
           const s = msg.data as SettlementResult;
           setSettlements(prev => [...prev, s]);
-          if (s.payouts.some(p => !!p.txHash)) {
-            setPendingToasts(prev => prev.some(existing => existing.fixtureId === s.fixtureId && existing.blockNumber === s.blockNumber)
-              ? prev
-              : [...prev, s]);
-          }
           setFixtures(prev => prev.map(f => f.id === s.fixtureId ? { ...f, status: 'settled', result: s.outcome } : f));
         } else if (msg.type === 'season-reset') {
           const data = msg.data as { mode?: SeasonStorageMode };
@@ -868,7 +900,13 @@ export default function App() {
     void outcome;
     return true;
   }, [fixtures, matchStates, showStakeClosedNotice]);
-  const dismissToast   = useCallback((s: SettlementResult) => setPendingToasts(prev => prev.filter(x => x !== s)), []);
+  const dismissSettlementNotice = useCallback((s: SettlementResult) => {
+    setDismissedSettlementNotices(prev => {
+      const next = new Set(prev);
+      next.add(settlementKey(s));
+      return next;
+    });
+  }, []);
   const handleWatch    = useCallback((fixtureId: string) => {
     setWatchingId(fixtureId);
     fetch(`${BACKEND_HTTP}/season/match/${encodeURIComponent(fixtureId)}?mode=${seasonMode}`)
@@ -1144,22 +1182,29 @@ export default function App() {
       ? 'Staking open'
       : 'Broadcast reset';
   const liveRailEntries = liveEntries.length > 1 ? [...liveEntries, ...liveEntries] : liveEntries;
-  const settledRailItems = [...settlements]
+  const settlementNoticeItems = [...settlements]
     .reverse()
     .map((settlement) => {
       const fixture = fixtures.find(f => f.id === settlement.fixtureId)
-        ?? realtimeFixtures.find(f => f.id === settlement.fixtureId)
         ?? null;
       const matchState = matchStates[settlement.fixtureId];
       return { settlement, fixture, matchState };
     })
     .filter(({ settlement, fixture, matchState }) => {
-      const hasPayoutTx = settlement.payouts.some(p => !!p.txHash);
+      const isFresh = settlementNoticeTick - settlementTimeMs(settlement) <= SETTLEMENT_NOTICE_MS;
+      const wasDismissed = dismissedSettlementNotices.has(settlementKey(settlement));
       const hasSettledFixture = fixture?.status === 'settled';
       const hasFinishedMatch = matchState?.status === 'finished';
-      return !!fixture && hasPayoutTx && !!settlement.explorerUrl && (hasSettledFixture || hasFinishedMatch);
-    })
-    .slice(0, 5);
+      return !!fixture
+        && isFresh
+        && !wasDismissed
+        && settlementHasPayoutForAddress(settlement, settlementWalletAddress)
+        && !!settlement.explorerUrl
+        && (hasSettledFixture || hasFinishedMatch);
+    });
+  const activeSettlementNotice = settlementNoticeItems.length > 0
+    ? settlementNoticeItems[Math.floor(settlementNoticeTick / 5000) % settlementNoticeItems.length]
+    : null;
   const settledFixtureIds = new Set(settlements.map(settlement => settlement.fixtureId));
   const proofPlatformVolumeWei = Object.values(pools).reduce((sum, pool) => {
     try {
@@ -1510,23 +1555,34 @@ export default function App() {
           </div>
         )}
 
-        {/* Recent settlements strip */}
-        {activeTab === 'home' && settledRailItems.length > 0 && (
+        {/* Account settlement notice */}
+        {activeTab === 'home' && viewMode === 'simulated' && activeSettlementNotice && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <span className="text-xs dark:text-zinc-500 text-zinc-400 shrink-0 font-semibold uppercase tracking-[0.18em]">Settled</span>
-            {settledRailItems.map(({ settlement: s, fixture: fix }) => {
+            {(() => {
+              const { settlement: s, fixture: fix } = activeSettlementNotice;
               const payoutTx = s.payouts.find(p => p.txHash)?.txHash ?? '';
               return (
-                <a key={`${s.fixtureId}-${s.blockNumber}`} href={s.explorerUrl} target="_blank" rel="noopener noreferrer"
-                  className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border dark:border-zinc-800 border-zinc-300 dark:bg-zinc-950 bg-white dark:hover:border-blue-500/50 hover:border-blue-300 dark:text-zinc-200 text-zinc-700 text-xs font-semibold transition-colors">
+                <>
+                <a key={settlementKey(s)} href={s.explorerUrl} target="_blank" rel="noopener noreferrer"
+                  className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border dark:border-zinc-800 border-zinc-300 dark:bg-zinc-950 bg-white dark:hover:border-blue-500/50 hover:border-blue-300 dark:text-zinc-200 text-zinc-700 text-xs font-semibold transition-all duration-300">
                   <span>{fix?.home.flag} {fix?.home.code}</span>
                   <span className="dark:text-zinc-600 text-zinc-400">vs</span>
                   <span>{fix?.away.code} {fix?.away.flag}</span>
                   <span className="rounded bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-300 uppercase">{s.outcome}</span>
                   <span className="text-[10px] tabular-nums dark:text-zinc-500 text-zinc-400">Payout {shortAddr(payoutTx)}</span>
                 </a>
+                <button
+                  type="button"
+                  onClick={() => dismissSettlementNotice(s)}
+                  className="shrink-0 rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-500/10 hover:text-zinc-300"
+                  title="Dismiss"
+                >
+                  <X size={12} />
+                </button>
+                </>
               );
-            })}
+            })()}
           </div>
         )}
 
@@ -1983,10 +2039,6 @@ export default function App() {
           </div>
         </div>
       </main>
-
-      {pendingToasts.map(s => (
-        <SettlementToast key={`${s.fixtureId}-${s.blockNumber}`} settlement={s} onDismiss={() => dismissToast(s)} />
-      ))}
 
       {watchingFixture && displayWatchingMatchState && (
         <MatchViewer

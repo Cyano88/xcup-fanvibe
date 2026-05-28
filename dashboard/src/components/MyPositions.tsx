@@ -951,11 +951,6 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                           {settledMeta}
                         </span>
                       )}
-                      {season && (
-                        <span className="rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums dark:text-zinc-400 text-zinc-500">
-                          {season}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
