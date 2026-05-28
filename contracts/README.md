@@ -55,6 +55,28 @@ After deployment, initialize a dynamic-fee v4 WOKB/USDT pool using:
 
 Then call `approvePool(poolKey, true)` on the hook before routing swaps through the pool.
 
+This repo includes a helper that initializes the deployed hook pool and approves it:
+
+```bash
+HOOK_DEPLOYER_PRIVATE_KEY=0x... npm run hook:init-pool
+```
+
+By default it initializes WOKB/USDT at `88` USDT per WOKB. Override this only if you want a different demo start price:
+
+```bash
+HOOK_INITIAL_OKB_USDT_PRICE=88 HOOK_DEPLOYER_PRIVATE_KEY=0x... npm run hook:init-pool
+```
+
+The script writes `poolId`, pool currencies, initialization tx, and approval tx back into `contracts/deployments/xlayer.json`.
+
+## Current X Layer Deployment
+
+- Hook tx: `0xeff4a1213e9324508461375f49889aa1e3c49dd25c9cdfd2040cae18771080c8`
+- Hook address: `0x4B6612ca209f07db44f8A651E4217A75106C4080`
+- Deployer / owner: `0x3183d8AE90a802F6D0EB7Ec8a4801b68eddcc26d`
+- Permission bits: `beforeSwap`
+- Target pool: WOKB/USDT dynamic fee, tick spacing `10`
+
 ## Sources Checked
 
 - Uniswap v4 deployment list: https://docs.uniswap.org/contracts/v4/deployments

@@ -1,0 +1,16 @@
+{
+  "chainId": 196,
+  "status": "success",
+  "deployer": "0x3183d8AE90a802F6D0EB7Ec8a4801b68eddcc26d",
+  "txHash": "0xeff4a1213e9324508461375f49889aa1e3c49dd25c9cdfd2040cae18771080c8",
+  "hookAddress": "0x4B6612ca209f07db44f8A651E4217A75106C4080",
+  "salt": "0x00000000000000000000000000000000000000000000000000000000000128a2",
+  "poolManager": "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32",
+  "create2Deployer": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+  "permissions": "beforeSwap",
+  "pool": {
+    "pair": "WOKB/USDT",
+    "fee": "0x800000",
+    "tickSpacing": 10
+  }
+}
