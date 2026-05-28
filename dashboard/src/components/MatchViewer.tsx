@@ -12,6 +12,18 @@ const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
 interface Comment { id: number; name: string; text: string; ts: string; fixtureId: string; }
 interface Props { fixture: Fixture; fixtures?: Fixture[]; matchState: MatchState; onClose: () => void; }
 
+function formatChatTimestamp(ts?: string): string {
+  if (!ts) return '';
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w160/${iso.toLowerCase()}.png`;
 
@@ -979,9 +991,14 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
           <p className="text-xs dark:text-zinc-600 text-zinc-400 text-center pt-10">No messages yet - be first!</p>
         )}
         {comments.map(c => (
-          <div key={c.id} className="flex items-start gap-2 text-xs dark:bg-zinc-900/40 bg-zinc-50 rounded-lg px-2.5 py-1.5">
-            <span className="font-semibold text-blue-600 dark:text-blue-300 shrink-0">{c.name}</span>
-            <span className="dark:text-zinc-300 text-zinc-700 leading-snug">{c.text}</span>
+          <div key={c.id} className="text-xs dark:bg-zinc-900/40 bg-zinc-50 rounded-lg px-2.5 py-1.5">
+            <div className="mb-0.5 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate font-semibold text-blue-600 dark:text-blue-300">{c.name}</span>
+              <span className="shrink-0 text-[10px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">
+                {formatChatTimestamp(c.ts)}
+              </span>
+            </div>
+            <div className="dark:text-zinc-300 text-zinc-700 leading-snug">{c.text}</div>
           </div>
         ))}
       </div>
