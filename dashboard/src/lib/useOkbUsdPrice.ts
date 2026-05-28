@@ -1,9 +1,40 @@
 import { useEffect, useState } from 'react';
 
-const FALLBACK_OKB_USD = Number(import.meta.env.VITE_OKB_USD_PRICE ?? '0');
+const OKB_PRICE_CACHE_KEY = 'fanvibe.okbUsdPrice';
+const OKB_PRICE_CACHE_TTL_MS = 30 * 60 * 1000;
+const FALLBACK_OKB_USD = Number(import.meta.env.VITE_OKB_USD_PRICE ?? '88');
+
+function validPrice(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function readCachedPrice(): number | null {
+  try {
+    const raw = localStorage.getItem(OKB_PRICE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { price?: unknown; ts?: unknown };
+    if (!validPrice(parsed.price) || typeof parsed.ts !== 'number') return null;
+    if (Date.now() - parsed.ts > OKB_PRICE_CACHE_TTL_MS) return null;
+    return parsed.price;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedPrice(price: number): void {
+  try {
+    localStorage.setItem(OKB_PRICE_CACHE_KEY, JSON.stringify({ price, ts: Date.now() }));
+  } catch {
+    // Price cache is only a display fallback.
+  }
+}
+
+function fallbackPrice(): number {
+  return validPrice(FALLBACK_OKB_USD) ? FALLBACK_OKB_USD : 88;
+}
 
 export function useOkbUsdPrice() {
-  const [price, setPrice] = useState(Number.isFinite(FALLBACK_OKB_USD) && FALLBACK_OKB_USD > 0 ? FALLBACK_OKB_USD : null);
+  const [price, setPrice] = useState<number>(() => readCachedPrice() ?? fallbackPrice());
 
   useEffect(() => {
     let cancelled = false;
@@ -11,7 +42,10 @@ export function useOkbUsdPrice() {
       .then(res => res.ok ? res.json() : null)
       .then((data: { okb?: { usd?: number } } | null) => {
         const usd = data?.okb?.usd;
-        if (!cancelled && typeof usd === 'number' && Number.isFinite(usd) && usd > 0) setPrice(usd);
+        if (!cancelled && validPrice(usd)) {
+          setPrice(usd);
+          writeCachedPrice(usd);
+        }
       })
       .catch(() => {});
     return () => {
