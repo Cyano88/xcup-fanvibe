@@ -298,7 +298,8 @@ app.post('/season/reset', async (req, res) => {
   const expected = process.env.ADMIN_TEST_SECRET;
   if (!expected || parsed.data.secret !== expected) return res.status(401).json({ error: 'unauthorized' });
   if (parsed.data.mode === 'prod') {
-    const state = await seasonController.resetToFreshSeason(1);
+    const currentSeason = seasonController.getState().seasonNumber;
+    const state = await seasonController.resetToFreshSeason(currentSeason + 1);
     if (parsed.data.resetMarket) {
       await engine.resetMarketState(state.fixtures);
     }
