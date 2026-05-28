@@ -234,6 +234,26 @@ export function isGroupStageFixture(fixture: Fixture): boolean {
   return fixture.mode === 'simulated' && SEASON_GROUPS.includes(fixture.group) && !fixture.round;
 }
 
+export function isKnockoutFixture(fixture: Fixture): boolean {
+  return fixture.mode === 'simulated' && !!fixture.round;
+}
+
+function previousKnockoutRound(round: TournamentRound): TournamentRound | 'group' | null {
+  if (round === 'R32') return 'group';
+  if (round === 'R16') return 'R32';
+  if (round === 'QF') return 'R16';
+  if (round === 'SF') return 'QF';
+  if (round === '3PL' || round === 'F') return 'SF';
+  return null;
+}
+
+function latestFinishedAt(fixtures: Fixture[], matchStates: Record<string, MatchState>, fallback: number): number {
+  return Math.max(
+    fallback,
+    ...fixtures.map(fixture => matchStates[fixture.id]?.finishedAt ?? fallback),
+  );
+}
+
 export function seasonFixtureKickoffDelayMs(fixtures: Fixture[], fixtureId: string): number {
   const fixture = fixtures.find(f => f.id === fixtureId);
   const groupFixtures = fixtures
@@ -251,6 +271,23 @@ export function seasonFixtureStartAtMs(
   seasonStartedAt: number,
   matchStates: Record<string, MatchState> = {},
 ): number | null {
+  if (isKnockoutFixture(fixture) && fixture.round) {
+    const previousRound = previousKnockoutRound(fixture.round);
+    if (!previousRound) return seasonStartedAt;
+
+    const previousFixtures = previousRound === 'group'
+      ? fixtures.filter(isGroupStageFixture)
+      : fixtures.filter(item => item.round === previousRound);
+
+    if (!previousFixtures.length || !previousFixtures.every(item => matchStates[item.id]?.status === 'finished')) {
+      return null;
+    }
+
+    const sameRoundFixtures = fixtures.filter(item => item.round === fixture.round);
+    const waveDelay = Math.floor(Math.max(0, sameRoundFixtures.findIndex(item => item.id === fixture.id)) / SEASON_WAVE_SIZE) * getSeasonTiming().waveGapMs;
+    return latestFinishedAt(previousFixtures, matchStates, seasonStartedAt) + getSeasonTiming().matchdayGapMs + waveDelay;
+  }
+
   if (!isGroupStageFixture(fixture)) return seasonStartedAt;
 
   const sameDayFixtures = fixtures.filter(f => isGroupStageFixture(f) && f.matchday === fixture.matchday);
@@ -276,6 +313,11 @@ export function isSeasonFixtureDue(
   matchStates: Record<string, MatchState> = {},
   now = Date.now(),
 ): boolean {
+  if (isKnockoutFixture(fixture)) {
+    const startsAt = seasonFixtureStartAtMs(fixtures, fixture, seasonStartedAt, matchStates);
+    return startsAt !== null && now >= startsAt;
+  }
+
   if (!isGroupStageFixture(fixture)) return true;
   if (fixture.matchday > 1) {
     const previousMatchdays = fixtures.filter(f => isGroupStageFixture(f) && f.matchday < fixture.matchday);
