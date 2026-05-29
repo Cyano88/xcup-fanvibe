@@ -1,6 +1,28 @@
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const REFERRAL_KEY = 'fanvibe.referralSource';
 
+export interface ReferralRewards {
+  pendingWei: string;
+  claimableWei: string;
+  paidWei: string;
+  pendingOKB: string;
+  claimableOKB: string;
+  paidOKB: string;
+  blocked: number;
+  rule: {
+    referrerRewardWei: string;
+    referredRewardWei: string;
+    minStakeWei: string;
+    dailyCap: number;
+  };
+}
+
+export interface ReferralSummary {
+  count: number;
+  qualified: number;
+  rewards: ReferralRewards;
+}
+
 export function getCapturedReferral(): string | null {
   try {
     const value = localStorage.getItem(REFERRAL_KEY);
@@ -47,4 +69,10 @@ export async function claimReferral(referred: string, txHash?: `0x${string}`): P
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ referrer, referred, txHash }),
   }).catch(() => {});
+}
+
+export async function fetchReferralSummary(address: string): Promise<ReferralSummary | null> {
+  const res = await fetch(`${BACKEND_HTTP}/referrals/${address}`);
+  if (!res.ok) return null;
+  return res.json() as Promise<ReferralSummary>;
 }

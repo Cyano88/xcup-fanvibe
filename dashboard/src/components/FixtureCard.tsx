@@ -186,6 +186,9 @@ export function FixtureCard({
   if (fixture.home.code === 'TBD' && fixture.away.code === 'TBD') {
     return <TBDCard fixture={fixture} />;
   }
+  const { user } = usePrivy();
+  const { wallets } = useWallets();
+  const connectedAddress = user?.wallet?.address ?? wallets[0]?.address ?? null;
 
   const [showHome, setShowHome]   = useState(true);
   const [hovered, setHovered]     = useState(false);
@@ -624,7 +627,7 @@ export function FixtureCard({
                     setStakeHash(hash);
                     setStakeError(null);
                     setStakeOutcome(null);
-                    reportStakeTx(hash).catch((err: unknown) => {
+                    reportStakeTx(hash, connectedAddress).catch((err: unknown) => {
                       setStakeError(err instanceof Error ? err.message : 'Stake indexing is delayed.');
                     });
                   }}

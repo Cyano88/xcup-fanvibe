@@ -137,6 +137,9 @@ export function ChampionPick({
   refereeAddress,
   daemonChampPool,
 }: Props) {
+  const { user } = usePrivy();
+  const { wallets } = useWallets();
+  const connectedAddress = user?.wallet?.address ?? wallets[0]?.address ?? null;
   const [open, setOpen]           = useState(false);
   const [selected, setSelected]   = useState<string | null>(null);
   const [amountOKB, setAmountOKB] = useState('0.01');
@@ -423,7 +426,7 @@ export function ChampionPick({
                         [selected]: (prev[selected] ?? 0n) + amountWei,
                       }));
                       setSelected(null);
-                      reportStakeTx(hash).catch((err: unknown) => {
+                      reportStakeTx(hash, connectedAddress).catch((err: unknown) => {
                         setTxError(err instanceof Error ? err.message : 'Stake indexing is delayed.');
                       });
                     }}

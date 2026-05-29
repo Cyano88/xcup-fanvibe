@@ -4,6 +4,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
+import { formatEther, parseEther } from 'viem';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
 import { clearSeasonState, readAppData, readSeasonState, writeAppData, writeSeasonState, type PersistedAppData, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
@@ -37,6 +38,11 @@ const wss = new WebSocketServer({ server: httpServer });
 const engine = new RefereeEngine();
 let seasonController: SeasonController;
 let appData: PersistedAppData = { version: 1, profiles: {}, referrals: [], pendingStakeReports: [], updatedAt: Date.now() };
+
+const REFERRAL_MIN_STAKE_WEI = parseEther('0.001');
+const REFERRER_REWARD_WEI = parseEther('0.0005');
+const REFERRED_REWARD_WEI = parseEther('0.0002');
+const REFERRAL_DAILY_CAP = 10;
 
 // ── WebSocket broadcast ───────────────────────────────────────────────────────
 
@@ -77,13 +83,89 @@ function profileNameFor(address: string): string | undefined {
   return appData.profiles[profileKey(address)]?.name;
 }
 
-function qualifyReferralForTx(txHash: string): void {
-  const staker = engine.stakerForTx(txHash);
-  if (!staker) return;
-  const referral = appData.referrals.find(item => item.referred.toLowerCase() === staker.toLowerCase());
-  if (!referral || referral.status === 'qualified') return;
+function rewardEpochFor(ts = Date.now()): string {
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
+function matureReferralRewards(): boolean {
+  const currentEpoch = rewardEpochFor();
+  let changed = false;
+  for (const referral of appData.referrals) {
+    if (referral.status !== 'qualified' || referral.rewardStatus !== 'pending' || !referral.rewardEpoch) continue;
+    if (referral.rewardEpoch >= currentEpoch) continue;
+    referral.rewardStatus = 'claimable';
+    changed = true;
+  }
+  return changed;
+}
+
+function referrerRewardedCount(referrer: string, epoch: string): number {
+  const key = referrer.toLowerCase();
+  return appData.referrals.filter(item =>
+    item.referrer.toLowerCase() === key
+    && item.rewardEpoch === epoch
+    && ['pending', 'claimable', 'paid'].includes(item.rewardStatus ?? '')
+  ).length;
+}
+
+function qualifyReferralForTx(txHash: string): boolean {
+  const stake = engine.validStakeForTx(txHash);
+  if (!stake) return false;
+  const referral = appData.referrals.find(item => item.referred.toLowerCase() === stake.staker.toLowerCase());
+  if (!referral || referral.status === 'qualified') return false;
+  const amountWei = BigInt(stake.amountWei);
+  if (amountWei < REFERRAL_MIN_STAKE_WEI) return false;
+  const qualifiedAt = Date.now();
+  const rewardEpoch = rewardEpochFor(qualifiedAt);
   referral.status = 'qualified';
   referral.firstTxHash = txHash;
+  referral.qualifiedAt = qualifiedAt;
+  referral.qualifyingAmountWei = stake.amountWei;
+  referral.rewardEpoch = rewardEpoch;
+  referral.referrerRewardWei = REFERRER_REWARD_WEI.toString();
+  referral.referredRewardWei = REFERRED_REWARD_WEI.toString();
+  if (referrerRewardedCount(referral.referrer, rewardEpoch) >= REFERRAL_DAILY_CAP) {
+    referral.rewardStatus = 'blocked';
+    referral.blockReason = 'daily_cap';
+  } else {
+    referral.rewardStatus = 'pending';
+    delete referral.blockReason;
+  }
+  return true;
+}
+
+function referralRewardSummary(address: string) {
+  const key = address.toLowerCase();
+  const invited = appData.referrals.filter(item => item.referrer.toLowerCase() === key);
+  const joinedBy = appData.referrals.find(item => item.referred.toLowerCase() === key) ?? null;
+  const ownReferral = joinedBy && joinedBy.status === 'qualified' ? [joinedBy] : [];
+  const sum = (items: typeof appData.referrals, field: 'referrerRewardWei' | 'referredRewardWei', statuses: string[]) =>
+    items.reduce((total, item) => statuses.includes(item.rewardStatus ?? '') ? total + BigInt(item[field] ?? '0') : total, 0n);
+  const pendingWei = sum(invited, 'referrerRewardWei', ['pending']) + sum(ownReferral, 'referredRewardWei', ['pending']);
+  const claimableWei = sum(invited, 'referrerRewardWei', ['claimable']) + sum(ownReferral, 'referredRewardWei', ['claimable']);
+  const paidWei = sum(invited, 'referrerRewardWei', ['paid']) + sum(ownReferral, 'referredRewardWei', ['paid']);
+  return {
+    address,
+    invited,
+    joinedBy,
+    count: invited.length,
+    qualified: invited.filter(item => item.status === 'qualified').length,
+    rewards: {
+      pendingWei: pendingWei.toString(),
+      claimableWei: claimableWei.toString(),
+      paidWei: paidWei.toString(),
+      pendingOKB: formatEther(pendingWei),
+      claimableOKB: formatEther(claimableWei),
+      paidOKB: formatEther(paidWei),
+      blocked: invited.filter(item => item.rewardStatus === 'blocked').length,
+      rule: {
+        referrerRewardWei: REFERRER_REWARD_WEI.toString(),
+        referredRewardWei: REFERRED_REWARD_WEI.toString(),
+        minStakeWei: REFERRAL_MIN_STAKE_WEI.toString(),
+        dailyCap: REFERRAL_DAILY_CAP,
+      },
+    },
+  };
 }
 
 async function persistAppData(): Promise<void> {
@@ -95,15 +177,17 @@ async function retryPendingStakeReports(): Promise<void> {
   if (pending.length === 0) return;
 
   const remaining: string[] = [];
+  let rewardsChanged = false;
   for (const hash of pending) {
     const indexed = await engine.reportStakeTx(hash as `0x${string}`);
     if (indexed || engine.hasStakeTx(hash)) {
-      qualifyReferralForTx(hash);
+      rewardsChanged = qualifyReferralForTx(hash) || rewardsChanged;
     } else {
       remaining.push(hash);
     }
   }
-  if (remaining.length !== appData.pendingStakeReports.length) {
+  rewardsChanged = matureReferralRewards() || rewardsChanged;
+  if (remaining.length !== appData.pendingStakeReports.length || rewardsChanged) {
     appData = { ...appData, pendingStakeReports: remaining.slice(-100), updatedAt: Date.now() };
     await persistAppData();
     broadcast('state', engine.getState());
@@ -209,28 +293,23 @@ app.post('/referrals/claim', async (req, res) => {
   const referral = {
     referrer: parsed.data.referrer,
     referred: parsed.data.referred,
-    firstTxHash: parsed.data.txHash,
     createdAt: Date.now(),
-    status: parsed.data.txHash ? 'qualified' as const : 'captured' as const,
+    status: 'captured' as const,
   };
   appData.referrals.push(referral);
+  if (parsed.data.txHash && engine.hasStakeTx(parsed.data.txHash)) {
+    qualifyReferralForTx(parsed.data.txHash);
+  }
+  matureReferralRewards();
   await persistAppData();
   res.json({ ok: true, referral });
 });
 
-app.get('/referrals/:address', (req, res) => {
+app.get('/referrals/:address', async (req, res) => {
   const parsed = addressSchema.safeParse(req.params.address);
   if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
-  const key = parsed.data.toLowerCase();
-  const invited = appData.referrals.filter(item => item.referrer.toLowerCase() === key);
-  const joinedBy = appData.referrals.find(item => item.referred.toLowerCase() === key) ?? null;
-  res.json({
-    address: parsed.data,
-    invited,
-    joinedBy,
-    count: invited.length,
-    qualified: invited.filter(item => item.status === 'qualified').length,
-  });
+  if (matureReferralRewards()) await persistAppData();
+  res.json(referralRewardSummary(parsed.data));
 });
 
 app.get('/worldcup/feed', async (req, res) => {
@@ -524,16 +603,16 @@ app.post('/stake/report', async (req, res) => {
       appData.referrals.push({
         referrer: parsed.data.referrer,
         referred: parsed.data.referred,
-        firstTxHash: parsed.data.txHash,
         createdAt: Date.now(),
-        status: indexed ? 'qualified' : 'captured',
+        status: 'captured',
       });
+      if (indexed) qualifyReferralForTx(parsed.data.txHash);
     } else if (indexed && existing.status !== 'qualified') {
-      existing.status = 'qualified';
-      existing.firstTxHash = parsed.data.txHash;
+      qualifyReferralForTx(parsed.data.txHash);
     }
   }
 
+  matureReferralRewards();
   await persistAppData();
   res.json({ ok: true, indexed, queued: !indexed });
 });

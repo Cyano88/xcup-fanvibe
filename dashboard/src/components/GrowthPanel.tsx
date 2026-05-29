@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Copy, ExternalLink, Trophy, Users } from 'lucide-react';
 import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
 import { fanDisplayName, getStoredProfileName, shortWallet } from '../lib/fanProfile';
-import { captureReferralFromUrl, getCapturedReferral } from '../lib/accountData';
+import { captureReferralFromUrl, fetchReferralSummary, getCapturedReferral, type ReferralSummary } from '../lib/accountData';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 
@@ -35,6 +35,7 @@ export function GrowthPanel({ address, okbUsd }: Props) {
   const [copiedReferral, setCopiedReferral] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [referralSource, setReferralSource] = useState<string | null>(() => getCapturedReferral());
+  const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
 
   useEffect(() => {
     setReferralSource(captureReferralFromUrl());
@@ -68,6 +69,29 @@ export function GrowthPanel({ address, okbUsd }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!address) {
+      setReferralSummary(null);
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      fetchReferralSummary(address)
+        .then(summary => {
+          if (!cancelled) setReferralSummary(summary);
+        })
+        .catch(() => {
+          if (!cancelled) setReferralSummary(null);
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [address]);
+
   const referralLink = useMemo(() => {
     if (!address) return 'Sign in to create your invite link';
     return `${window.location.origin}/?ref=${address}`;
@@ -83,6 +107,12 @@ export function GrowthPanel({ address, okbUsd }: Props) {
 
   const topEntries = leaderboard.slice(0, 3);
   const expandedEntries = leaderboard.slice(0, 12);
+  const rule = referralSummary?.rewards.rule;
+  const rewardLine = referralSummary
+    ? `${referralSummary.qualified}/${referralSummary.count} qualified - ${formatOkbUsdFromWei(referralSummary.rewards.claimableWei, okbUsd)?.replace(/^US/, '') ?? '$0.00'} claimable`
+    : rule
+      ? `${formatOkbUsdFromWei(rule.referrerRewardWei, okbUsd)?.replace(/^US/, '') ?? '0.0005 OKB'} per qualified invite`
+      : 'Rewards unlock after a referred wallet stakes.';
 
   return (
     <div className="mt-4 grid min-w-0 gap-3">
@@ -110,6 +140,25 @@ export function GrowthPanel({ address, okbUsd }: Props) {
         </div>
         <div className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-600">
           {referralSource ? `Joined through ${shortWallet(referralSource)}.` : 'Invite tracking is stored for the next rewards layer.'}
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="rounded-md border border-zinc-100 px-2 py-2 dark:border-zinc-900">
+            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Invites</div>
+            <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.count ?? 0}</div>
+          </div>
+          <div className="rounded-md border border-zinc-100 px-2 py-2 dark:border-zinc-900">
+            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Qualified</div>
+            <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.qualified ?? 0}</div>
+          </div>
+          <div className="rounded-md border border-zinc-100 px-2 py-2 dark:border-zinc-900">
+            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Pending</div>
+            <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
+              {referralSummary?.rewards.pendingOKB ? Number(referralSummary.rewards.pendingOKB).toFixed(4) : '0.0000'} OKB
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-600">
+          {rewardLine}
         </div>
       </div>
 

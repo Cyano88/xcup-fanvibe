@@ -715,6 +715,16 @@ export class RefereeEngine {
     return Array.from(this.rejectedStakeRefunds.values()).find(item => item.txHash.toLowerCase() === normalized)?.staker;
   }
 
+  validStakeForTx(txHash: string): { staker: string; amountWei: string; kind: 'match' | 'champion' } | undefined {
+    const normalized = txHash.toLowerCase();
+    const stake = Array.from(this.stakes.values()).find(item => item.txHash.toLowerCase() === normalized);
+    if (stake) return { staker: stake.staker, amountWei: stake.amountWei, kind: 'match' };
+    const championStake = this.champStakes.find(item => item.txHash.toLowerCase() === normalized)
+      ?? this.champHistory.find(item => item.stake.txHash.toLowerCase() === normalized)?.stake;
+    if (championStake) return { staker: championStake.staker, amountWei: championStake.amountWei, kind: 'champion' };
+    return undefined;
+  }
+
   async reportStakeTx(txHash: `0x${string}`): Promise<boolean> {
     try {
       const tx = await this.httpClient.getTransaction({ hash: txHash });
