@@ -362,8 +362,9 @@ export class RefereeEngine {
       }
     }
 
+    const archivedChampionTxs = new Set(this.champHistory.map(position => position.stake.txHash.toLowerCase()));
     const championPositions = [
-      ...this.champStakes.map(stake => ({
+      ...this.champStakes.filter(stake => !archivedChampionTxs.has(stake.txHash.toLowerCase())).map(stake => ({
         stake,
         winner: this.champWinner,
         settled: this.champSettled,
@@ -700,6 +701,7 @@ export class RefereeEngine {
     return this.stakes.has(txHash)
       || Array.from(this.stakes.keys()).some(hash => hash.toLowerCase() === normalized)
       || this.champStakes.some(stake => stake.txHash.toLowerCase() === normalized)
+      || this.champHistory.some(position => position.stake.txHash.toLowerCase() === normalized)
       || Array.from(this.rejectedStakeRefunds.keys()).some(hash => hash.toLowerCase() === normalized);
   }
 

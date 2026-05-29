@@ -115,10 +115,22 @@ function statusTone(status: string): string {
   return 'text-zinc-600 dark:text-zinc-300 bg-zinc-500/10';
 }
 
+function matchStateOutcome(state?: MatchState): 'home' | 'draw' | 'away' | undefined {
+  if (!state || state.status !== 'finished') return undefined;
+  if (state.penaltyWinner) return state.penaltyWinner;
+  if (state.homeScore > state.awayScore) return 'home';
+  if (state.awayScore > state.homeScore) return 'away';
+  return 'draw';
+}
+
 function effectiveMatchStatus(position: UserPosition, liveFixture?: Fixture, liveState?: MatchState): UserPosition['status'] | 'active' {
   if (position.type !== 'match') return position.status;
+  if (['paid', 'lost', 'won_pending_payout'].includes(position.status)) return position.status;
   const stakeMs = position.stake.timestamp > 10_000_000_000 ? position.stake.timestamp : position.stake.timestamp * 1000;
   const settlementAppliesToStake = !!position.settlement && position.settlement.settledAt >= stakeMs;
+  if (settlementAppliesToStake) return position.status;
+  const finishedOutcome = matchStateOutcome(liveState);
+  if (finishedOutcome) return finishedOutcome === position.stake.outcome ? 'won_pending_payout' : 'lost';
   const currentFixtureIsLive = liveState?.status === 'live' || liveState?.status === 'half_time';
   const currentFixtureIsSettled = liveFixture?.status === 'settled' && !!liveFixture.result;
   const currentFixtureUnsettled = liveFixture?.status && liveFixture.status !== 'settled';
@@ -127,7 +139,6 @@ function effectiveMatchStatus(position: UserPosition, liveFixture?: Fixture, liv
     if (position.status === 'paid') return position.status;
     return liveFixture.result === position.stake.outcome ? 'won_pending_payout' : 'lost';
   }
-  if (!settlementAppliesToStake) return 'active';
   return position.status;
 }
 
@@ -852,7 +863,6 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
           <PrivyWalletPanel address={address} okbUsd={okbUsd} onError={setError} />
         )}
 
-        <GrowthPanel address={address} positions={sortedPositions} okbUsd={okbUsd} />
       </div>
 
       {error && <div className="mx-4 mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-500">{error}</div>}
@@ -1013,6 +1023,8 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
               )}
             </>
           )}
+
+          <GrowthPanel address={address} okbUsd={okbUsd} />
         </div>
       )}
     </section>
