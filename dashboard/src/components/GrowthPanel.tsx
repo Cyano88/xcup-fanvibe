@@ -144,7 +144,7 @@ export function GrowthPanel({ address, okbUsd }: Props) {
             type="button"
             onClick={copyReferral}
             disabled={!address}
-            className="inline-flex h-8 w-20 shrink-0 items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white text-xs font-bold text-zinc-950 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+            className="inline-flex h-8 w-20 shrink-0 items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white text-xs font-bold text-zinc-950 transition-colors hover:border-zinc-300 hover:bg-zinc-50 active:border-zinc-300 active:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:opacity-45 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:active:border-zinc-700 dark:active:bg-zinc-900 dark:focus-visible:ring-zinc-700"
           >
             {copiedReferral ? <Check size={13} /> : <Copy size={13} />}
             {copiedReferral ? 'Copied' : 'Copy'}

@@ -869,6 +869,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
 
       {address && (
         <div className="p-4">
+          <div className="mb-3 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Settlements</div>
           {positions.length === 0 ? (
             <div className="rounded-md border dark:border-zinc-900 border-zinc-100 px-3 py-6 text-center text-sm dark:text-zinc-500 text-zinc-500">
               {!positionsLoaded || positionsLoading ? 'Updating...' : 'No stakes found for this wallet yet.'}
