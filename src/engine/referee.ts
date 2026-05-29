@@ -304,6 +304,127 @@ export class RefereeEngine {
       });
   }
 
+  getLeaderboard(limit = 20) {
+    type LeaderboardEntry = {
+      address: string;
+      volumeWei: bigint;
+      returnedWei: bigint;
+      wins: number;
+      losses: number;
+      active: number;
+      refunded: number;
+      positions: number;
+      lastActiveAt: number;
+    };
+
+    const entries = new Map<string, LeaderboardEntry>();
+    const entryFor = (address: string) => {
+      const key = address.toLowerCase();
+      const existing = entries.get(key);
+      if (existing) return existing;
+      const created: LeaderboardEntry = {
+        address,
+        volumeWei: 0n,
+        returnedWei: 0n,
+        wins: 0,
+        losses: 0,
+        active: 0,
+        refunded: 0,
+        positions: 0,
+        lastActiveAt: 0,
+      };
+      entries.set(key, created);
+      return created;
+    };
+
+    for (const stake of this.stakes.values()) {
+      const entry = entryFor(stake.staker);
+      const amount = BigInt(stake.amountWei);
+      entry.volumeWei += amount;
+      entry.positions += 1;
+      entry.lastActiveAt = Math.max(entry.lastActiveAt, stake.timestamp);
+
+      const fixture = stake.fixture ?? this.fixtures.find(f => f.id === stake.fixtureId);
+      const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
+      const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stakeMs);
+      const outcome = settlement?.outcome ?? (fixture?.status === 'settled' ? fixture.result : undefined);
+      if (!outcome) {
+        entry.active += 1;
+        continue;
+      }
+
+      if (outcome === stake.outcome) {
+        entry.wins += 1;
+        const payout = settlement?.payouts.find(p => p.address.toLowerCase() === stake.staker.toLowerCase());
+        if (payout) entry.returnedWei += BigInt(payout.amountWei);
+      } else {
+        entry.losses += 1;
+      }
+    }
+
+    const championPositions = [
+      ...this.champStakes.map(stake => ({
+        stake,
+        winner: this.champWinner,
+        settled: this.champSettled,
+      })),
+      ...this.champHistory.map(position => ({
+        stake: position.stake,
+        winner: position.winner,
+        settled: true,
+      })),
+    ];
+
+    for (const position of championPositions) {
+      const entry = entryFor(position.stake.staker);
+      entry.volumeWei += BigInt(position.stake.amountWei);
+      entry.positions += 1;
+      entry.lastActiveAt = Math.max(entry.lastActiveAt, position.stake.timestamp);
+      if (!position.settled || !position.winner) {
+        entry.active += 1;
+        continue;
+      }
+      if (position.winner === position.stake.teamCode) {
+        entry.wins += 1;
+        const championJob = this.settlementJobs.get(`champion:${position.winner}`);
+        const payout = championJob?.payouts.find(p => p.address.toLowerCase() === position.stake.staker.toLowerCase() && p.status === 'sent' && p.txHash);
+        if (payout) entry.returnedWei += BigInt(payout.amountWei);
+      } else {
+        entry.losses += 1;
+      }
+    }
+
+    for (const refund of this.rejectedStakeRefunds.values()) {
+      const entry = entryFor(refund.staker);
+      entry.refunded += refund.status === 'refunded' ? 1 : 0;
+      entry.returnedWei += refund.status === 'refunded' ? BigInt(refund.amountWei) : 0n;
+      entry.lastActiveAt = Math.max(entry.lastActiveAt, refund.timestamp);
+    }
+
+    return Array.from(entries.values())
+      .filter(entry => entry.positions > 0)
+      .sort((a, b) => {
+        const leftScore = a.wins * 1_000_000 + a.positions * 1_000 + Number(a.volumeWei / 1_000_000_000_000_000n);
+        const rightScore = b.wins * 1_000_000 + b.positions * 1_000 + Number(b.volumeWei / 1_000_000_000_000_000n);
+        if (leftScore !== rightScore) return rightScore - leftScore;
+        return b.lastActiveAt - a.lastActiveAt;
+      })
+      .slice(0, limit)
+      .map((entry, index) => ({
+        rank: index + 1,
+        address: entry.address,
+        volumeWei: entry.volumeWei.toString(),
+        returnedWei: entry.returnedWei.toString(),
+        wins: entry.wins,
+        losses: entry.losses,
+        active: entry.active,
+        refunded: entry.refunded,
+        positions: entry.positions,
+        winRate: entry.wins + entry.losses > 0 ? entry.wins / (entry.wins + entry.losses) : null,
+        lastActiveAt: entry.lastActiveAt,
+      }));
+  }
+
   syncChampionSeason(seasonNumber: number): void {
     if (!Number.isFinite(seasonNumber) || seasonNumber < 1) return;
 

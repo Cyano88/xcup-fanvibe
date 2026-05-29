@@ -115,6 +115,12 @@ app.get('/positions/:address', (req, res) => {
   res.json({ address: parsed.data, positions: engine.getPositions(parsed.data) });
 });
 
+app.get('/leaderboard', (req, res) => {
+  const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
+  res.json({ entries: engine.getLeaderboard(parsed.data) });
+});
+
 app.get('/worldcup/feed', async (req, res) => {
   const force = req.query.force === '1';
   const feed = await getWorldCupFeed(force);

@@ -10,6 +10,7 @@ import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfi
 import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { xLayerPublicClient } from '../lib/publicClient';
+import { GrowthPanel } from './GrowthPanel';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
@@ -834,6 +835,8 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
         {address && PRIVY_ENABLED && (
           <PrivyWalletPanel address={address} okbUsd={okbUsd} onError={setError} />
         )}
+
+        <GrowthPanel address={address} positions={sortedPositions} okbUsd={okbUsd} />
       </div>
 
       {error && <div className="mx-4 mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-500">{error}</div>}
