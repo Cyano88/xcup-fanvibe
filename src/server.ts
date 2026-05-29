@@ -4,13 +4,15 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
-import { formatEther, parseEther } from 'viem';
+import { createPublicClient, createWalletClient, formatEther, http, parseEther, type Address } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
-import { clearSeasonState, readAppData, readSeasonState, writeAppData, writeSeasonState, type PersistedAppData, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
+import { clearSeasonState, readAppData, readSeasonState, writeAppData, writeSeasonState, type PersistedAppData, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
 import { getWorldCupFeed } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
+import { explorerTx, xLayerMainnet } from './chain.js';
 
 // ── App bootstrap ─────────────────────────────────────────────────────────────
 
@@ -87,14 +89,65 @@ function rewardEpochFor(ts = Date.now()): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
+type ReferralRewardStatus = 'pending' | 'claimable' | 'paid' | 'blocked';
+type ReferralRewardSide = 'referrer' | 'referred';
+
+const REFERRAL_REWARDS_ENABLED = process.env.REFERRAL_REWARDS_ENABLED !== '0';
+const REFERRAL_CLAIMS_ENABLED = process.env.REFERRAL_CLAIMS_ENABLED !== '0';
+const REWARD_MAX_CLAIM_WEI = parseEther(process.env.REWARD_MAX_CLAIM_OKB ?? '0.01');
+const REWARD_DAILY_PAYOUT_CAP_WEI = parseEther(process.env.REWARD_DAILY_PAYOUT_CAP_OKB ?? '0.05');
+const REWARD_RPC_URL = process.env.REWARD_RPC_URL
+  ?? process.env.X_LAYER_HTTP_RPC
+  ?? process.env.X_LAYER_RPC_URL
+  ?? xLayerMainnet.rpcUrls.default.http[0];
+
+function rewardStatusFor(referral: PersistedReferral, side: ReferralRewardSide): ReferralRewardStatus | undefined {
+  return side === 'referrer'
+    ? referral.referrerRewardStatus ?? referral.rewardStatus
+    : referral.referredRewardStatus ?? referral.rewardStatus;
+}
+
+function setRewardStatus(referral: PersistedReferral, side: ReferralRewardSide, status: ReferralRewardStatus): void {
+  if (side === 'referrer') referral.referrerRewardStatus = status;
+  else referral.referredRewardStatus = status;
+
+  const referrerStatus = referral.referrerRewardStatus ?? referral.rewardStatus;
+  const referredStatus = referral.referredRewardStatus ?? referral.rewardStatus;
+  if (referrerStatus === referredStatus) referral.rewardStatus = referrerStatus;
+  else if (referrerStatus === 'paid' && referredStatus === 'paid') referral.rewardStatus = 'paid';
+  else if (referrerStatus === 'claimable' || referredStatus === 'claimable') referral.rewardStatus = 'claimable';
+  else if (referrerStatus === 'pending' || referredStatus === 'pending') referral.rewardStatus = 'pending';
+  else referral.rewardStatus = referrerStatus ?? referredStatus;
+}
+
+function normalizeReferralRewardSides(referral: PersistedReferral): boolean {
+  if (referral.status !== 'qualified') return false;
+  let changed = false;
+  if (!referral.referrerRewardStatus && referral.rewardStatus) {
+    referral.referrerRewardStatus = referral.rewardStatus;
+    changed = true;
+  }
+  if (!referral.referredRewardStatus && referral.rewardStatus) {
+    referral.referredRewardStatus = referral.rewardStatus === 'blocked' ? 'blocked' : referral.rewardStatus;
+    changed = true;
+  }
+  return changed;
+}
+
 function matureReferralRewards(): boolean {
   const currentEpoch = rewardEpochFor();
   let changed = false;
   for (const referral of appData.referrals) {
-    if (referral.status !== 'qualified' || referral.rewardStatus !== 'pending' || !referral.rewardEpoch) continue;
-    if (referral.rewardEpoch >= currentEpoch) continue;
-    referral.rewardStatus = 'claimable';
-    changed = true;
+    changed = normalizeReferralRewardSides(referral) || changed;
+    if (referral.status !== 'qualified' || !referral.rewardEpoch || referral.rewardEpoch >= currentEpoch) continue;
+    if (rewardStatusFor(referral, 'referrer') === 'pending') {
+      setRewardStatus(referral, 'referrer', 'claimable');
+      changed = true;
+    }
+    if (rewardStatusFor(referral, 'referred') === 'pending') {
+      setRewardStatus(referral, 'referred', 'claimable');
+      changed = true;
+    }
   }
   return changed;
 }
@@ -104,11 +157,12 @@ function referrerRewardedCount(referrer: string, epoch: string): number {
   return appData.referrals.filter(item =>
     item.referrer.toLowerCase() === key
     && item.rewardEpoch === epoch
-    && ['pending', 'claimable', 'paid'].includes(item.rewardStatus ?? '')
+    && ['pending', 'claimable', 'paid'].includes(rewardStatusFor(item, 'referrer') ?? '')
   ).length;
 }
 
 function qualifyReferralForTx(txHash: string): boolean {
+  if (!REFERRAL_REWARDS_ENABLED) return false;
   const stake = engine.validStakeForTx(txHash);
   if (!stake) return false;
   const referral = appData.referrals.find(item => item.referred.toLowerCase() === stake.staker.toLowerCase());
@@ -125,12 +179,16 @@ function qualifyReferralForTx(txHash: string): boolean {
   referral.referrerRewardWei = REFERRER_REWARD_WEI.toString();
   referral.referredRewardWei = REFERRED_REWARD_WEI.toString();
   if (referrerRewardedCount(referral.referrer, rewardEpoch) >= REFERRAL_DAILY_CAP) {
-    referral.rewardStatus = 'blocked';
+    setRewardStatus(referral, 'referrer', 'blocked');
+    setRewardStatus(referral, 'referred', 'pending');
     referral.blockReason = 'daily_cap';
+    console.log(`[FanVibe] Referral cap blocked for ${referral.referrer} on ${rewardEpoch}`);
   } else {
-    referral.rewardStatus = 'pending';
+    setRewardStatus(referral, 'referrer', 'pending');
+    setRewardStatus(referral, 'referred', 'pending');
     delete referral.blockReason;
   }
+  console.log(`[FanVibe] Referral qualified: ${referral.referred} via ${referral.referrer} (${formatEther(amountWei)} OKB)`);
   return true;
 }
 
@@ -139,11 +197,19 @@ function referralRewardSummary(address: string) {
   const invited = appData.referrals.filter(item => item.referrer.toLowerCase() === key);
   const joinedBy = appData.referrals.find(item => item.referred.toLowerCase() === key) ?? null;
   const ownReferral = joinedBy && joinedBy.status === 'qualified' ? [joinedBy] : [];
-  const sum = (items: typeof appData.referrals, field: 'referrerRewardWei' | 'referredRewardWei', statuses: string[]) =>
-    items.reduce((total, item) => statuses.includes(item.rewardStatus ?? '') ? total + BigInt(item[field] ?? '0') : total, 0n);
-  const pendingWei = sum(invited, 'referrerRewardWei', ['pending']) + sum(ownReferral, 'referredRewardWei', ['pending']);
-  const claimableWei = sum(invited, 'referrerRewardWei', ['claimable']) + sum(ownReferral, 'referredRewardWei', ['claimable']);
-  const paidWei = sum(invited, 'referrerRewardWei', ['paid']) + sum(ownReferral, 'referredRewardWei', ['paid']);
+  const sum = (
+    items: typeof appData.referrals,
+    side: ReferralRewardSide,
+    field: 'referrerRewardWei' | 'referredRewardWei',
+    statuses: ReferralRewardStatus[],
+  ) => items.reduce((total, item) => statuses.includes(rewardStatusFor(item, side) ?? 'blocked') ? total + BigInt(item[field] ?? '0') : total, 0n);
+  const pendingWei = sum(invited, 'referrer', 'referrerRewardWei', ['pending']) + sum(ownReferral, 'referred', 'referredRewardWei', ['pending']);
+  const claimableWei = sum(invited, 'referrer', 'referrerRewardWei', ['claimable']) + sum(ownReferral, 'referred', 'referredRewardWei', ['claimable']);
+  const paidWei = sum(invited, 'referrer', 'referrerRewardWei', ['paid']) + sum(ownReferral, 'referred', 'referredRewardWei', ['paid']);
+  const latestPayoutTxHash = [
+    ...invited.map(item => item.referrerRewardPayoutTxHash ?? item.rewardPayoutTxHash),
+    ...ownReferral.map(item => item.referredRewardPayoutTxHash ?? item.rewardPayoutTxHash),
+  ].filter(Boolean).at(-1) ?? null;
   return {
     address,
     invited,
@@ -157,7 +223,9 @@ function referralRewardSummary(address: string) {
       pendingOKB: formatEther(pendingWei),
       claimableOKB: formatEther(claimableWei),
       paidOKB: formatEther(paidWei),
-      blocked: invited.filter(item => item.rewardStatus === 'blocked').length,
+      blocked: invited.filter(item => rewardStatusFor(item, 'referrer') === 'blocked').length,
+      latestPayoutTxHash,
+      latestPayoutUrl: latestPayoutTxHash ? explorerTx(latestPayoutTxHash) : null,
       rule: {
         referrerRewardWei: REFERRER_REWARD_WEI.toString(),
         referredRewardWei: REFERRED_REWARD_WEI.toString(),
@@ -166,6 +234,45 @@ function referralRewardSummary(address: string) {
       },
     },
   };
+}
+
+function referralClaimPlan(address: string): Array<{ referral: PersistedReferral; side: ReferralRewardSide; amountWei: bigint }> {
+  const key = address.toLowerCase();
+  const plan: Array<{ referral: PersistedReferral; side: ReferralRewardSide; amountWei: bigint }> = [];
+  for (const referral of appData.referrals) {
+    if (referral.status !== 'qualified') continue;
+    normalizeReferralRewardSides(referral);
+    if (referral.referrer.toLowerCase() === key && rewardStatusFor(referral, 'referrer') === 'claimable') {
+      plan.push({ referral, side: 'referrer', amountWei: BigInt(referral.referrerRewardWei ?? '0') });
+    }
+    if (referral.referred.toLowerCase() === key && rewardStatusFor(referral, 'referred') === 'claimable') {
+      plan.push({ referral, side: 'referred', amountWei: BigInt(referral.referredRewardWei ?? '0') });
+    }
+  }
+  return plan.filter(item => item.amountWei > 0n);
+}
+
+function rewardWalletClients() {
+  const privateKey = process.env.REWARD_WALLET_PRIVATE_KEY;
+  if (!privateKey || !/^0x[0-9a-fA-F]{64}$/.test(privateKey)) return null;
+  const account = privateKeyToAccount(privateKey as `0x${string}`);
+  const publicClient = createPublicClient({ chain: xLayerMainnet, transport: http(REWARD_RPC_URL) });
+  const walletClient = createWalletClient({ account, chain: xLayerMainnet, transport: http(REWARD_RPC_URL) });
+  return { account, publicClient, walletClient };
+}
+
+function rewardPaidTodayWei(): bigint {
+  const currentEpoch = rewardEpochFor();
+  return appData.referrals.reduce((total, referral) => {
+    let next = total;
+    if (referral.referrerRewardPaidAt && rewardEpochFor(referral.referrerRewardPaidAt) === currentEpoch) {
+      next += BigInt(referral.referrerRewardWei ?? '0');
+    }
+    if (referral.referredRewardPaidAt && rewardEpochFor(referral.referredRewardPaidAt) === currentEpoch) {
+      next += BigInt(referral.referredRewardWei ?? '0');
+    }
+    return next;
+  }, 0n);
 }
 
 async function persistAppData(): Promise<void> {
@@ -310,6 +417,78 @@ app.get('/referrals/:address', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
   if (matureReferralRewards()) await persistAppData();
   res.json(referralRewardSummary(parsed.data));
+});
+
+app.post('/referrals/:address/claim', async (req, res) => {
+  if (!REFERRAL_CLAIMS_ENABLED) return res.status(503).json({ error: 'referral claims are paused' });
+  const parsed = addressSchema.safeParse(req.params.address);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+
+  const claimant = parsed.data;
+  let changed = matureReferralRewards();
+  const claimPlan = referralClaimPlan(claimant);
+  const totalWei = claimPlan.reduce((total, item) => total + item.amountWei, 0n);
+  if (totalWei <= 0n) {
+    if (changed) await persistAppData();
+    return res.json({ ok: true, amountWei: '0', txHash: null, txUrl: null, summary: referralRewardSummary(claimant) });
+  }
+  if (totalWei > REWARD_MAX_CLAIM_WEI) {
+    console.warn(`[FanVibe] Referral claim blocked by max payout: ${claimant} ${formatEther(totalWei)} OKB`);
+    return res.status(429).json({ error: 'claim exceeds reward limit' });
+  }
+  const paidTodayWei = rewardPaidTodayWei();
+  if (paidTodayWei + totalWei > REWARD_DAILY_PAYOUT_CAP_WEI) {
+    console.warn(`[FanVibe] Referral claim blocked by daily reward-wallet cap: ${formatEther(paidTodayWei + totalWei)} OKB`);
+    return res.status(429).json({ error: 'reward cycle limit reached' });
+  }
+
+  const rewardWallet = rewardWalletClients();
+  if (!rewardWallet) return res.status(503).json({ error: 'reward wallet is not configured' });
+
+  const balance = await rewardWallet.publicClient.getBalance({ address: rewardWallet.account.address });
+  if (balance < totalWei) {
+    console.warn(`[FanVibe] Referral claim blocked by reward wallet balance: ${formatEther(balance)} OKB available`);
+    return res.status(503).json({ error: 'reward wallet needs funding' });
+  }
+
+  try {
+    const txHash = await rewardWallet.walletClient.sendTransaction({
+      account: rewardWallet.account,
+      chain: xLayerMainnet,
+      to: claimant as Address,
+      value: totalWei,
+    });
+    const receipt = await rewardWallet.publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 });
+    if (receipt.status !== 'success') return res.status(502).json({ error: 'reward payout failed' });
+
+    for (const item of claimPlan) {
+      setRewardStatus(item.referral, item.side, 'paid');
+      if (item.side === 'referrer') {
+        item.referral.referrerRewardPayoutTxHash = txHash;
+        item.referral.referrerRewardPaidAt = Date.now();
+      } else {
+        item.referral.referredRewardPayoutTxHash = txHash;
+        item.referral.referredRewardPaidAt = Date.now();
+      }
+      item.referral.rewardPayoutTxHash = txHash;
+    }
+    changed = true;
+    await persistAppData();
+    console.log(`[FanVibe] Referral claim paid: ${claimant} ${formatEther(totalWei)} OKB ${txHash}`);
+    res.json({
+      ok: true,
+      amountWei: totalWei.toString(),
+      amountOKB: formatEther(totalWei),
+      txHash,
+      txUrl: explorerTx(txHash),
+      summary: referralRewardSummary(claimant),
+    });
+  } catch (err: unknown) {
+    if (changed) await persistAppData();
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[FanVibe] Referral claim failed for ${claimant}: ${message}`);
+    res.status(502).json({ error: 'reward payout failed' });
+  }
 });
 
 app.get('/worldcup/feed', async (req, res) => {

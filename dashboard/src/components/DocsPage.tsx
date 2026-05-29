@@ -22,6 +22,7 @@ const navItems = [
   ['Account', '#account'],
   ['Markets', '#markets'],
   ['Portfolio', '#portfolio'],
+  ['Invite Rewards', '#invite-rewards'],
   ['Settlement', '#settlement'],
   ['Gas Insurance', '#gas-insurance'],
   ['How To Test', '#how-to-test'],
@@ -77,6 +78,14 @@ const gasRows = [
   ['Refuel trigger', 'If the OKB gas balance drops below the configured threshold, the service checks USDT reserves for a refuel path.'],
   ['Routing', 'The rebalancing path tries OKX DEX Aggregator first and uses a PancakeSwap V3 WOKB reserve route as fallback.'],
   ['Cost guard', 'A profitability guard blocks uneconomic refuels, keeping the insurance loop separate from user stake accounting.'],
+];
+
+const referralRows = [
+  ['Invite link', 'Connected users can copy a personal fanvibe.xyz invite link from Portfolio.'],
+  ['Qualification', 'A referral qualifies only after the referred wallet places a valid stake of at least 0.001 OKB.'],
+  ['Rewards', 'The referrer earns 0.0005 OKB and the referred user earns 0.0002 OKB after qualification.'],
+  ['Cycle', 'Rewards mature in the next reward cycle before becoming claimable from Portfolio.'],
+  ['Safety', 'Self-referrals are blocked, each referred wallet can qualify once, referrers are capped at 10 paid referrals per day, and reward-wallet payouts have a daily cap.'],
 ];
 
 function short(value: string): string {
@@ -279,6 +288,23 @@ export function DocsPage() {
                 <div>Total account value</div>
                 <div className="text-zinc-500">Wallet balance and unresolved market value are surfaced together.</div>
               </div>
+            </div>
+          </section>
+
+          <section id="invite-rewards" className="grid gap-8 border-b border-zinc-200 py-10 dark:border-zinc-900 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight">Invite rewards</h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                FanVibe referrals are account-based, not click-based. The backend locks the first referrer for a wallet, waits for a valid stake, then makes rewards claimable from a separate reward wallet so invite payouts do not interfere with market settlement.
+              </p>
+            </div>
+            <div className="divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-900 dark:border-zinc-900">
+              {referralRows.map(([title, body]) => (
+                <div key={title} className="grid gap-2 py-4 sm:grid-cols-[140px_1fr]">
+                  <div className="text-sm font-semibold">{title}</div>
+                  <div className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{body}</div>
+                </div>
+              ))}
             </div>
           </section>
 

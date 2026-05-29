@@ -116,6 +116,12 @@ export interface PersistedReferral {
   referredRewardWei?: string;
   rewardStatus?: 'pending' | 'claimable' | 'paid' | 'blocked';
   rewardPayoutTxHash?: string;
+  referrerRewardStatus?: 'pending' | 'claimable' | 'paid' | 'blocked';
+  referredRewardStatus?: 'pending' | 'claimable' | 'paid' | 'blocked';
+  referrerRewardPayoutTxHash?: string;
+  referredRewardPayoutTxHash?: string;
+  referrerRewardPaidAt?: number;
+  referredRewardPaidAt?: number;
   blockReason?: string;
   status: 'captured' | 'qualified';
 }

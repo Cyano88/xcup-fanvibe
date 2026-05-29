@@ -9,6 +9,8 @@ export interface ReferralRewards {
   claimableOKB: string;
   paidOKB: string;
   blocked: number;
+  latestPayoutTxHash?: string | null;
+  latestPayoutUrl?: string | null;
   rule: {
     referrerRewardWei: string;
     referredRewardWei: string;
@@ -75,4 +77,20 @@ export async function fetchReferralSummary(address: string): Promise<ReferralSum
   const res = await fetch(`${BACKEND_HTTP}/referrals/${address}`);
   if (!res.ok) return null;
   return res.json() as Promise<ReferralSummary>;
+}
+
+export interface ReferralClaimResult {
+  ok: boolean;
+  amountWei: string;
+  amountOKB?: string;
+  txHash: string | null;
+  txUrl: string | null;
+  summary: ReferralSummary;
+}
+
+export async function claimReferralRewards(address: string): Promise<ReferralClaimResult> {
+  const res = await fetch(`${BACKEND_HTTP}/referrals/${address}/claim`, { method: 'POST' });
+  const data = await res.json().catch(() => null) as ReferralClaimResult | { error?: string } | null;
+  if (!res.ok) throw new Error(data && 'error' in data && data.error ? data.error : 'Reward claim failed');
+  return data as ReferralClaimResult;
 }

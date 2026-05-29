@@ -22,6 +22,7 @@ This repository is a monorepo. It contains the production app, backend referee s
 - Upcoming and live World Cup match coverage alongside FanVibe markets.
 - World Cup news and OKX/X Layer news in the News tab.
 - Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, and total account value.
+- Invite rewards with backend qualification, daily caps, claimable balances, and separate reward-wallet payouts.
 - Autonomous settlement for completed fixture and champion markets.
 - O2-style gas insurance for the referee wallet, with reserve rebalancing when gas capacity drops below threshold.
 - Explorer-linked stake, payout, refund, and proof transactions.
@@ -62,6 +63,19 @@ The referee also runs an O2-style metabolism loop as fallback gas insurance. Eve
 5. Confirm the wallet prompt.
 6. Open Portfolio to track active positions, settlement status, payouts, refunds, and explorer links.
 7. Open News to follow World Cup coverage and OKX/X Layer updates.
+
+## Invite Rewards
+
+Connected users can copy an invite link from Portfolio. FanVibe stores the first valid referrer for a wallet on the backend, blocks self-referrals, and only qualifies the referral after the referred wallet places a valid stake of at least `0.001 OKB`.
+
+Reward policy:
+
+- Referrer reward: `0.0005 OKB` after the referred user's first valid stake.
+- Referred user bonus: `0.0002 OKB` after their first valid stake.
+- Daily cap: 10 paid referrals per referrer per day.
+- Reward only once per referred wallet.
+- Rewards mature in the next reward cycle, then become claimable from Portfolio.
+- Payouts use a separate reward wallet so invite rewards do not interfere with market payouts or refunds.
 
 ## Uniswap v4 Hook Proof
 
@@ -119,6 +133,11 @@ Backend:
 | --- | --- |
 | `X_LAYER_MAINNET_RPC` | X Layer RPC URL |
 | `REFEREE_PRIVATE_KEY` | Referee wallet signer for payouts and refunds |
+| `REWARD_WALLET_PRIVATE_KEY` | Separate reward wallet signer for invite reward claims |
+| `REWARD_MAX_CLAIM_OKB` | Optional per-claim reward payout cap, defaults to `0.01` |
+| `REWARD_DAILY_PAYOUT_CAP_OKB` | Optional total reward-wallet payout cap per UTC day, defaults to `0.05` |
+| `REFERRAL_REWARDS_ENABLED` | Set to `0` to pause referral qualification |
+| `REFERRAL_CLAIMS_ENABLED` | Set to `0` to pause reward claims |
 | `ADMIN_ADDRESS` | Settlement signer address |
 | `ADMIN_TEST_SECRET` | Admin-only season reset secret |
 | `NEWS_API_KEY` | Optional news feed key |

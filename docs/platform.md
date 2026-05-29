@@ -13,6 +13,7 @@ FanVibe lets users:
 - Follow upcoming and live World Cup match coverage alongside FanVibe markets.
 - Track every position in one portfolio.
 - Review payouts, refunds, wallet balance, and total account value.
+- Invite users through account-based referral links with backend-qualified rewards.
 - Rely on autonomous settlement for completed fixture and champion markets.
 - Use an O2-style gas insurance loop that helps keep the referee wallet payout-ready.
 - Follow explorer links for stake, payout, refund, and proof transactions.
@@ -71,8 +72,26 @@ The Portfolio tab is the account ledger. It shows:
 - Season identifiers.
 - Explorer links.
 - Profile name controls.
+- Invite rewards and reward payout proofs.
 
 History remains tied to the connected account and is designed to stay visible rather than disappearing after settlement.
+
+## Invite Rewards
+
+FanVibe referrals are designed for real usage, not click farming. A connected user can copy an invite link from Portfolio. When a new wallet opens that link and later connects, the backend locks the first valid referrer for that wallet.
+
+Rewards qualify only after the referred wallet places a valid stake of at least `0.001 OKB`.
+
+| Rule | Value |
+| --- | --- |
+| Referrer reward | `0.0005 OKB` |
+| Referred user bonus | `0.0002 OKB` |
+| Qualification minimum | `0.001 OKB` first valid stake |
+| Daily cap | 10 paid referrals per referrer |
+| Reward-wallet cap | Configurable total OKB payout cap per UTC day |
+| Repeat reward | Once per referred wallet |
+
+Rewards mature in the next reward cycle, then become claimable in Portfolio. Payouts are sent from a separate reward wallet so referral growth payouts cannot interfere with market settlement, refunds, or referee gas operations. Paid rewards expose explorer links when payout transactions exist.
 
 ## Settlement
 
