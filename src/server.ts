@@ -6,7 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
-import { clearSeasonState, readSeasonState, writeSeasonState, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
+import { clearSeasonState, readAppData, readSeasonState, writeAppData, writeSeasonState, type PersistedAppData, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
 import { getWorldCupFeed } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
@@ -36,6 +36,7 @@ const wss = new WebSocketServer({ server: httpServer });
 
 const engine = new RefereeEngine();
 let seasonController: SeasonController;
+let appData: PersistedAppData = { version: 1, profiles: {}, referrals: [], pendingStakeReports: [], updatedAt: Date.now() };
 
 // ── WebSocket broadcast ───────────────────────────────────────────────────────
 
@@ -63,6 +64,50 @@ function compactSeasonState(state: PersistedSeasonState | null): PersistedSeason
       }
       : null,
   };
+}
+
+const addressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
+const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
+
+function profileKey(address: string): string {
+  return address.toLowerCase();
+}
+
+function profileNameFor(address: string): string | undefined {
+  return appData.profiles[profileKey(address)]?.name;
+}
+
+function qualifyReferralForTx(txHash: string): void {
+  const staker = engine.stakerForTx(txHash);
+  if (!staker) return;
+  const referral = appData.referrals.find(item => item.referred.toLowerCase() === staker.toLowerCase());
+  if (!referral || referral.status === 'qualified') return;
+  referral.status = 'qualified';
+  referral.firstTxHash = txHash;
+}
+
+async function persistAppData(): Promise<void> {
+  await writeAppData(appData);
+}
+
+async function retryPendingStakeReports(): Promise<void> {
+  const pending = [...new Set(appData.pendingStakeReports)].filter(hash => /^0x[0-9a-fA-F]{64}$/.test(hash));
+  if (pending.length === 0) return;
+
+  const remaining: string[] = [];
+  for (const hash of pending) {
+    const indexed = await engine.reportStakeTx(hash as `0x${string}`);
+    if (indexed || engine.hasStakeTx(hash)) {
+      qualifyReferralForTx(hash);
+    } else {
+      remaining.push(hash);
+    }
+  }
+  if (remaining.length !== appData.pendingStakeReports.length) {
+    appData = { ...appData, pendingStakeReports: remaining.slice(-100), updatedAt: Date.now() };
+    await persistAppData();
+    broadcast('state', engine.getState());
+  }
 }
 
 engine.onLog = (log: DaemonLog) => broadcast('log', log);
@@ -110,7 +155,7 @@ app.get('/state', (_req, res) => {
 });
 
 app.get('/positions/:address', (req, res) => {
-  const parsed = z.string().regex(/^0x[0-9a-fA-F]{40}$/).safeParse(req.params.address);
+  const parsed = addressSchema.safeParse(req.params.address);
   if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
   res.json({ address: parsed.data, positions: engine.getPositions(parsed.data) });
 });
@@ -118,7 +163,74 @@ app.get('/positions/:address', (req, res) => {
 app.get('/leaderboard', (req, res) => {
   const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
   if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
-  res.json({ entries: engine.getLeaderboard(parsed.data) });
+  const entries = engine.getLeaderboard(parsed.data).map(entry => ({
+    ...entry,
+    displayName: profileNameFor(entry.address),
+  }));
+  res.json({ entries });
+});
+
+app.get('/profiles/:address', (req, res) => {
+  const parsed = addressSchema.safeParse(req.params.address);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+  const profile = appData.profiles[profileKey(parsed.data)];
+  res.json({ address: parsed.data, name: profile?.name ?? '', updatedAt: profile?.updatedAt ?? null });
+});
+
+app.put('/profiles/:address', async (req, res) => {
+  const address = addressSchema.safeParse(req.params.address);
+  const body = z.object({ name: z.string().trim().max(24) }).safeParse(req.body);
+  if (!address.success || !body.success) return res.status(400).json({ error: 'invalid profile' });
+  const key = profileKey(address.data);
+  const name = body.data.name.replace(/[^\w .-]/g, '').trim().slice(0, 24);
+  if (name) {
+    appData.profiles[key] = { address: address.data, name, updatedAt: Date.now() };
+  } else {
+    delete appData.profiles[key];
+  }
+  await persistAppData();
+  res.json({ address: address.data, name: appData.profiles[key]?.name ?? '' });
+});
+
+app.post('/referrals/claim', async (req, res) => {
+  const parsed = z.object({
+    referrer: addressSchema,
+    referred: addressSchema,
+    txHash: txHashSchema.optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid referral' });
+  const referrer = parsed.data.referrer.toLowerCase();
+  const referred = parsed.data.referred.toLowerCase();
+  if (referrer === referred) return res.status(400).json({ error: 'self referral blocked' });
+
+  const existing = appData.referrals.find(item => item.referred.toLowerCase() === referred);
+  if (existing) return res.json({ ok: true, referral: existing });
+
+  const referral = {
+    referrer: parsed.data.referrer,
+    referred: parsed.data.referred,
+    firstTxHash: parsed.data.txHash,
+    createdAt: Date.now(),
+    status: parsed.data.txHash ? 'qualified' as const : 'captured' as const,
+  };
+  appData.referrals.push(referral);
+  await persistAppData();
+  res.json({ ok: true, referral });
+});
+
+app.get('/referrals/:address', (req, res) => {
+  const parsed = addressSchema.safeParse(req.params.address);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+  const key = parsed.data.toLowerCase();
+  const invited = appData.referrals.filter(item => item.referrer.toLowerCase() === key);
+  const joinedBy = appData.referrals.find(item => item.referred.toLowerCase() === key) ?? null;
+  res.json({
+    address: parsed.data,
+    invited,
+    joinedBy,
+    count: invited.length,
+    qualified: invited.filter(item => item.status === 'qualified').length,
+  });
 });
 
 app.get('/worldcup/feed', async (req, res) => {
@@ -391,11 +503,39 @@ app.post('/oracle/champion', async (req, res) => {
 });
 
 app.post('/stake/report', async (req, res) => {
-  const schema = z.object({ txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/) });
+  const schema = z.object({
+    txHash: txHashSchema,
+    referred: addressSchema.optional(),
+    referrer: addressSchema.optional(),
+  });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid txHash' });
-  await engine.reportStakeTx(parsed.data.txHash as `0x${string}`);
-  res.json({ ok: true });
+  const indexed = await engine.reportStakeTx(parsed.data.txHash as `0x${string}`);
+  if (indexed) qualifyReferralForTx(parsed.data.txHash);
+  if (!indexed && !appData.pendingStakeReports.some(hash => hash.toLowerCase() === parsed.data.txHash.toLowerCase())) {
+    appData.pendingStakeReports.push(parsed.data.txHash);
+    appData.pendingStakeReports = appData.pendingStakeReports.slice(-100);
+  }
+
+  if (parsed.data.referrer && parsed.data.referred && parsed.data.referrer.toLowerCase() !== parsed.data.referred.toLowerCase()) {
+    const referred = parsed.data.referred.toLowerCase();
+    const existing = appData.referrals.find(item => item.referred.toLowerCase() === referred);
+    if (!existing) {
+      appData.referrals.push({
+        referrer: parsed.data.referrer,
+        referred: parsed.data.referred,
+        firstTxHash: parsed.data.txHash,
+        createdAt: Date.now(),
+        status: indexed ? 'qualified' : 'captured',
+      });
+    } else if (indexed && existing.status !== 'qualified') {
+      existing.status = 'qualified';
+      existing.firstTxHash = parsed.data.txHash;
+    }
+  }
+
+  await persistAppData();
+  res.json({ ok: true, indexed, queued: !indexed });
 });
 
 app.get('/stake/status/:fixtureId', async (req, res) => {
@@ -472,9 +612,16 @@ httpServer.listen(PORT, async () => {
   console.log(`[FanVibe] WebSocket on ws://localhost:${PORT}`);
 
   try {
+    appData = await readAppData();
     await engine.start();
     await seasonController.start();
     engine.syncChampionSeason(seasonController.getState().seasonNumber);
+    await retryPendingStakeReports();
+    setInterval(() => {
+      retryPendingStakeReports().catch(err => {
+        console.error(`[FanVibe] Pending stake retry failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }, 15_000);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[FanVibe] Engine start failed: ${msg}`);

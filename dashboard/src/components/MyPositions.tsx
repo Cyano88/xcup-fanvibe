@@ -11,6 +11,7 @@ import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { xLayerPublicClient } from '../lib/publicClient';
 import { GrowthPanel } from './GrowthPanel';
+import { claimReferral, fetchProfileName, saveProfileName } from '../lib/accountData';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
@@ -251,6 +252,18 @@ function PrivyPositionsConnect({
   }, [address]);
 
   useEffect(() => {
+    if (!address) return;
+    claimReferral(address);
+    fetchProfileName(address)
+      .then(name => {
+        if (!name) return;
+        setStoredProfileName(name, address);
+        setProfileName(name);
+      })
+      .catch(() => {});
+  }, [address]);
+
+  useEffect(() => {
     if (!walletsReady || wallets.length === 0) return;
     const currentStillConnected = address
       ? wallets.some(wallet => wallet.address.toLowerCase() === address.toLowerCase())
@@ -312,6 +325,9 @@ function PrivyPositionsConnect({
     setStoredProfileName(nextName, address);
     setProfileName(getStoredProfileName(address));
     setEditingProfile(false);
+    if (address) {
+      saveProfileName(address, nextName).catch(() => {});
+    }
   }, [address, profileInput]);
 
   const profilePrompt = profileName ? fanDisplayName(address, profileName) : 'Set username';

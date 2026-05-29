@@ -3,9 +3,9 @@ import { Check, Copy, ExternalLink, Share2, Trophy, Users } from 'lucide-react';
 import type { UserPosition } from '../types';
 import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
 import { fanDisplayName, getStoredProfileName, shortWallet } from '../lib/fanProfile';
+import { captureReferralFromUrl, getCapturedReferral } from '../lib/accountData';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
-const REFERRAL_KEY = 'fanvibe.referralSource';
 
 interface LeaderboardEntry {
   rank: number;
@@ -19,6 +19,7 @@ interface LeaderboardEntry {
   positions: number;
   winRate: number | null;
   lastActiveAt: number;
+  displayName?: string;
 }
 
 interface Props {
@@ -55,14 +56,10 @@ export function GrowthPanel({ address, positions, okbUsd }: Props) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [copiedReferral, setCopiedReferral] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
-  const [referralSource, setReferralSource] = useState<string | null>(() => localStorage.getItem(REFERRAL_KEY));
+  const [referralSource, setReferralSource] = useState<string | null>(() => getCapturedReferral());
 
   useEffect(() => {
-    const ref = new URLSearchParams(window.location.search).get('ref');
-    if (ref && /^0x[0-9a-fA-F]{40}$/.test(ref)) {
-      localStorage.setItem(REFERRAL_KEY, ref);
-      setReferralSource(ref);
-    }
+    setReferralSource(captureReferralFromUrl());
   }, []);
 
   useEffect(() => {
@@ -180,7 +177,7 @@ export function GrowthPanel({ address, positions, okbUsd }: Props) {
               Rankings appear after the first public stakes.
             </div>
           ) : leaderboard.map(entry => {
-            const profileName = getStoredProfileName(entry.address);
+            const profileName = entry.displayName || getStoredProfileName(entry.address);
             const volumeUsd = compactUsd(formatOkbUsdFromWei(entry.volumeWei, okbUsd));
             const winRate = entry.winRate === null ? '--' : `${Math.round(entry.winRate * 100)}%`;
             return (

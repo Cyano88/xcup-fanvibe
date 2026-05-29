@@ -15,6 +15,7 @@ import { simulateMatch } from './lib/clientSim';
 import { X_LAYER_RPC_URLS, xLayerMainnet, explorerAddr, explorerTx } from './lib/chain';
 import { shortAddr } from './lib/encode';
 import { flushPendingStakeReports } from './lib/stakeReport';
+import { captureReferralFromUrl } from './lib/accountData';
 import { formatOkbUsd, formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
 import {
   SEASON_GROUPS,
@@ -50,7 +51,6 @@ const FANVIBE_V4_APPROVE_TX = '0xf0b842fa937598ff7b8babd6585a6946020339e6ef3a211
 const FANVIBE_V4_SWAP_PROOF_TX = '0xe38fd0daf3e879270ecff754f5cbf4668715825b0ed11926f873cacd50ad9c3c';
 const SEASON_CACHE_KEY = 'fanvibe.seasonSnapshot.prod';
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
-const ACCOUNT_VALUE_CACHE_KEY = 'fanvibe.accountUsdValue';
 const ACTIVE_TAB_KEY = 'fanvibe.activeTab';
 const SETTLEMENT_NOTICE_MS = 5 * 60 * 1000;
 const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
@@ -131,14 +131,6 @@ function fmtOKBWei(wei: bigint | string | number): string {
 
 function stripUsdPrefix(value: string | null): string | null {
   return value ? value.replace(/^US/, '') : null;
-}
-
-function cachedAccountValue(): string {
-  try {
-    return window.localStorage.getItem(ACCOUNT_VALUE_CACHE_KEY) ?? '$0.00';
-  } catch {
-    return '$0.00';
-  }
 }
 
 function readActiveTab(): AppTab {
@@ -343,9 +335,10 @@ function preseasonArchiveRank(fixture: Fixture): number {
 
 export default function App() {
   const okbUsd = useOkbUsdPrice();
-  const [accountValueLabel, setAccountValueLabel] = useState(() => cachedAccountValue());
+  const [accountValueLabel, setAccountValueLabel] = useState('$0.00');
 
   useEffect(() => {
+    captureReferralFromUrl();
     flushPendingStakeReports().catch(() => {});
     const timer = window.setInterval(() => {
       flushPendingStakeReports().catch(() => {});
@@ -1038,14 +1031,9 @@ export default function App() {
         const nextLabel = stripUsdPrefix(formatOkbUsdFromWei(balanceWei + openExposureWei, okbUsd)) ?? '$0.00';
         if (cancelled) return;
         setAccountValueLabel(nextLabel);
-        try {
-          window.localStorage.setItem(ACCOUNT_VALUE_CACHE_KEY, nextLabel);
-        } catch {
-          /* keep UI value only */
-        }
       } catch {
         if (cancelled) return;
-        setAccountValueLabel(prev => prev || cachedAccountValue());
+        setAccountValueLabel(prev => prev || '$0.00');
       }
     };
 

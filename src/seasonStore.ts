@@ -47,6 +47,8 @@ const keyFor = (mode: SeasonStorageMode) => `fanvibe:season:${mode}`;
 const fileFor = (mode: SeasonStorageMode) => join(STORE_DIR, `${keyFor(mode).replace(/:/g, '-')}.json`);
 const engineKeyFor = () => 'fanvibe:referee:market';
 const engineFileFor = () => join(STORE_DIR, 'fanvibe-referee-market.json');
+const appDataKeyFor = () => 'fanvibe:app:data';
+const appDataFileFor = () => join(STORE_DIR, 'fanvibe-app-data.json');
 
 export interface PersistedRefereeMarket {
   version: 1;
@@ -94,6 +96,28 @@ export interface PersistedSettlementJob {
   blockNumber: number;
   settledAt: number;
   payouts: PersistedSettlementPayout[];
+}
+
+export interface PersistedFanProfile {
+  address: string;
+  name: string;
+  updatedAt: number;
+}
+
+export interface PersistedReferral {
+  referrer: string;
+  referred: string;
+  firstTxHash?: string;
+  createdAt: number;
+  status: 'captured' | 'qualified';
+}
+
+export interface PersistedAppData {
+  version: 1;
+  profiles: Record<string, PersistedFanProfile>;
+  referrals: PersistedReferral[];
+  pendingStakeReports: string[];
+  updatedAt: number;
 }
 
 async function upstash<T>(command: unknown[]): Promise<T | null> {
@@ -168,6 +192,30 @@ export async function writeRefereeMarket(state: PersistedRefereeMarket): Promise
   }
 
   const target = engineFileFor();
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, payload);
+}
+
+export async function readAppData(): Promise<PersistedAppData> {
+  const raw = await upstash<string>(['GET', appDataKeyFor()]);
+  if (raw) return JSON.parse(raw) as PersistedAppData;
+
+  try {
+    const file = await readFile(appDataFileFor(), 'utf8');
+    return JSON.parse(file) as PersistedAppData;
+  } catch {
+    return { version: 1, profiles: {}, referrals: [], pendingStakeReports: [], updatedAt: Date.now() };
+  }
+}
+
+export async function writeAppData(state: PersistedAppData): Promise<void> {
+  const payload = JSON.stringify({ ...state, updatedAt: Date.now() });
+  if (UPSTASH_URL && UPSTASH_TOKEN) {
+    await upstash(['SET', appDataKeyFor(), payload]);
+    return;
+  }
+
+  const target = appDataFileFor();
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, payload);
 }

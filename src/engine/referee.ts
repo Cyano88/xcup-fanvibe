@@ -695,15 +695,35 @@ export class RefereeEngine {
   }
 
   // Direct TX lookup — called when frontend reports a confirmed stake hash
-  async reportStakeTx(txHash: `0x${string}`): Promise<void> {
+  hasStakeTx(txHash: string): boolean {
+    const normalized = txHash.toLowerCase();
+    return this.stakes.has(txHash)
+      || Array.from(this.stakes.keys()).some(hash => hash.toLowerCase() === normalized)
+      || this.champStakes.some(stake => stake.txHash.toLowerCase() === normalized)
+      || Array.from(this.rejectedStakeRefunds.keys()).some(hash => hash.toLowerCase() === normalized);
+  }
+
+  stakerForTx(txHash: string): string | undefined {
+    const normalized = txHash.toLowerCase();
+    const stake = Array.from(this.stakes.values()).find(item => item.txHash.toLowerCase() === normalized);
+    if (stake) return stake.staker;
+    const championStake = this.champStakes.find(item => item.txHash.toLowerCase() === normalized)
+      ?? this.champHistory.find(item => item.stake.txHash.toLowerCase() === normalized)?.stake;
+    if (championStake) return championStake.staker;
+    return Array.from(this.rejectedStakeRefunds.values()).find(item => item.txHash.toLowerCase() === normalized)?.staker;
+  }
+
+  async reportStakeTx(txHash: `0x${string}`): Promise<boolean> {
     try {
       const tx = await this.httpClient.getTransaction({ hash: txHash });
-      if (!tx) return;
+      if (!tx) return false;
       const block = await this.httpClient.getBlock({ blockNumber: tx.blockNumber!, includeTransactions: false });
       this.processStakeTx(tx as unknown as Transaction, Number(block.timestamp));
       this.onUpdate?.();
+      return this.hasStakeTx(txHash);
     } catch {
       this.log('RPC', 'warn', `Failed to look up reported TX ${txHash}`);
+      return false;
     }
   }
 
