@@ -440,7 +440,14 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
     ...entry,
     displayName: profileNameFor(entry.address),
   }));
-  res.json({ entries: await attachFvbEligibility(entries) });
+  res.json({
+    entries: await attachFvbEligibility(entries),
+    fvbEligibility: {
+      tokenAddress: FANVIBE_TOKEN_ADDRESS,
+      capWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+      capTokens: '450000',
+    },
+  });
 });
 
 app.get('/matchday-cup/country-support', (req, res) => {
