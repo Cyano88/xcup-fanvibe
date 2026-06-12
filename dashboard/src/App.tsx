@@ -377,7 +377,7 @@ export default function App() {
   const [matchStates, setMatchStates]           = useState<Record<string, MatchState>>(initialSeason.matchStates);
   const [liveUiTick, setLiveUiTick]             = useState(0);
   const [watchingFixtureId, setWatchingId]      = useState<string | null>(null);
-  const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('simulated');
+  const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('realtime');
   const [activeTab, setActiveTab]               = useState<AppTab>(() => readActiveTab());
   const [soundMuted, setSoundMuted]             = useState(false);
   const [seasonMode, setSeasonMode]             = useState<SeasonStorageMode>('prod');
@@ -403,6 +403,9 @@ export default function App() {
   const [phaseEndsAt, setPhaseEndsAt]           = useState(initialSeason.phaseEndsAt);
   const [seasonClockTick, setSeasonClockTick]   = useState(0);
 
+  const adminModeVisible = import.meta.env.VITE_ENABLE_ADMIN_TEST_MODE === 'true'
+    || new URLSearchParams(window.location.search).get('admin') === '1';
+
   const wsRef                  = useRef<WebSocket | null>(null);
   const reconnectRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
   const simCleanupRef          = useRef<Map<string, () => void>>(new Map());
@@ -419,6 +422,10 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
     window.localStorage.setItem('fanvibe-theme', dark ? 'dark' : 'light');
   }, [dark]);
+
+  useEffect(() => {
+    if (!adminModeVisible && viewMode !== 'realtime') setViewMode('realtime');
+  }, [adminModeVisible, viewMode]);
 
   useEffect(() => {
     try {
@@ -990,8 +997,9 @@ export default function App() {
     };
   }, [seasonMode, viewMode, watchingFixtureId]);
 
-  const simFixtures    = viewMode === 'simulated' ? fixtures : realtimeFixtures;
-  const rtGroups       = ['all', ...Array.from(new Set(realtimeFixtures.map(f => f.group))).sort()];
+  const worldCupLiveDataActive = viewMode === 'realtime' && worldCupFeed?.mode === 'live';
+  const simFixtures    = viewMode === 'simulated' ? fixtures : worldCupLiveDataActive ? realtimeFixtures : [];
+  const rtGroups       = ['all', ...Array.from(new Set(simFixtures.map(f => f.group))).sort()];
   const projectMatchState = useCallback((state?: MatchState): MatchState | undefined => {
     if (!state || state.status !== 'live') return state;
     const kickoffMs = Date.parse(state.simulatedKickoff);
@@ -1079,7 +1087,7 @@ export default function App() {
         : SEASON_GROUPS.includes(fixtureRoundFilter)
           ? simFixtures.filter(f => f.group === fixtureRoundFilter && isGroupStageFixture(f))
           : simFixtures)
-    : (fixtureGroupFilter === 'all' ? realtimeFixtures : realtimeFixtures.filter(f => f.group === fixtureGroupFilter));
+    : (fixtureGroupFilter === 'all' ? simFixtures : simFixtures.filter(f => f.group === fixtureGroupFilter));
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const visibleFixtures = activeTab === 'search' && normalizedSearchQuery
     ? baseVisibleFixtures.filter(fixture => [
@@ -1119,7 +1127,7 @@ export default function App() {
     })
     : visibleFixtures;
   const selectedGroupFixtures = activeTab === 'search' && viewMode === 'realtime' && fixtureGroupFilter !== 'all'
-    ? realtimeFixtures.filter(f => f.group === fixtureGroupFilter)
+    ? simFixtures.filter(f => f.group === fixtureGroupFilter)
     : [];
   const selectedGroupResults = selectedGroupFixtures.filter(f => matchStates[f.id]?.status === 'finished');
   const simulatedFixtureSectionLabel = viewMode === 'simulated'
@@ -1252,7 +1260,7 @@ export default function App() {
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
       ? `updated ${worldCupFeed.freshnessSeconds}s ago`
-      : 'ready for staking'
+      : 'provider unavailable'
     : 'updating';
   const appTabs: Array<{ id: AppTab; label: string; icon: typeof Home }> = [
     { id: 'home', label: 'Home', icon: Home },
@@ -1364,29 +1372,43 @@ export default function App() {
         {/* -- Mode toggle ------------------------------------------------- */}
         {(activeTab === 'home' || activeTab === 'search') && (
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
-            <button
-              onClick={() => setViewMode('simulated')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
-                ${viewMode === 'simulated'
-                  ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
-                  : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
-            >
-              Season Play
-            </button>
-            <button
-              onClick={() => setViewMode('realtime')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
-                ${viewMode === 'realtime'
-                  ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
-                  : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
-            >
-              <Globe size={13} />
-              World Cup 2026
-            </button>
-          </div>
+          {adminModeVisible ? (
+            <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
+              <button
+                onClick={() => setViewMode('simulated')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+                  ${viewMode === 'simulated'
+                    ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
+                    : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
+              >
+                Season Play
+              </button>
+              <button
+                onClick={() => setViewMode('realtime')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+                  ${viewMode === 'realtime'
+                    ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
+                    : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-zinc-200 hover:text-zinc-700'}`}
+              >
+                <Globe size={13} />
+                World Cup 2026
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-900 bg-white px-4 py-2 shadow-sm">
+              <Globe size={15} className="dark:text-blue-300 text-blue-700" />
+              <span className="text-sm font-bold dark:text-zinc-100 text-zinc-950">World Cup 2026</span>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                worldCupLiveDataActive
+                  ? 'dark:bg-emerald-500/15 bg-emerald-50 dark:text-emerald-300 text-emerald-700'
+                  : 'dark:bg-amber-500/15 bg-amber-50 dark:text-amber-300 text-amber-700'
+              }`}>
+                {worldCupLiveDataActive ? 'Live feed' : 'Provider pending'}
+              </span>
+            </div>
+          )}
 
-          {viewMode === 'simulated' && (import.meta.env.VITE_ENABLE_ADMIN_TEST_MODE === 'true' || new URLSearchParams(window.location.search).get('admin') === '1') && (
+          {viewMode === 'simulated' && adminModeVisible && (
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
                 <button
@@ -1773,11 +1795,19 @@ export default function App() {
           >
             <Globe size={18} className="relative z-10 text-blue-200 shrink-0 mt-0.5" />
             <div className="relative z-10">
-              <div className="text-sm font-bold text-white mb-1 drop-shadow-sm">FIFA World Cup 2026 - All 12 Groups</div>
+              <div className="text-sm font-bold text-white mb-1 drop-shadow-sm">World Cup 2026 Live Data</div>
               <div className="text-xs text-zinc-200/90 leading-relaxed">
-                Official WC 2026 group stage fixtures (MD1 + MD2). Staking is open now for all {realtimeFixtures.length} listed matches.
-                First kick-off <span className="font-semibold text-white">June 11, 2026</span>.
-                Fixture board: <span className="font-semibold text-white">{worldCupSourceLabel}</span> ({worldCupFreshness}).
+                {worldCupLiveDataActive ? (
+                  <>
+                    Live provider feed active for World Cup fixtures. Staking is available on provider-backed matches only.
+                    Feed: <span className="font-semibold text-white">{worldCupSourceLabel}</span> ({worldCupFreshness}).
+                  </>
+                ) : (
+                  <>
+                    Real provider feed is not active, so World Cup match staking is paused. Configure Sportmonks and reload before opening real-match markets.
+                    Feed: <span className="font-semibold text-white">{worldCupSourceLabel}</span> ({worldCupFreshness}).
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1853,7 +1883,7 @@ export default function App() {
               </div>
 
               <GroupTable
-                fixtures={realtimeFixtures}
+                fixtures={simFixtures}
                 matchStates={matchStates}
                 selectedGroup={fixtureGroupFilter}
               />
@@ -1924,7 +1954,9 @@ export default function App() {
             </div>
             {orderedVisibleFixtures.length === 0 && (
               <div className="rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white px-4 py-8 text-center text-sm dark:text-zinc-500 text-zinc-500">
-                No matches found. Try a team name, code, group, or venue.
+                {viewMode === 'realtime' && !worldCupLiveDataActive
+                  ? 'Real World Cup markets open after the live sports data provider is active.'
+                  : 'No matches found. Try a team name, code, group, or venue.'}
               </div>
             )}
           </section>

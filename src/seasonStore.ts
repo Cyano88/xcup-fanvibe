@@ -50,6 +50,14 @@ const engineFileFor = () => join(STORE_DIR, 'fanvibe-referee-market.json');
 const appDataKeyFor = () => 'fanvibe:app:data';
 const appDataFileFor = () => join(STORE_DIR, 'fanvibe-app-data.json');
 
+export function seasonStorageStatus() {
+  return {
+    driver: UPSTASH_URL && UPSTASH_TOKEN ? 'upstash' : 'file',
+    storeDir: UPSTASH_URL && UPSTASH_TOKEN ? null : STORE_DIR,
+    upstashConfigured: !!(UPSTASH_URL && UPSTASH_TOKEN),
+  };
+}
+
 export interface PersistedRefereeMarket {
   version: 1;
   stakes: Stake[];

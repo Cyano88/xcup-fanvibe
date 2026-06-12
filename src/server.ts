@@ -8,7 +8,7 @@ import { createPublicClient, createWalletClient, formatEther, http, parseEther, 
 import { privateKeyToAccount } from 'viem/accounts';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
-import { clearSeasonState, readAppData, readSeasonState, writeAppData, writeSeasonState, type PersistedAppData, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
+import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
 import { getWorldCupFeed } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
@@ -338,7 +338,16 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    storage: seasonStorageStatus(),
+    season: {
+      number: seasonController.getState().seasonNumber,
+      phase: seasonController.getState().phase,
+      updatedAt: seasonController.getState().updatedAt,
+    },
+  });
 });
 
 app.get('/state', (_req, res) => {
