@@ -11,7 +11,7 @@ import { explorerAddr } from '../lib/chain';
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FVB_ENTRY_MIN_WEI = 1n;
-const FVB_HOLDER_BOOST_CAP = '420,000 FVB';
+const FVB_REWARD_ELIGIBILITY_CAP = '450,000 FVB';
 const FVB_ENTRY_MINIMUM = '$10 FVB';
 const ERC20_BALANCE_ABI = [
   {
@@ -294,64 +294,78 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
         </div>
 
         {buyModalOpen && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-zinc-950 shadow-2xl">
-              <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-3">
-                <div>
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-200">
-                    <Trophy size={12} />
-                    Matchday Cup Entry
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-md">
+            <div className="w-full max-w-[440px] overflow-hidden rounded-xl border border-white/[0.12] bg-[#070A10] shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+              <div className="border-b border-white/10 bg-white/[0.03] px-5 py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-200">
+                      <Trophy size={12} />
+                      Matchday Cup Entry
+                    </div>
+                    <h4 className="mt-2 text-xl font-semibold tracking-tight text-white">Hold $FVB to qualify</h4>
                   </div>
-                  <h4 className="mt-1 text-lg font-semibold text-white">Buy $FVB to enter</h4>
+                  <button
+                    type="button"
+                    onClick={() => setBuyModalOpen(false)}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/20 text-zinc-300 transition-colors hover:border-white/25 hover:text-white"
+                    aria-label="Close buy FVB modal"
+                  >
+                    <X size={15} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setBuyModalOpen(false)}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 text-zinc-300 transition-colors hover:border-white/25 hover:text-white"
-                  aria-label="Close buy FVB modal"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-
-              <div className="space-y-3 px-4 py-4">
-                <p className="text-sm leading-6 text-zinc-300">
-                  $FVB is still on the eulr bonding curve. Buying now mints from the curve with your wallet; after graduation, trading moves to Uniswap v4 liquidity.
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  Buy from the eulr curve before graduation. Reward-pool eligibility counts up to 450k $FVB per wallet; after graduation, open trading begins and fans can buy more to trade, compete, and rank up.
                 </p>
+              </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3">
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">Entry minimum</div>
+              <div className="space-y-4 px-5 py-4">
+                <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
+                  <div className="border-r border-white/10 px-4 py-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Minimum</div>
                     <div className="mt-1 text-lg font-semibold text-white">{FVB_ENTRY_MINIMUM}</div>
-                    <div className="mt-1 text-[11px] leading-4 text-zinc-400">Use the same wallet for FVB and match stakes.</div>
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3">
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">Boost cap</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{FVB_HOLDER_BOOST_CAP}</div>
-                    <div className="mt-1 text-[11px] leading-4 text-zinc-400">More can be held, but scoring boost stops here.</div>
+                  <div className="px-4 py-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Eligible max</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{FVB_REWARD_ELIGIBILITY_CAP}</div>
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-blue-300/15 bg-blue-500/10 px-3 py-3 text-xs leading-5 text-blue-100">
-                  Suggested buys stay small. Start with at least $10, then rank up through real match stakes, wins, and activity.
+                <div className="space-y-2">
+                  {[
+                    'Use the same wallet for $FVB and match stakes.',
+                    'Stake OKB on real World Cup matches to build score.',
+                    'After graduation, trade $FVB to keep climbing.',
+                  ].map((item, index) => (
+                    <div key={item} className="flex items-center gap-3 rounded-lg border border-white/[0.08] bg-black/25 px-3 py-2.5">
+                      <div className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white text-[11px] font-black text-zinc-950">
+                        {index + 1}
+                      </div>
+                      <div className="text-xs font-medium leading-5 text-zinc-200">{item}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-lg border border-blue-300/15 bg-blue-400/10 px-3 py-3 text-xs leading-5 text-blue-100">
+                  Current phase: buying $FVB mints from the bonding curve. Trading expands after graduation.
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 border-t border-white/10 px-4 py-3">
+              <div className="flex flex-wrap gap-2 border-t border-white/10 bg-white/[0.03] px-5 py-4">
                 <a
                   href={FANVIBE_TOKEN_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-4 text-xs font-black text-zinc-950 transition-colors hover:bg-zinc-200"
                 >
-                  Continue to eulr
+                  Buy on eulr
                   <ExternalLink size={12} />
                 </a>
                 <a
                   href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
                 >
                   Contract
                   <ExternalLink size={12} />
