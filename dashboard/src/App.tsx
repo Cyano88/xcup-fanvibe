@@ -1538,11 +1538,11 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-3 backdrop-blur-[2px]">
-                <div className="flex items-center justify-between gap-3">
+              <div className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-2.5 backdrop-blur-[2px] sm:px-3">
+                <div className="flex items-center justify-between gap-2">
                   <div>
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-400">Prize pool</div>
-                    <div className="mt-1 text-3xl font-semibold leading-none text-white">$200</div>
+                    <div className="mt-0.5 text-2xl font-semibold leading-none text-white">$200</div>
                   </div>
                   <div className="matchday-prize-orb" aria-hidden="true">
                     <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
@@ -1555,31 +1555,31 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-1.5 text-sm font-semibold text-zinc-200">
+                <div className="mt-2 space-y-1 text-xs font-semibold text-zinc-200">
                   <div className="flex items-center justify-between"><span>1st</span><span className="text-white">$100</span></div>
                   <div className="flex items-center justify-between"><span>2nd</span><span className="text-white">$60</span></div>
                   <div className="flex items-center justify-between"><span>3rd</span><span className="text-white">$30</span></div>
-                  <div className="flex items-center justify-between text-xs text-zinc-300"><span>Wildcard reward</span><span className="text-white">$10</span></div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-300"><span>Wildcard reward</span><span className="text-white">$10</span></div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex gap-1.5">
                   <a
                     href={FANVIBE_TOKEN_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-white px-2 text-[11px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
+                    className="inline-flex h-6 min-w-0 flex-1 items-center justify-center gap-1 rounded-md bg-white px-1.5 text-[10px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
                   >
                     Buy $FVB
-                    <ExternalLink size={10} />
+                    <ExternalLink size={9} />
                   </a>
                   <a
                     href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md border border-white/10 px-2 text-[11px] font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
+                    className="inline-flex h-6 min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-white/10 px-1.5 text-[10px] font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
                   >
                     Contract
-                    <ExternalLink size={10} />
+                    <ExternalLink size={9} />
                   </a>
                 </div>
               </div>
