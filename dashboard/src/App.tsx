@@ -7,6 +7,7 @@ import { LogStream } from './components/LogStream';
 import { MyPositions } from './components/MyPositions';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
+import { MatchdayCupLeaderboard } from './components/MatchdayCupLeaderboard';
 import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team, UserPosition } from './types';
 import { REALTIME_FIXTURES } from './types';
 import { BracketView } from './components/BracketView';
@@ -17,6 +18,7 @@ import { shortAddr } from './lib/encode';
 import { flushPendingStakeReports } from './lib/stakeReport';
 import { captureReferralFromUrl } from './lib/accountData';
 import { formatOkbUsd, formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
+import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_LOGO, FANVIBE_TOKEN_URL } from './lib/fanvibeToken';
 import {
   SEASON_GROUPS,
   DEFAULT_SEASON_TIMING,
@@ -101,7 +103,7 @@ type SeasonStorageMode = 'prod' | 'test';
 interface WorldCupFeed {
   fixtures: Fixture[];
   matchStates: Record<string, MatchState>;
-  source: 'wc2026api' | 'balldontlie' | 'zafronix' | 'static';
+  source: 'sportmonks' | 'wc2026api' | 'balldontlie' | 'zafronix' | 'static';
   mode: 'live' | 'fallback';
   updatedAt: number;
   freshnessSeconds: number;
@@ -1242,7 +1244,11 @@ export default function App() {
     }
   }).length;
   const displayedSeasonWinners = seasonWinners;
-  const worldCupSourceLabel = worldCupFeed?.mode === 'live' ? 'Live fixture feed' : 'Curated fixture board';
+  const worldCupSourceLabel = worldCupFeed?.mode === 'live'
+    ? worldCupFeed.source === 'sportmonks'
+      ? 'Sportmonks live feed'
+      : 'Live fixture feed'
+    : 'Curated fixture board';
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
       ? `updated ${worldCupFeed.freshnessSeconds}s ago`
@@ -1441,6 +1447,106 @@ export default function App() {
             )}
           </div>
         </div>
+        )}
+
+        {activeTab === 'home' && (
+          <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-900 dark:bg-zinc-950">
+            <div className="grid gap-0 md:grid-cols-[180px_1fr]">
+              <a
+                href={FANVIBE_TOKEN_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative min-h-[190px] overflow-hidden border-b border-zinc-100 bg-zinc-50 dark:border-zinc-900 dark:bg-zinc-900/60 md:border-b-0 md:border-r"
+                aria-label="Open FanVibe World Cup token"
+              >
+                <img
+                  src={FANVIBE_TOKEN_LOGO}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                />
+              </a>
+              <div className="flex min-w-0 flex-col justify-between gap-5 p-4 sm:p-5">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                      FVB Matchday Cup
+                    </div>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                      $200 prize pool for World Cup matchday fans
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                      Stake OKB on real World Cup fixtures, hold $FVB, and climb the Matchday Cup leaderboard. $FVB is FanVibe's World Cup token and is moving toward Uniswap v4 graduation on X Layer.
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('realtime')}
+                      className="inline-flex h-10 items-center rounded-lg border border-zinc-200 px-4 text-sm font-bold text-zinc-800 transition-colors hover:border-blue-300 hover:text-blue-600 dark:border-zinc-800 dark:text-zinc-200 dark:hover:border-blue-500/50 dark:hover:text-blue-300"
+                    >
+                      World Cup matches
+                    </button>
+                    <a
+                      href={FANVIBE_TOKEN_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-10 items-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-bold text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                    >
+                      Buy $FVB
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <div className="rounded-lg border border-zinc-100 px-3 py-2 dark:border-zinc-900">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Prize pool</div>
+                    <div className="mt-1 text-xs font-bold text-zinc-900 dark:text-zinc-100">$200</div>
+                  </div>
+                  <div className="rounded-lg border border-zinc-100 px-3 py-2 dark:border-zinc-900">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">1st place</div>
+                    <div className="mt-1 text-xs font-bold text-zinc-900 dark:text-zinc-100">$100</div>
+                  </div>
+                  <div className="rounded-lg border border-zinc-100 px-3 py-2 dark:border-zinc-900">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">2nd place</div>
+                    <div className="mt-1 text-xs font-bold text-zinc-900 dark:text-zinc-100">$60</div>
+                  </div>
+                  <div className="rounded-lg border border-zinc-100 px-3 py-2 dark:border-zinc-900">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">3rd + wild</div>
+                    <div className="mt-1 text-xs font-bold text-zinc-900 dark:text-zinc-100">$30 + $10</div>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 border-t border-zinc-100 pt-3 text-xs dark:border-zinc-900 sm:grid-cols-3">
+                  <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-blue-600 text-[10px] font-black text-white">1</span>
+                    Stake OKB on real World Cup matches
+                  </div>
+                  <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-blue-600 text-[10px] font-black text-white">2</span>
+                    Hold $FVB for Matchday Cup entry
+                  </div>
+                  <a
+                    href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-w-0 items-center gap-2 text-zinc-600 transition-colors hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-300"
+                  >
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-blue-600 text-[10px] font-black text-white">3</span>
+                    <span className="min-w-0 truncate">$FVB contract {shortAddr(FANVIBE_TOKEN_ADDRESS)}</span>
+                    <ExternalLink size={11} className="shrink-0" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'home' && (
+          <MatchdayCupLeaderboard
+            okbUsd={okbUsd}
+            onOpenWorldCup={() => setViewMode('realtime')}
+          />
         )}
 
         {activeTab === 'home' && viewMode === 'simulated' && seasonMode === 'test' && seasonAdminOpen && (

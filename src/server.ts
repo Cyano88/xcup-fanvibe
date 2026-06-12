@@ -361,6 +361,22 @@ app.get('/leaderboard', (req, res) => {
   res.json({ entries });
 });
 
+app.get('/matchday-cup/leaderboard', (req, res) => {
+  const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
+  const entries = engine.getMatchdayCupLeaderboard(parsed.data).map(entry => ({
+    ...entry,
+    displayName: profileNameFor(entry.address),
+  }));
+  res.json({ entries });
+});
+
+app.get('/matchday-cup/country-support', (req, res) => {
+  const parsed = z.coerce.number().int().min(1).max(50).default(12).safeParse(req.query.limit);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
+  res.json({ entries: engine.getMatchdayCountrySupport(parsed.data) });
+});
+
 app.get('/profiles/:address', (req, res) => {
   const parsed = addressSchema.safeParse(req.params.address);
   if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
@@ -494,6 +510,9 @@ app.post('/referrals/:address/claim', async (req, res) => {
 app.get('/worldcup/feed', async (req, res) => {
   const force = req.query.force === '1';
   const feed = await getWorldCupFeed(force);
+  if (process.env.LIVE_SPORTS_REQUIRED === '1' && feed.mode !== 'live') {
+    return res.status(503).json(feed);
+  }
   engine.syncFixtures(feed.fixtures);
   for (const matchState of Object.values(feed.matchStates)) {
     if (matchState.status !== 'finished') continue;

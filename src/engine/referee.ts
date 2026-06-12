@@ -426,6 +426,153 @@ export class RefereeEngine {
       }));
   }
 
+  getMatchdayCupLeaderboard(limit = 20) {
+    type LeaderboardEntry = {
+      address: string;
+      volumeWei: bigint;
+      returnedWei: bigint;
+      wins: number;
+      losses: number;
+      active: number;
+      refunded: number;
+      positions: number;
+      lastActiveAt: number;
+    };
+
+    const entries = new Map<string, LeaderboardEntry>();
+    const entryFor = (address: string) => {
+      const key = address.toLowerCase();
+      const existing = entries.get(key);
+      if (existing) return existing;
+      const created: LeaderboardEntry = {
+        address,
+        volumeWei: 0n,
+        returnedWei: 0n,
+        wins: 0,
+        losses: 0,
+        active: 0,
+        refunded: 0,
+        positions: 0,
+        lastActiveAt: 0,
+      };
+      entries.set(key, created);
+      return created;
+    };
+
+    for (const stake of this.stakes.values()) {
+      const fixture = stake.fixture ?? this.fixtures.find(f => f.id === stake.fixtureId);
+      if (fixture?.mode !== 'realtime') continue;
+
+      const entry = entryFor(stake.staker);
+      const amount = BigInt(stake.amountWei);
+      entry.volumeWei += amount;
+      entry.positions += 1;
+      entry.lastActiveAt = Math.max(entry.lastActiveAt, stake.timestamp);
+
+      const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
+      const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stakeMs);
+      const outcome = settlement?.outcome ?? (fixture.status === 'settled' ? fixture.result : undefined);
+      if (!outcome) {
+        entry.active += 1;
+        continue;
+      }
+
+      if (outcome === stake.outcome) {
+        entry.wins += 1;
+        const payout = settlement?.payouts.find(p => p.address.toLowerCase() === stake.staker.toLowerCase());
+        if (payout) entry.returnedWei += BigInt(payout.amountWei);
+      } else {
+        entry.losses += 1;
+      }
+    }
+
+    return Array.from(entries.values())
+      .filter(entry => entry.positions > 0)
+      .sort((a, b) => {
+        const leftScore = a.wins * 1_000_000 + a.positions * 1_000 + Number(a.volumeWei / 1_000_000_000_000_000n);
+        const rightScore = b.wins * 1_000_000 + b.positions * 1_000 + Number(b.volumeWei / 1_000_000_000_000_000n);
+        if (leftScore !== rightScore) return rightScore - leftScore;
+        return b.lastActiveAt - a.lastActiveAt;
+      })
+      .slice(0, limit)
+      .map((entry, index) => ({
+        rank: index + 1,
+        address: entry.address,
+        volumeWei: entry.volumeWei.toString(),
+        returnedWei: entry.returnedWei.toString(),
+        wins: entry.wins,
+        losses: entry.losses,
+        active: entry.active,
+        refunded: entry.refunded,
+        positions: entry.positions,
+        winRate: entry.wins + entry.losses > 0 ? entry.wins / (entry.wins + entry.losses) : null,
+        lastActiveAt: entry.lastActiveAt,
+      }));
+  }
+
+  getMatchdayCountrySupport(limit = 12) {
+    type CountrySupportEntry = {
+      code: string;
+      name: string;
+      iso: string;
+      volumeWei: bigint;
+      positions: number;
+      supporters: Set<string>;
+      lastActiveAt: number;
+    };
+
+    const entries = new Map<string, CountrySupportEntry>();
+    const entryFor = (team: { code: string; name: string; iso: string }) => {
+      const existing = entries.get(team.code);
+      if (existing) return existing;
+      const created: CountrySupportEntry = {
+        code: team.code,
+        name: team.name,
+        iso: team.iso,
+        volumeWei: 0n,
+        positions: 0,
+        supporters: new Set<string>(),
+        lastActiveAt: 0,
+      };
+      entries.set(team.code, created);
+      return created;
+    };
+
+    for (const stake of this.stakes.values()) {
+      const fixture = stake.fixture ?? this.fixtures.find(f => f.id === stake.fixtureId);
+      if (fixture?.mode !== 'realtime') continue;
+      if (stake.outcome === 'draw') continue;
+
+      const team = stake.outcome === 'home' ? fixture.home : fixture.away;
+      if (team.code === 'TBD' || team.iso === 'tbd') continue;
+
+      const entry = entryFor(team);
+      entry.volumeWei += BigInt(stake.amountWei);
+      entry.positions += 1;
+      entry.supporters.add(stake.staker.toLowerCase());
+      entry.lastActiveAt = Math.max(entry.lastActiveAt, stake.timestamp);
+    }
+
+    return Array.from(entries.values())
+      .sort((a, b) => {
+        const volumeDiff = b.volumeWei - a.volumeWei;
+        if (volumeDiff !== 0n) return volumeDiff > 0n ? 1 : -1;
+        if (a.supporters.size !== b.supporters.size) return b.supporters.size - a.supporters.size;
+        return b.lastActiveAt - a.lastActiveAt;
+      })
+      .slice(0, limit)
+      .map((entry, index) => ({
+        rank: index + 1,
+        code: entry.code,
+        name: entry.name,
+        iso: entry.iso,
+        volumeWei: entry.volumeWei.toString(),
+        positions: entry.positions,
+        supporters: entry.supporters.size,
+        lastActiveAt: entry.lastActiveAt,
+      }));
+  }
+
   syncChampionSeason(seasonNumber: number): void {
     if (!Number.isFinite(seasonNumber) || seasonNumber < 1) return;
 
