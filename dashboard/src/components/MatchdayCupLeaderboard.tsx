@@ -1,33 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
-import { formatUnits, parseAbiItem, zeroAddress } from 'viem';
 import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
 import { fanDisplayName, getStoredProfileName, shortWallet } from '../lib/fanProfile';
-import { xLayerPublicClient } from '../lib/publicClient';
-import { FANVIBE_TOKEN_ADDRESS } from '../lib/fanvibeToken';
 import { explorerAddr } from '../lib/chain';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
-const FVB_TRANSFER_FROM_BLOCK = 62_489_600n;
-const HOLDER_ELIGIBILITY_CAP_WEI = 450_000n * 10n ** 18n;
 const LEADERBOARD_BATCH_SIZE = 20;
-const ERC20_BALANCE_ABI = [
-  {
-    type: 'function',
-    name: 'balanceOf',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
-const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
 
-interface HolderEntry {
+interface MatchdayEntry {
   rank: number;
   address: string;
-  balanceWei: bigint;
-  eligibleWei: bigint;
+  displayName?: string;
+  volumeWei: string;
+  returnedWei: string;
+  wins: number;
+  losses: number;
+  active: number;
+  refunded: number;
+  positions: number;
+  winRate: number | null;
+  lastActiveAt: number;
 }
 
 interface CountrySupportEntry {
@@ -50,80 +43,44 @@ function compactUsd(value: string | null): string {
   return value?.replace(/^US/, '') ?? '$0.00';
 }
 
-function compactTokenBalance(value: bigint): string {
-  const n = Number(formatUnits(value, 18));
+function formatOkbVolume(value: string): string {
+  const n = Number(value) / 1e18;
   if (!Number.isFinite(n)) return '0';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 1 : 2)}K`;
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return n > 0 ? '< 1' : '0';
+  if (n >= 100) return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 3 });
+  return n > 0 ? n.toFixed(4) : '0';
 }
 
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
 export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
-  const [activeBoard, setActiveBoard] = useState<'holders' | 'countries'>('holders');
-  const [holders, setHolders] = useState<HolderEntry[]>([]);
+  const [activeBoard, setActiveBoard] = useState<'matchday' | 'countries'>('matchday');
+  const [matchdayEntries, setMatchdayEntries] = useState<MatchdayEntry[]>([]);
   const [countrySupport, setCountrySupport] = useState<CountrySupportEntry[]>([]);
-  const [holdersLoaded, setHoldersLoaded] = useState(false);
+  const [matchdayLoaded, setMatchdayLoaded] = useState(false);
   const [supportLoaded, setSupportLoaded] = useState(false);
-  const [visibleHolders, setVisibleHolders] = useState(LEADERBOARD_BATCH_SIZE);
+  const [visibleMatchday, setVisibleMatchday] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleCountries, setVisibleCountries] = useState(LEADERBOARD_BATCH_SIZE);
 
   useEffect(() => {
     let cancelled = false;
-    const refresh = async () => {
-      try {
-        const logs = await xLayerPublicClient.getLogs({
-          address: FANVIBE_TOKEN_ADDRESS as `0x${string}`,
-          event: TRANSFER_EVENT,
-          fromBlock: FVB_TRANSFER_FROM_BLOCK,
-          toBlock: 'latest',
+    const refresh = () => {
+      fetch(`${BACKEND_HTTP}/matchday-cup/leaderboard?limit=50`)
+        .then(res => res.ok ? res.json() : Promise.reject(new Error('matchday leaderboard')))
+        .then((data: { entries?: MatchdayEntry[] }) => {
+          if (cancelled) return;
+          setMatchdayEntries(data.entries ?? []);
+          setMatchdayLoaded(true);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMatchdayEntries([]);
+          setMatchdayLoaded(true);
         });
-        if (cancelled) return;
-
-        const candidates = new Set<string>();
-        logs.forEach(log => {
-          const from = log.args.from?.toLowerCase();
-          const to = log.args.to?.toLowerCase();
-          if (from && from !== zeroAddress) candidates.add(from);
-          if (to && to !== zeroAddress) candidates.add(to);
-        });
-
-        const balances = await Promise.all(
-          Array.from(candidates).map(async candidate => {
-            const balance = await xLayerPublicClient.readContract({
-              address: FANVIBE_TOKEN_ADDRESS as `0x${string}`,
-              abi: ERC20_BALANCE_ABI,
-              functionName: 'balanceOf',
-              args: [candidate as `0x${string}`],
-            });
-            return { address: candidate, balance };
-          }),
-        );
-        if (cancelled) return;
-
-        const ranked = balances
-          .filter(item => item.balance > 0n)
-          .sort((a, b) => a.balance === b.balance ? 0 : a.balance > b.balance ? -1 : 1)
-          .slice(0, 50)
-          .map((item, index) => ({
-            rank: index + 1,
-            address: item.address,
-            balanceWei: item.balance,
-            eligibleWei: item.balance > HOLDER_ELIGIBILITY_CAP_WEI ? HOLDER_ELIGIBILITY_CAP_WEI : item.balance,
-          }));
-        setHolders(ranked);
-        setHoldersLoaded(true);
-      } catch {
-        if (cancelled) return;
-        setHolders([]);
-        setHoldersLoaded(true);
-      }
     };
     refresh();
-    const timer = setInterval(refresh, 60_000);
+    const timer = setInterval(refresh, 20_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -154,15 +111,15 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
     };
   }, []);
 
-  const visibleHolderRows = holders.slice(0, visibleHolders);
+  const visibleMatchdayRows = matchdayEntries.slice(0, visibleMatchday);
   const visibleCountryRows = countrySupport.slice(0, visibleCountries);
-  const activeRowsLoaded = activeBoard === 'holders' ? holdersLoaded : supportLoaded;
-  const hasMoreRows = activeBoard === 'holders'
-    ? visibleHolders < holders.length
+  const activeRowsLoaded = activeBoard === 'matchday' ? matchdayLoaded : supportLoaded;
+  const hasMoreRows = activeBoard === 'matchday'
+    ? visibleMatchday < matchdayEntries.length
     : visibleCountries < countrySupport.length;
   const showMoreRows = () => {
-    if (activeBoard === 'holders') {
-      setVisibleHolders(count => Math.min(count + LEADERBOARD_BATCH_SIZE, holders.length));
+    if (activeBoard === 'matchday') {
+      setVisibleMatchday(count => Math.min(count + LEADERBOARD_BATCH_SIZE, matchdayEntries.length));
     } else {
       setVisibleCountries(count => Math.min(count + LEADERBOARD_BATCH_SIZE, countrySupport.length));
     }
@@ -205,10 +162,10 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
             <div className="inline-flex rounded-md dark:bg-zinc-900 bg-zinc-100 p-0.5">
               <button
                 type="button"
-                onClick={() => setActiveBoard('holders')}
-                className={`rounded px-3 py-1.5 text-xs font-bold transition-colors ${activeBoard === 'holders' ? 'dark:bg-white bg-zinc-950 dark:text-zinc-950 text-white' : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-white hover:text-zinc-950'}`}
+                onClick={() => setActiveBoard('matchday')}
+                className={`rounded px-3 py-1.5 text-xs font-bold transition-colors ${activeBoard === 'matchday' ? 'dark:bg-white bg-zinc-950 dark:text-zinc-950 text-white' : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-white hover:text-zinc-950'}`}
               >
-                Top FVB holders
+                Matchday ranking
               </button>
               <button
                 type="button"
@@ -219,18 +176,19 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
               </button>
             </div>
             <div className="text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
-              {activeBoard === 'holders' ? `${holders.length} holders indexed` : `${countrySupport.length} countries ranked`}
+              {activeBoard === 'matchday' ? `${matchdayEntries.length} fans ranked` : `${countrySupport.length} countries ranked`}
             </div>
           </div>
 
           <div className="mt-3 overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200">
-            {activeBoard === 'holders' ? (
-              visibleHolderRows.length === 0 ? (
+            {activeBoard === 'matchday' ? (
+              visibleMatchdayRows.length === 0 ? (
                 <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
-                  {activeRowsLoaded ? 'FVB holder rankings appear after token transfers are indexed.' : 'Loading FVB holders...'}
+                  {activeRowsLoaded ? 'The first real World Cup stake starts the Matchday Cup ranking.' : 'Loading Matchday rankings...'}
                 </div>
-              ) : visibleHolderRows.map(entry => {
-                const profileName = getStoredProfileName(entry.address);
+              ) : visibleMatchdayRows.map(entry => {
+                const profileName = entry.displayName ?? getStoredProfileName(entry.address);
+                const volumeUsd = compactUsd(formatOkbUsdFromWei(entry.volumeWei, okbUsd));
                 return (
                   <a
                     key={entry.address}
@@ -249,8 +207,12 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xs font-bold tabular-nums dark:text-white text-zinc-950">{compactTokenBalance(entry.eligibleWei)} FVB</div>
-                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{compactTokenBalance(entry.balanceWei)} held</div>
+                      <div className="text-xs font-bold tabular-nums dark:text-white text-zinc-950">
+                        {entry.wins}W / {entry.active} live
+                      </div>
+                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">
+                        {formatOkbVolume(entry.volumeWei)} OKB - {volumeUsd}
+                      </div>
                     </div>
                   </a>
                 );
