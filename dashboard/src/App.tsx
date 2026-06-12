@@ -1197,6 +1197,13 @@ export default function App() {
   const worldCupLiveRailEntries = worldCupLiveEntries.length > 1
     ? [...worldCupLiveEntries, ...worldCupLiveEntries]
     : worldCupLiveEntries;
+  const matchdayPrizeTeams = Array.from(new Map(
+    simFixtures
+      .filter(fixture => fixture.status !== 'settled')
+      .flatMap(fixture => [fixture.home, fixture.away])
+      .filter(team => team.code !== 'TBD' && team.iso !== 'tbd')
+      .map(team => [team.code, team])
+  ).values()).slice(0, 8);
   const settlementNoticeItems = [...settlements]
     .reverse()
     .map((settlement) => {
@@ -1501,89 +1508,78 @@ export default function App() {
 
         {activeTab === 'home' && homeCupView === 'matches' && (
           <section
-            className="fanvibe-live-panel rounded-lg border border-white/10 p-4 shadow-sm"
+            className="fanvibe-live-panel rounded-lg border border-white/10 p-3 shadow-sm sm:p-4"
             style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
           >
-            <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_300px]">
+            <div className="relative z-10 grid gap-4 lg:grid-cols-[1fr_245px]">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-blue-100/90">
                   <Trophy size={13} />
                   FVB Matchday Cup
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                <h2 className="mt-1.5 text-xl font-semibold tracking-tight text-white sm:text-2xl">
                   World Cup match stakes now power the $200 Matchday Cup.
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-200/90">
+                <p className="mt-2 max-w-2xl text-sm leading-5 text-zinc-200/90">
                   Stake OKB on real World Cup fixtures, hold $FVB with the same wallet, and climb the fan leaderboard. $FVB is FanVibe's World Cup token on X Layer.
                 </p>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="mt-3 space-y-1.5">
                   {[
-                    ['1', 'Stake OKB', 'Back real match outcomes before kick-off.'],
-                    ['2', 'Hold $FVB', 'Keep $FVB in the wallet you use to play.'],
-                    ['3', 'Rank up', 'Volume, wins, and activity move the leaderboard.'],
-                  ].map(([step, title, copy]) => (
-                    <div key={step} className="rounded-lg border border-white/10 bg-black/30 px-3 py-3 backdrop-blur-[2px]">
-                      <div className="flex items-center gap-2">
-                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-blue-500 text-[11px] font-black text-white">{step}</span>
-                        <span className="text-xs font-bold text-white">{title}</span>
-                      </div>
-                      <div className="mt-2 text-[11px] leading-5 text-zinc-300">{copy}</div>
+                    ['1', 'Stake OKB on live matches'],
+                    ['2', 'Hold $FVB in the same wallet'],
+                    ['3', 'Win, stay active, climb the board'],
+                  ].map(([step, title]) => (
+                    <div key={step} className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-blue-500 text-[10px] font-black text-white">{step}</span>
+                      <span>{title}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="rounded-lg border border-white/10 bg-black/35 p-3 backdrop-blur-[2px]">
-                <div className="grid grid-cols-[76px_1fr] gap-3">
-                  <a
-                    href={FANVIBE_TOKEN_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-black/40"
-                    aria-label="Open FanVibe World Cup token"
-                  >
-                    <img src={FANVIBE_TOKEN_LOGO} alt="" className="h-full min-h-[116px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
-                  </a>
-                  <div className="min-w-0">
+              <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-3 backdrop-blur-[2px]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
                     <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-400">Prize pool</div>
                     <div className="mt-1 text-3xl font-semibold leading-none text-white">$200</div>
-                    <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
-                      {[
-                        ['1st', '$100'],
-                        ['2nd', '$60'],
-                        ['3rd', '$30'],
-                      ].map(([label, value]) => (
-                        <div key={label} className="rounded-md border border-white/10 bg-white/5 px-2 py-2">
-                          <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{label}</div>
-                          <div className="mt-1 text-xs font-bold text-white">{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-2 rounded-md border border-white/10 bg-white/5 px-2 py-2 text-[11px] font-semibold text-zinc-300">
-                      Wildcard reward: <span className="text-white">$10</span>
+                  </div>
+                  <div className="matchday-prize-orb" aria-hidden="true">
+                    <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
+                    <div className="matchday-prize-flags">
+                      {matchdayPrizeTeams.map(team => {
+                        const flag = flagUrl(team.iso);
+                        return flag ? <img key={team.code} src={flag} alt="" /> : null;
+                      })}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 space-y-1.5 text-sm font-semibold text-zinc-200">
+                  <div className="flex items-center justify-between"><span>1st</span><span className="text-white">$100</span></div>
+                  <div className="flex items-center justify-between"><span>2nd</span><span className="text-white">$60</span></div>
+                  <div className="flex items-center justify-between"><span>3rd</span><span className="text-white">$30</span></div>
+                  <div className="flex items-center justify-between text-xs text-zinc-300"><span>Wildcard reward</span><span className="text-white">$10</span></div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   <a
                     href={FANVIBE_TOKEN_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
+                    className="inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-white px-2 text-[11px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
                   >
                     Buy $FVB
-                    <ExternalLink size={12} />
+                    <ExternalLink size={10} />
                   </a>
                   <a
                     href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
+                    className="inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md border border-white/10 px-2 text-[11px] font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
                   >
                     Contract
-                    <ExternalLink size={12} />
+                    <ExternalLink size={10} />
                   </a>
                 </div>
               </div>
@@ -1866,32 +1862,6 @@ export default function App() {
             ))}
           </div>
         ))}
-
-        {/* -- Realtime mode notice ---------------------------------------- */}
-        {activeTab === 'home' && homeCupView === 'matches' && viewMode === 'realtime' && (
-          <div
-            className="fanvibe-live-panel rounded-xl border border-white/10 p-4 flex items-start gap-3 shadow-sm"
-            style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
-          >
-            <Globe size={18} className="relative z-10 text-blue-200 shrink-0 mt-0.5" />
-            <div className="relative z-10">
-              <div className="text-sm font-bold text-white mb-1 drop-shadow-sm">World Cup 2026 Live Data</div>
-              <div className="text-xs text-zinc-200/90 leading-relaxed">
-                {worldCupLiveDataActive ? (
-                  <>
-                    Live provider feed active for World Cup fixtures. Staking is available on provider-backed matches only.
-                    Feed: <span className="font-semibold text-white">{worldCupSourceLabel}</span> ({worldCupFreshness}).
-                  </>
-                ) : (
-                  <>
-                    Real provider feed is not active, so World Cup match staking is paused. Configure Sportmonks and reload before opening real-match markets.
-                    Feed: <span className="font-semibold text-white">{worldCupSourceLabel}</span> ({worldCupFreshness}).
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* -- Champion prediction market --------------------------------- */}
         {activeTab === 'home' && viewMode === 'simulated' && seasonHydrated && (
