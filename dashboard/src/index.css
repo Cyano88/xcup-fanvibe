@@ -274,42 +274,27 @@
 
 .matchday-prize-orb {
   position: relative;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   border-radius: 999px;
   background: transparent;
-  filter: drop-shadow(0 7px 10px rgba(0, 0, 0, 0.42));
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.4));
   transform-style: preserve-3d;
   animation: matchdayPrizeBounce 4.8s ease-in-out infinite;
-}
-
-.matchday-prize-orb::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.12) 25%, transparent 48%),
-    radial-gradient(circle at 68% 76%, rgba(0, 0, 0, 0.36), transparent 54%);
-  box-shadow:
-    inset -6px -8px 10px rgba(0, 0, 0, 0.28),
-    inset 4px 4px 8px rgba(255, 255, 255, 0.12);
 }
 
 .matchday-prize-ball,
 .matchday-prize-flags img {
   position: absolute;
   inset: 0;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   object-fit: cover;
   border: 0;
   background: transparent;
-  box-shadow: inset -8px -9px 12px rgba(0, 0, 0, 0.24);
+  box-shadow: none;
 }
 
 .matchday-prize-ball {

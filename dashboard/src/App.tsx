@@ -1511,18 +1511,19 @@ export default function App() {
             className="fanvibe-live-panel rounded-lg border border-white/10 p-3 shadow-sm sm:p-4"
             style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
           >
-            <div className="relative z-10 grid gap-4 lg:grid-cols-[1fr_245px]">
+            <div className="relative z-10 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-blue-100/90">
-                  <Trophy size={13} />
+                <div className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.14em] text-blue-100/95">
+                  <Trophy size={15} />
                   FVB Matchday Cup
                 </div>
-                <h2 className="mt-1.5 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                  World Cup match stakes now power the $200 Matchday Cup.
-                </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-5 text-zinc-200/90">
                   Stake OKB on real World Cup fixtures, hold $FVB with the same wallet, and climb the fan leaderboard. $FVB is FanVibe's World Cup token on X Layer.
                 </p>
+                <div className="mt-2 inline-flex items-baseline gap-1.5 text-white">
+                  <span className="text-2xl font-semibold leading-none">$200</span>
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-300">Prize Pool</span>
+                </div>
 
                 <div className="mt-3 space-y-1.5">
                   {[
@@ -1538,48 +1539,42 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-2.5 backdrop-blur-[2px] sm:px-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-400">Prize pool</div>
-                    <div className="mt-0.5 text-2xl font-semibold leading-none text-white">$200</div>
-                  </div>
-                  <div className="matchday-prize-orb" aria-hidden="true">
-                    <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
-                    <div className="matchday-prize-flags">
-                      {matchdayPrizeTeams.map(team => {
-                        const flag = flagUrl(team.iso);
-                        return flag ? <img key={team.code} src={flag} alt="" /> : null;
-                      })}
-                    </div>
+              <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 px-2 py-2 backdrop-blur-[2px] lg:w-[318px]">
+                <div className="matchday-prize-orb" aria-hidden="true">
+                  <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
+                  <div className="matchday-prize-flags">
+                    {matchdayPrizeTeams.map(team => {
+                      const flag = flagUrl(team.iso);
+                      return flag ? <img key={team.code} src={flag} alt="" /> : null;
+                    })}
                   </div>
                 </div>
 
-                <div className="mt-2 space-y-1 text-xs font-semibold text-zinc-200">
-                  <div className="flex items-center justify-between"><span>1st</span><span className="text-white">$100</span></div>
-                  <div className="flex items-center justify-between"><span>2nd</span><span className="text-white">$60</span></div>
-                  <div className="flex items-center justify-between"><span>3rd</span><span className="text-white">$30</span></div>
-                  <div className="flex items-center justify-between text-[11px] text-zinc-300"><span>Wildcard reward</span><span className="text-white">$10</span></div>
+                <div className="grid min-w-0 flex-1 grid-cols-4 items-center gap-1 text-[10px] font-semibold text-zinc-300">
+                  <div className="leading-none"><span>1st</span><span className="ml-1 text-xs font-bold text-white">$100</span></div>
+                  <div className="leading-none"><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$60</span></div>
+                  <div className="leading-none"><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$30</span></div>
+                  <div className="leading-none"><span>Wild</span><span className="ml-1 text-xs font-bold text-white">$10</span></div>
                 </div>
 
-                <div className="mt-2 flex gap-1.5">
+                <div className="flex shrink-0 flex-col gap-1">
                   <a
                     href={FANVIBE_TOKEN_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-6 min-w-0 flex-1 items-center justify-center gap-1 rounded-md bg-white px-1.5 text-[10px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
+                    className="inline-flex h-5 items-center justify-center gap-1 rounded bg-white px-1.5 text-[9px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
                   >
-                    Buy $FVB
-                    <ExternalLink size={9} />
+                    Buy
+                    <ExternalLink size={8} />
                   </a>
                   <a
                     href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-6 min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-white/10 px-1.5 text-[10px] font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
+                    className="inline-flex h-5 items-center justify-center gap-1 rounded border border-white/10 px-1.5 text-[9px] font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
                   >
                     Contract
-                    <ExternalLink size={9} />
+                    <ExternalLink size={8} />
                   </a>
                 </div>
               </div>
