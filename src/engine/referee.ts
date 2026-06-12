@@ -45,6 +45,8 @@ const METABOLISM_INTERVAL_MS = 60_000;
 const OUTCOME_MAP: Record<number, Outcome> = { 0: 'home', 1: 'draw', 2: 'away' };
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
 const baseFixtureId = (fixtureId: string) => fixtureId.replace(/^s\d+-/, '');
+const MAX_PERSISTED_SETTLEMENTS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENTS ?? '200'));
+const MAX_PERSISTED_SETTLEMENT_JOBS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENT_JOBS ?? '200'));
 
 const TBD_TEAM: Team = { name: 'TBD', code: 'TBD', flag: '🏆', iso: 'un' };
 const NEXT_SIM_KICKOFF_MS = Number(process.env.SIM_NEXT_KICKOFF_MS ?? '30000');
@@ -642,8 +644,8 @@ export class RefereeEngine {
     this.stakes = new Map(stored.stakes.map(stake => [stake.txHash, stake]));
     this.rejectedStakeRefunds = new Map(stored.rejectedStakeRefunds.map(refund => [refund.txHash, refund]));
     this.pools = new Map(stored.pools.map(pool => [pool.fixtureId, pool]));
-    this.settlements = stored.settlements;
-    this.settlementJobs = new Map((stored.settlementJobs ?? []).map(job => [job.id, job]));
+    this.settlements = this.compactSettlements(stored.settlements ?? []);
+    this.settlementJobs = new Map(this.compactSettlementJobs(stored.settlementJobs ?? []).map(job => [job.id, job]));
     this.champStakes = stored.champStakes;
     this.champHistory = stored.champHistory ?? [];
     this.champPool = new Map(CHAMP_TEAMS.map(team => [team, BigInt(stored.champPool[team] ?? '0')]));
@@ -663,6 +665,11 @@ export class RefereeEngine {
       }
     }
 
+    const settlementDropCount = Math.max(0, (stored.settlements?.length ?? 0) - this.settlements.length);
+    const jobDropCount = Math.max(0, (stored.settlementJobs?.length ?? 0) - this.settlementJobs.size);
+    if (settlementDropCount || jobDropCount) {
+      this.log('SYSTEM', 'warn', `Compacted referee market history - dropped ${settlementDropCount} old settlements and ${jobDropCount} old settlement jobs.`);
+    }
     this.log('SYSTEM', 'success', `Loaded referee market history - ${this.stakes.size} stakes, ${this.settlements.length} settlements.`);
   }
 
@@ -716,8 +723,8 @@ export class RefereeEngine {
       stakes: Array.from(this.stakes.values()),
       rejectedStakeRefunds: Array.from(this.rejectedStakeRefunds.values()),
       pools: Array.from(this.pools.values()),
-      settlements: this.settlements,
-      settlementJobs: Array.from(this.settlementJobs.values()),
+      settlements: this.compactSettlements(this.settlements),
+      settlementJobs: this.compactSettlementJobs(Array.from(this.settlementJobs.values())),
       champStakes: this.champStakes,
       champHistory: this.champHistory,
       champPool,
@@ -731,6 +738,38 @@ export class RefereeEngine {
 
   private async persistMarketStateNow(): Promise<void> {
     await writeRefereeMarket(this.marketSnapshot());
+  }
+
+  private compactSettlements(settlements: SettlementResult[]): SettlementResult[] {
+    const currentFixtureIds = new Set(this.fixtures.map(fixture => fixture.id));
+    const currentFixtureSettlements = new Map<string, SettlementResult>();
+
+    for (const settlement of settlements) {
+      if (!currentFixtureIds.has(settlement.fixtureId)) continue;
+      const existing = currentFixtureSettlements.get(settlement.fixtureId);
+      if (!existing || settlement.settledAt > existing.settledAt) {
+        currentFixtureSettlements.set(settlement.fixtureId, settlement);
+      }
+    }
+
+    const recent = [...settlements]
+      .sort((a, b) => b.settledAt - a.settledAt)
+      .slice(0, MAX_PERSISTED_SETTLEMENTS);
+
+    return [...new Map([...recent, ...currentFixtureSettlements.values()]
+      .map(settlement => [`${settlement.fixtureId}:${settlement.settledAt}`, settlement])).values()]
+      .sort((a, b) => a.settledAt - b.settledAt);
+  }
+
+  private compactSettlementJobs(jobs: PersistedSettlementJob[]): PersistedSettlementJob[] {
+    const paying = jobs.filter(job => job.status === 'paying');
+    const complete = jobs
+      .filter(job => job.status === 'complete')
+      .sort((a, b) => b.settledAt - a.settledAt)
+      .slice(0, MAX_PERSISTED_SETTLEMENT_JOBS);
+
+    return [...new Map([...paying, ...complete].map(job => [job.id, job])).values()]
+      .sort((a, b) => a.settledAt - b.settledAt);
   }
 
   async resetMarketState(fixtures = this.fixtures): Promise<void> {

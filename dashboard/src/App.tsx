@@ -403,8 +403,7 @@ export default function App() {
   const [phaseEndsAt, setPhaseEndsAt]           = useState(initialSeason.phaseEndsAt);
   const [seasonClockTick, setSeasonClockTick]   = useState(0);
 
-  const adminModeVisible = import.meta.env.VITE_ENABLE_ADMIN_TEST_MODE === 'true'
-    || new URLSearchParams(window.location.search).get('admin') === '1';
+  const simulationModeVisible = new URLSearchParams(window.location.search).get('sim') === '1';
 
   const wsRef                  = useRef<WebSocket | null>(null);
   const reconnectRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -424,8 +423,8 @@ export default function App() {
   }, [dark]);
 
   useEffect(() => {
-    if (!adminModeVisible && viewMode !== 'realtime') setViewMode('realtime');
-  }, [adminModeVisible, viewMode]);
+    if (!simulationModeVisible && viewMode !== 'realtime') setViewMode('realtime');
+  }, [simulationModeVisible, viewMode]);
 
   useEffect(() => {
     try {
@@ -1372,7 +1371,7 @@ export default function App() {
         {/* -- Mode toggle ------------------------------------------------- */}
         {(activeTab === 'home' || activeTab === 'search') && (
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          {adminModeVisible ? (
+          {simulationModeVisible ? (
             <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
               <button
                 onClick={() => setViewMode('simulated')}
@@ -1408,7 +1407,7 @@ export default function App() {
             </div>
           )}
 
-          {viewMode === 'simulated' && adminModeVisible && (
+          {viewMode === 'simulated' && simulationModeVisible && (
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 p-1 dark:bg-zinc-900 bg-zinc-100 rounded-xl border dark:border-zinc-800 border-zinc-200">
                 <button
