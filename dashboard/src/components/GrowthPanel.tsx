@@ -130,8 +130,8 @@ export function GrowthPanel({ address, okbUsd }: Props) {
   const pendingUsd = compactUsd(formatOkbUsdFromWei(referralSummary?.rewards.pendingWei ?? '0', okbUsd));
 
   return (
-    <div className="mt-4 grid min-w-0 gap-3">
-      <div className="min-w-0 rounded-lg border border-zinc-100 bg-white p-3 dark:border-zinc-900 dark:bg-zinc-950">
+    <div className="mt-4 grid min-w-0 gap-0 divide-y divide-zinc-100 dark:divide-zinc-900">
+      <div className="min-w-0 py-4">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
@@ -150,22 +150,22 @@ export function GrowthPanel({ address, okbUsd }: Props) {
             {copiedReferral ? 'Copied' : 'Copy'}
           </button>
         </div>
-        <div className="mt-3 min-w-0 rounded-md border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-900 dark:bg-zinc-900/60 dark:text-zinc-500">
+        <div className="mt-3 min-w-0 border-y border-zinc-100 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-900 dark:text-zinc-500">
           <div className="truncate">{referralLink}</div>
         </div>
         <div className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-600">
           {referralSource ? `Joined through ${shortWallet(referralSource)}.` : 'Invite rewards qualify after a first valid stake.'}
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <div className="rounded-md border border-zinc-100 px-2 py-2 dark:border-zinc-900">
+        <div className="mt-3 grid grid-cols-3 divide-x divide-zinc-100 border-y border-zinc-100 py-2 dark:divide-zinc-900 dark:border-zinc-900">
+          <div className="px-2">
             <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Invites</div>
             <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.count ?? 0}</div>
           </div>
-          <div className="rounded-md border border-zinc-100 px-2 py-2 dark:border-zinc-900">
+          <div className="px-2">
             <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Qualified</div>
             <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.qualified ?? 0}</div>
           </div>
-          <div className="rounded-md border border-zinc-100 px-2 py-2 dark:border-zinc-900">
+          <div className="px-2">
             <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Pending</div>
             <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
               {referralSummary?.rewards.pendingOKB ? Number(referralSummary.rewards.pendingOKB).toFixed(4) : '0.0000'} OKB
@@ -175,7 +175,7 @@ export function GrowthPanel({ address, okbUsd }: Props) {
         <div className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-600">
           {rewardLine}
         </div>
-        <div className="mt-3 flex min-w-0 items-center justify-between gap-3 rounded-md border border-zinc-100 bg-white px-3 py-2 dark:border-zinc-900 dark:bg-zinc-950">
+        <div className="mt-3 flex min-w-0 items-center justify-between gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
           <div className="min-w-0">
             <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Reward cycle</div>
             <div className="mt-1 truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
@@ -215,11 +215,11 @@ export function GrowthPanel({ address, okbUsd }: Props) {
         )}
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-900 dark:bg-transparent">
+      <div className="min-w-0 overflow-hidden py-1">
         <button
           type="button"
           onClick={() => setLeaderboardOpen(open => !open)}
-          className="flex w-full min-w-0 items-center justify-between gap-4 px-4 py-3 text-xs text-zinc-500 transition-colors hover:text-zinc-700 dark:bg-transparent dark:text-zinc-600 dark:hover:text-zinc-400"
+          className="flex w-full min-w-0 items-center justify-between gap-4 py-3 text-xs text-zinc-500 transition-colors hover:text-zinc-700 dark:bg-transparent dark:text-zinc-600 dark:hover:text-zinc-400"
         >
           <span className="flex min-w-0 items-center gap-2">
             <span className="flex shrink-0 items-center gap-2 font-semibold text-zinc-600 dark:text-zinc-400">
@@ -253,9 +253,9 @@ export function GrowthPanel({ address, okbUsd }: Props) {
         </button>
 
         {leaderboardOpen && (
-          <div className="space-y-2 border-t border-zinc-100 p-3 dark:border-zinc-900">
+          <div className="border-t border-zinc-100 dark:border-zinc-900">
             {leaderboard.length === 0 ? (
-              <div className="rounded-md border border-zinc-100 px-3 py-6 text-center text-sm text-zinc-500 dark:border-zinc-900 dark:text-zinc-500">
+              <div className="px-3 py-6 text-center text-sm text-zinc-500 dark:text-zinc-500">
                 Rankings appear after the first public stakes.
               </div>
             ) : expandedEntries.map(entry => {
@@ -263,7 +263,7 @@ export function GrowthPanel({ address, okbUsd }: Props) {
               const volumeUsd = compactUsd(formatOkbUsdFromWei(entry.volumeWei, okbUsd));
               const winRate = entry.winRate === null ? '--' : `${Math.round(entry.winRate * 100)}%`;
               return (
-                <div key={entry.address} className="grid min-w-0 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-md border border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-900 dark:bg-zinc-900/55">
+                <div key={entry.address} className="grid min-w-0 grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-zinc-100 px-1 py-3 last:border-b-0 dark:border-zinc-900">
                   <div className="grid h-7 w-7 place-items-center rounded bg-zinc-950 text-xs font-black text-white dark:bg-white dark:text-zinc-950">
                     {entry.rank}
                   </div>

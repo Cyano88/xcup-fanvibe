@@ -1998,10 +1998,10 @@ export default function App() {
 
         {/* -- Activity feed toggle ---------------------------------------- */}
         {activeTab === 'portfolio' && (
-        <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
+        <div className="border-t dark:border-zinc-900 border-zinc-200">
           <button
             onClick={() => setLogOpen(o => !o)}
-            className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
+            className="w-full flex items-center justify-between gap-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-transparent"
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="font-semibold dark:text-zinc-400 text-zinc-600">Account Activity</span>
@@ -2065,10 +2065,10 @@ export default function App() {
 
         {/* -- Proof panel ------------------------------------------------- */}
         {activeTab === 'portfolio' && (
-        <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
+        <div className="border-t dark:border-zinc-900 border-zinc-200">
           <button
             onClick={() => setProofOpen(o => !o)}
-            className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-white"
+            className="w-full flex items-center justify-between gap-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:hover:text-zinc-400 hover:text-zinc-700 transition-colors dark:bg-transparent bg-transparent"
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="font-semibold dark:text-zinc-400 text-zinc-600">Why X Layer</span>
@@ -2080,7 +2080,7 @@ export default function App() {
           </button>
 
           {proofOpen && (
-            <div className="border-t dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950/80 bg-white px-4 py-4">
+            <div className="border-t dark:border-zinc-900 border-zinc-100 py-4">
               <div className="mb-4 max-w-3xl">
                 <div className="text-sm font-semibold dark:text-zinc-100 text-zinc-900">
                   X Layer keeps FanVibe fast, auditable, and payout-ready.
@@ -2134,11 +2134,11 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-3 text-xs leading-relaxed dark:text-zinc-400 text-zinc-600">
+              <div className="mt-4 border-t dark:border-zinc-900 border-zinc-100 pt-3 text-xs leading-relaxed dark:text-zinc-400 text-zinc-600">
                 FanVibe keeps every stake, result, and payout easy to review. Completed payouts link to public records so users can confirm market outcomes.
               </div>
 
-              <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-3">
+              <div className="mt-4 border-t dark:border-zinc-900 border-zinc-100 pt-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Experimental v4 Hook</div>
@@ -2173,21 +2173,21 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
+              <div className="mt-4 grid grid-cols-2 divide-x divide-y dark:divide-zinc-900 divide-zinc-100 border-t border-b dark:border-zinc-900 border-zinc-100 md:grid-cols-4 md:divide-y-0">
+                <div className="px-3 py-3">
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Platform Volume</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fmtOKBWei(proofPlatformVolumeWei)}</div>
                   {proofPoolUsd && <div className="mt-0.5 text-xs dark:text-zinc-500 text-zinc-500">{proofPoolUsd}</div>}
                 </div>
-                <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
+                <div className="px-3 py-3">
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Open Markets</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{fixtures.filter(f => f.status === 'open').length}</div>
                 </div>
-                <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
+                <div className="px-3 py-3">
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Payouts</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{payoutSettlementCount}</div>
                 </div>
-                <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2">
+                <div className="px-3 py-3">
                   <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Season</div>
                   <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{seasonLabel}</div>
                   <div className="mt-0.5 truncate text-[10px] dark:text-zinc-600 text-zinc-400">{liveSeasonStageCode}</div>
@@ -2197,30 +2197,30 @@ export default function App() {
               <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Recent Stakes</div>
-                  <div className="space-y-2">
+                  <div className="divide-y dark:divide-zinc-900 divide-zinc-100 border-y dark:border-zinc-900 border-zinc-100">
                     {proofStakeTxs.length > 0 ? proofStakeTxs.map(log => (
-                      <a key={`${log.id}-${log.txHash}`} href={explorerTx(log.txHash!)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs transition-colors dark:hover:border-blue-500/40 hover:border-blue-300">
+                      <a key={`${log.id}-${log.txHash}`} href={explorerTx(log.txHash!)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 py-2 text-xs transition-colors hover:text-blue-500">
                         <span className="min-w-0 truncate dark:text-zinc-300 text-zinc-700">{log.message}</span>
                         <span className="shrink-0 font-semibold tabular-nums dark:text-zinc-500 text-zinc-500">{shortAddr(log.txHash!)}</span>
                       </a>
                     )) : (
-                      <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs dark:text-zinc-500 text-zinc-500">No stake transactions indexed yet.</div>
+                      <div className="py-2 text-xs dark:text-zinc-500 text-zinc-500">No stake transactions indexed yet.</div>
                     )}
                   </div>
                 </div>
 
                 <div>
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Recent Payouts</div>
-                  <div className="space-y-2">
+                  <div className="divide-y dark:divide-zinc-900 divide-zinc-100 border-y dark:border-zinc-900 border-zinc-100">
                     {proofPayoutTxs.length > 0 ? proofPayoutTxs.map(payout => (
-                      <a key={`${payout.fixtureId}-${payout.txHash}`} href={explorerTx(payout.txHash)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs transition-colors dark:hover:border-blue-500/40 hover:border-blue-300">
+                      <a key={`${payout.fixtureId}-${payout.txHash}`} href={explorerTx(payout.txHash)} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 py-2 text-xs transition-colors hover:text-blue-500">
                         <span className="min-w-0 truncate dark:text-zinc-300 text-zinc-700">{payout.fixtureId} payout</span>
                         <span className="shrink-0 font-semibold tabular-nums dark:text-zinc-500 text-zinc-500">
                           {fmtOKBWei(payout.amountWei)}{formatOkbUsdFromWei(payout.amountWei, okbUsd) ? ` (${formatOkbUsdFromWei(payout.amountWei, okbUsd)})` : ''} - {shortAddr(payout.txHash)}
                         </span>
                       </a>
                     )) : (
-                      <div className="rounded-lg border dark:border-zinc-900 border-zinc-100 px-3 py-2 text-xs dark:text-zinc-500 text-zinc-500">Payout links appear after a settled match has winners.</div>
+                      <div className="py-2 text-xs dark:text-zinc-500 text-zinc-500">Payout links appear after a settled match has winners.</div>
                     )}
                   </div>
                 </div>

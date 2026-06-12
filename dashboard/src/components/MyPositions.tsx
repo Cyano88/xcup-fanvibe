@@ -770,7 +770,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
   ]);
 
   return (
-    <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950 bg-white p-3">
+    <div className="mt-4 border-t dark:border-zinc-900 border-zinc-100 pt-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Wallet Balance</div>
@@ -793,7 +793,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             </div>
           </div>
         </div>
-        <div className="inline-flex self-start rounded-md border dark:border-zinc-800 border-zinc-200 p-0.5 sm:self-auto">
+        <div className="inline-flex self-start rounded-md bg-zinc-100 p-0.5 dark:bg-zinc-900 sm:self-auto">
           <button
             type="button"
             onClick={() => setMode('balance')}
@@ -823,7 +823,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
       </div>
 
       {mode === 'balance' ? (
-        <div className="mt-3 flex items-center justify-between rounded-md dark:bg-zinc-900/45 bg-zinc-50 px-3 py-2">
+        <div className="mt-3 flex items-center justify-between border-t dark:border-zinc-900 border-zinc-100 pt-3">
           <span className="text-xs dark:text-zinc-500 text-zinc-500">Available for stakes and transfers</span>
           <button
             type="button"
@@ -866,7 +866,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
           {transferUsd && <div className="hidden text-[10px] font-medium tabular-nums text-zinc-400 md:block md:col-start-2">{transferUsd}</div>}
         </div>
       ) : (
-        <div className="mt-3 rounded-md dark:bg-zinc-900/45 bg-zinc-50 p-3">
+        <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold dark:text-zinc-200 text-zinc-800">Buy FVB</div>
@@ -912,7 +912,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
                         setBuyMessage('');
                         setBuyTxHash(null);
                       }}
-                      className="rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-400 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
+                      className="rounded-md bg-zinc-100 px-2 py-1.5 text-xs font-semibold dark:bg-zinc-900 dark:text-zinc-400 text-zinc-500 transition-colors hover:text-blue-500"
                     >
                       ${usd}
                     </button>
@@ -922,7 +922,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
                     key={okbAmount}
                     type="button"
                     onClick={() => setBuyAmount(okbAmount)}
-                    className="rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-400 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
+                    className="rounded-md bg-zinc-100 px-2 py-1.5 text-xs font-semibold dark:bg-zinc-900 dark:text-zinc-400 text-zinc-500 transition-colors hover:text-blue-500"
                   >
                     {okbAmount} OKB
                   </button>
@@ -945,11 +945,21 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <span className="font-semibold tabular-nums dark:text-zinc-300 text-zinc-700">{buyQuoteLoading ? 'Quoting...' : `${formatFvbBalance(buyQuoteWei)} FVB est.`}</span>
           </div>
 
-          {belowMinimum && <div className="mt-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600 dark:text-amber-300">Minimum buy is $10 worth of OKB.</div>}
-          {remainingEligibilityWei === null && <div className="mt-2 rounded-md bg-zinc-500/10 px-3 py-2 text-xs font-semibold dark:text-zinc-400 text-zinc-500">Syncing FVB balance before buy limits are applied.</div>}
-          {aboveEligibilityMax && <div className="mt-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600 dark:text-amber-300">This buy is above your remaining 450K FVB eligibility room.</div>}
-          {remainingEligibilityWei === 0n && <div className="mt-2 rounded-md bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">This wallet already meets the FVB eligibility cap.</div>}
-          {buyMessage && <div className="mt-2 rounded-md bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">{buyMessage}</div>}
+          <div className="mt-2 min-h-[18px] text-[11px] font-medium">
+            {belowMinimum ? (
+              <span className="text-amber-600 dark:text-amber-300">Minimum buy is $10 worth of OKB.</span>
+            ) : remainingEligibilityWei === null ? (
+              <span className="dark:text-zinc-500 text-zinc-500">Syncing FVB balance before buy limits are applied.</span>
+            ) : aboveEligibilityMax ? (
+              <span className="text-amber-600 dark:text-amber-300">This buy is above your remaining 450K FVB eligibility room.</span>
+            ) : remainingEligibilityWei === 0n ? (
+              <span className="text-emerald-600 dark:text-emerald-300">This wallet already meets the FVB eligibility cap.</span>
+            ) : buyMessage ? (
+              <span className="text-emerald-600 dark:text-emerald-300">{buyMessage}</span>
+            ) : (
+              <span className="dark:text-zinc-600 text-zinc-400">Buy with the same wallet you use for match stakes.</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -1219,16 +1229,16 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/50 bg-zinc-50 px-3 py-2">
+        <div className="mt-4 grid grid-cols-3 divide-x dark:divide-zinc-900 divide-zinc-100 border-t border-b dark:border-zinc-900 border-zinc-100 py-3">
+          <div className="px-3">
             <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Positions</div>
             <div className="mt-1 text-lg font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{positions.length}</div>
           </div>
-          <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/50 bg-zinc-50 px-3 py-2">
+          <div className="px-3">
             <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Active</div>
             <div className="mt-1 text-lg font-semibold tabular-nums text-blue-600 dark:text-blue-400">{summary.active}</div>
           </div>
-          <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/50 bg-zinc-50 px-3 py-2">
+          <div className="px-3">
             <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Volume</div>
             <div className="mt-1 text-lg font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatOKB(summary.totalWei.toString())}</div>
             {volumeUsd && <div className="mt-0.5 text-[10px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{volumeUsd}</div>}
@@ -1245,9 +1255,9 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
 
       {address && (
         <div className="p-4">
-          <div className="mb-3 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Settlements</div>
+          <div className="mb-3 border-b dark:border-zinc-900 border-zinc-100 pb-2 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Settlements</div>
           {positions.length === 0 ? (
-            <div className="rounded-md border dark:border-zinc-900 border-zinc-100 px-3 py-6 text-center text-sm dark:text-zinc-500 text-zinc-500">
+            <div className="px-3 py-6 text-center text-sm dark:text-zinc-500 text-zinc-500">
               {!positionsLoaded || positionsLoading ? 'Updating...' : 'No stakes found for this wallet yet.'}
             </div>
           ) : (
@@ -1332,7 +1342,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     onWatch?.(liveFixture.id);
                   }
                   } : undefined}
-                  className={`position-row flex items-center justify-between gap-3 rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950 bg-white px-3 py-3 shadow-sm ${canOpenMatch ? 'cursor-pointer transition-colors dark:hover:border-blue-500 hover:border-blue-500' : ''} ${flashGoal ? 'position-goal-flash' : ''}`}
+                  className={`position-row flex items-center justify-between gap-3 border-b dark:border-zinc-900 border-zinc-100 px-1 py-3 last:border-b-0 ${canOpenMatch ? 'cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/35' : ''} ${flashGoal ? 'position-goal-flash' : ''}`}
                 >
                   <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
