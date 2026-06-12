@@ -6,6 +6,7 @@ import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
 import { fanDisplayName, getStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { xLayerPublicClient } from '../lib/publicClient';
 import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
+import { explorerAddr } from '../lib/chain';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
@@ -268,15 +269,26 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
               <div className="mt-0.5 truncate text-xs font-medium text-zinc-300">{eligibilityDetail}</div>
             </div>
           </div>
-          <a
-            href={FANVIBE_TOKEN_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
-          >
-            Buy $FVB
-            <ExternalLink size={12} />
-          </a>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a
+              href={FANVIBE_TOKEN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
+            >
+              Buy $FVB
+              <ExternalLink size={12} />
+            </a>
+            <a
+              href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
+            >
+              Contract
+              <ExternalLink size={12} />
+            </a>
+          </div>
         </div>
 
         <div className="border-t border-white/10 pt-4">

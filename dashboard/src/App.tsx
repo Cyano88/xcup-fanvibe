@@ -18,7 +18,7 @@ import { shortAddr } from './lib/encode';
 import { flushPendingStakeReports } from './lib/stakeReport';
 import { captureReferralFromUrl } from './lib/accountData';
 import { formatOkbUsd, formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
-import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_LOGO, FANVIBE_TOKEN_URL } from './lib/fanvibeToken';
+import { FANVIBE_TOKEN_LOGO, FANVIBE_TOKEN_URL } from './lib/fanvibeToken';
 import {
   SEASON_GROUPS,
   DEFAULT_SEASON_TIMING,
@@ -1511,15 +1511,26 @@ export default function App() {
             className="fanvibe-live-panel rounded-lg border border-white/10 p-3 shadow-sm sm:p-4"
             style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
           >
-            <div className="relative z-10 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div className="relative z-10 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.14em] text-blue-100/95">
                   <Trophy size={15} />
                   FVB Matchday Cup
                 </div>
-                <p className="mt-2 max-w-2xl text-sm leading-5 text-zinc-200/90">
-                  Stake OKB on real World Cup fixtures, hold $FVB with the same wallet, and climb the fan leaderboard. $FVB is FanVibe's World Cup token on X Layer.
-                </p>
+                <div className="mt-2 flex max-w-2xl flex-wrap items-center gap-2">
+                  <p className="min-w-[220px] flex-1 text-sm leading-5 text-zinc-200/90">
+                    Stake OKB on real World Cup fixtures, hold $FVB with the same wallet, and climb the fan leaderboard. $FVB is FanVibe's World Cup token on X Layer.
+                  </p>
+                  <a
+                    href={FANVIBE_TOKEN_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
+                  >
+                    Buy $FVB
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
                 <div className="mt-2 inline-flex items-baseline gap-1.5 text-white">
                   <span className="text-2xl font-semibold leading-none">$200</span>
                   <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-300">Prize Pool</span>
@@ -1537,9 +1548,16 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-300">
+                  <div className="leading-none"><span>1st</span><span className="ml-1 text-xs font-bold text-white">$100</span></div>
+                  <div className="leading-none"><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$60</span></div>
+                  <div className="leading-none"><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$30</span></div>
+                  <div className="leading-none"><span>Wildcard</span><span className="ml-1 text-xs font-bold text-white">$10</span></div>
+                </div>
               </div>
 
-              <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 px-2 py-2 backdrop-blur-[2px] lg:w-[318px]">
+              <div className="flex justify-end">
                 <div className="matchday-prize-orb" aria-hidden="true">
                   <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
                   <div className="matchday-prize-flags">
@@ -1548,34 +1566,6 @@ export default function App() {
                       return flag ? <img key={team.code} src={flag} alt="" /> : null;
                     })}
                   </div>
-                </div>
-
-                <div className="grid min-w-0 flex-1 grid-cols-4 items-center gap-1 text-[10px] font-semibold text-zinc-300">
-                  <div className="leading-none"><span>1st</span><span className="ml-1 text-xs font-bold text-white">$100</span></div>
-                  <div className="leading-none"><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$60</span></div>
-                  <div className="leading-none"><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$30</span></div>
-                  <div className="leading-none"><span>Wild</span><span className="ml-1 text-xs font-bold text-white">$10</span></div>
-                </div>
-
-                <div className="flex shrink-0 flex-col gap-1">
-                  <a
-                    href={FANVIBE_TOKEN_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-5 items-center justify-center gap-1 rounded bg-white px-1.5 text-[9px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
-                  >
-                    Buy
-                    <ExternalLink size={8} />
-                  </a>
-                  <a
-                    href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-5 items-center justify-center gap-1 rounded border border-white/10 px-1.5 text-[9px] font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
-                  >
-                    Contract
-                    <ExternalLink size={8} />
-                  </a>
                 </div>
               </div>
             </div>
