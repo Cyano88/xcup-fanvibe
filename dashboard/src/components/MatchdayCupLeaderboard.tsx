@@ -21,6 +21,10 @@ interface MatchdayEntry {
   positions: number;
   winRate: number | null;
   lastActiveAt: number;
+  fvbBalanceWei?: string | null;
+  fvbEligibleWei?: string | null;
+  fvbEligibilityCapWei?: string;
+  fvbEligible?: boolean | null;
 }
 
 interface CountrySupportEntry {
@@ -49,6 +53,16 @@ function formatOkbVolume(value: string): string {
   if (n >= 100) return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
   if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 3 });
   return n > 0 ? n.toFixed(4) : '0';
+}
+
+function formatFvbBalance(value: string | null | undefined): string {
+  if (!value) return '0';
+  const n = Number(value) / 1e18;
+  if (!Number.isFinite(n)) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 1 : 2)}K`;
+  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return n > 0 ? '< 1' : '0';
 }
 
 const flagUrl = (iso: string) =>
@@ -189,6 +203,11 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
               ) : visibleMatchdayRows.map(entry => {
                 const profileName = entry.displayName ?? getStoredProfileName(entry.address);
                 const volumeUsd = compactUsd(formatOkbUsdFromWei(entry.volumeWei, okbUsd));
+                const fvbStatus = entry.fvbEligible === null || entry.fvbEligible === undefined
+                  ? 'FVB syncing'
+                  : entry.fvbEligible
+                    ? `${formatFvbBalance(entry.fvbEligibleWei)} FVB eligible`
+                    : 'Needs FVB';
                 return (
                   <a
                     key={entry.address}
@@ -203,7 +222,7 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
                         {fanDisplayName(entry.address, profileName)}
                       </div>
                       <div className="mt-0.5 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
-                        {shortWallet(entry.address)}
+                        {shortWallet(entry.address)} - {fvbStatus}
                       </div>
                     </div>
                     <div className="text-right">

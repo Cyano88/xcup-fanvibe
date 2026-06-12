@@ -100,6 +100,69 @@ const REWARD_RPC_URL = process.env.REWARD_RPC_URL
   ?? process.env.X_LAYER_HTTP_RPC
   ?? process.env.X_LAYER_RPC_URL
   ?? xLayerMainnet.rpcUrls.default.http[0];
+const FANVIBE_TOKEN_ADDRESS = (process.env.FANVIBE_TOKEN_ADDRESS ?? '0x35a676Ca9347499f97819813a38ED14e6a7C5e3F') as Address;
+const FVB_ELIGIBILITY_CAP_WEI = 450_000n * 10n ** 18n;
+const FVB_RPC_URL = process.env.FVB_RPC_URL
+  ?? process.env.X_LAYER_HTTP_RPC
+  ?? process.env.X_LAYER_RPC_URL
+  ?? xLayerMainnet.rpcUrls.default.http[0];
+const fvbPublicClient = createPublicClient({ chain: xLayerMainnet, transport: http(FVB_RPC_URL) });
+const ERC20_BALANCE_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
+
+async function attachFvbEligibility<T extends { address: string }>(entries: T[]) {
+  if (!entries.length) return entries.map(entry => ({
+    ...entry,
+    fvbBalanceWei: '0',
+    fvbEligibleWei: '0',
+    fvbEligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+    fvbEligible: false,
+  }));
+
+  try {
+    const balances = await fvbPublicClient.multicall({
+      allowFailure: true,
+      contracts: entries.map(entry => ({
+        address: FANVIBE_TOKEN_ADDRESS,
+        abi: ERC20_BALANCE_ABI,
+        functionName: 'balanceOf',
+        args: [entry.address as Address],
+      })),
+    });
+
+    return entries.map((entry, index) => {
+      const result = balances[index];
+      const balance = result?.status === 'success' ? result.result : null;
+      const eligibleWei = balance === null
+        ? null
+        : balance > FVB_ELIGIBILITY_CAP_WEI ? FVB_ELIGIBILITY_CAP_WEI : balance;
+      return {
+        ...entry,
+        fvbBalanceWei: balance?.toString() ?? null,
+        fvbEligibleWei: eligibleWei?.toString() ?? null,
+        fvbEligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+        fvbEligible: balance === null ? null : balance > 0n,
+      };
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[FanVibe] FVB eligibility lookup failed: ${msg}`);
+    return entries.map(entry => ({
+      ...entry,
+      fvbBalanceWei: null,
+      fvbEligibleWei: null,
+      fvbEligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+      fvbEligible: null,
+    }));
+  }
+}
 
 function rewardStatusFor(referral: PersistedReferral, side: ReferralRewardSide): ReferralRewardStatus | undefined {
   return side === 'referrer'
@@ -370,14 +433,14 @@ app.get('/leaderboard', (req, res) => {
   res.json({ entries });
 });
 
-app.get('/matchday-cup/leaderboard', (req, res) => {
+app.get('/matchday-cup/leaderboard', async (req, res) => {
   const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
   if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
   const entries = engine.getMatchdayCupLeaderboard(parsed.data).map(entry => ({
     ...entry,
     displayName: profileNameFor(entry.address),
   }));
-  res.json({ entries });
+  res.json({ entries: await attachFvbEligibility(entries) });
 });
 
 app.get('/matchday-cup/country-support', (req, res) => {
