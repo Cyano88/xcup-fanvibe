@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Send, Wallet, X } from 'lucide-react';
+import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Send, Wallet } from 'lucide-react';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import { encodeFunctionData, formatEther, formatUnits, isAddress, parseEther } from 'viem';
 import type { Fixture, MatchState, UserPosition } from '../types';
 import { REALTIME_FIXTURES } from '../types';
 import { explorerTx, xLayerMainnet } from '../lib/chain';
-import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
+import { FANVIBE_TOKEN_ADDRESS } from '../lib/fanvibeToken';
 import { baseFixtureId, seasonFixtureStartAtMs } from '../lib/seasonTournament';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
@@ -536,7 +536,6 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
   const [buyAmount, setBuyAmount] = useState('0.12');
   const [buyQuoteWei, setBuyQuoteWei] = useState<bigint | null>(null);
   const [buyQuoteLoading, setBuyQuoteLoading] = useState(false);
-  const [buyModalOpen, setBuyModalOpen] = useState(false);
   const [buyMessage, setBuyMessage] = useState('');
   const [pending, setPending] = useState(false);
   const [buyPending, setBuyPending] = useState(false);
@@ -638,7 +637,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
   }, [address]);
 
   useEffect(() => {
-    if (!buyModalOpen || buyAmountWei <= 0n) {
+    if (mode !== 'buy' || buyAmountWei <= 0n) {
       setBuyQuoteWei(null);
       setBuyQuoteLoading(false);
       return;
@@ -664,7 +663,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
     return () => {
       cancelled = true;
     };
-  }, [buyAmountWei, buyModalOpen]);
+  }, [buyAmountWei, mode]);
 
   const withdraw = useCallback(async () => {
     if (!wallet || pending) return;
@@ -772,33 +771,29 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
 
   return (
     <div className="mt-4 rounded-lg border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-950 bg-white p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1">
           <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Wallet Balance</div>
-          <div className="mt-1 grid gap-1.5 sm:grid-cols-3 sm:items-end">
+          <div className="mt-2 grid grid-cols-[1fr_1fr_auto] items-start gap-3">
             <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatBalance(balanceWei)}</span>
-                <span className="text-xs font-bold dark:text-zinc-500 text-zinc-400">OKB</span>
-              </div>
+              <div className="text-xl font-semibold tabular-nums dark:text-zinc-50 text-zinc-950 sm:text-2xl">{formatBalance(balanceWei)}</div>
+              <div className="mt-0.5 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">OKB</div>
               {balanceUsd && (
                 <div className="mt-0.5 text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{balanceUsd}</div>
               )}
             </div>
             <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-lg font-semibold tabular-nums dark:text-zinc-50 text-zinc-950">{formatFvbBalance(fvbBalanceWei)}</span>
-                <span className="text-xs font-bold dark:text-zinc-500 text-zinc-400">FVB</span>
-              </div>
+              <div className="text-xl font-semibold tabular-nums dark:text-zinc-50 text-zinc-950 sm:text-2xl">{formatFvbBalance(fvbBalanceWei)}</div>
+              <div className="mt-0.5 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">FVB</div>
               <div className="mt-0.5 text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{fvbUsd ?? 'Eligibility token'}</div>
             </div>
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Total</div>
-              <div className="mt-1 text-sm font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{totalUsd ?? 'Syncing'}</div>
+            <div className="text-right">
+              <div className="text-xl font-semibold tabular-nums dark:text-zinc-50 text-zinc-950 sm:text-2xl">{totalUsd ?? 'Syncing'}</div>
+              <div className="mt-0.5 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">Total</div>
             </div>
           </div>
         </div>
-        <div className="inline-flex rounded-md border dark:border-zinc-800 border-zinc-200 p-0.5">
+        <div className="inline-flex self-start rounded-md border dark:border-zinc-800 border-zinc-200 p-0.5 sm:self-auto">
           <button
             type="button"
             onClick={() => setMode('balance')}
@@ -817,7 +812,6 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             type="button"
             onClick={() => {
               setMode('buy');
-              setBuyModalOpen(true);
               setBuyMessage('');
               setBuyTxHash(null);
             }}
@@ -841,7 +835,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
           </button>
         </div>
-      ) : (
+      ) : mode === 'withdraw' ? (
         <div className="mt-3 grid gap-2 md:grid-cols-[1fr_120px_auto]">
           <input
             value={recipient}
@@ -871,6 +865,92 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
           </button>
           {transferUsd && <div className="hidden text-[10px] font-medium tabular-nums text-zinc-400 md:block md:col-start-2">{transferUsd}</div>}
         </div>
+      ) : (
+        <div className="mt-3 rounded-md dark:bg-zinc-900/45 bg-zinc-50 p-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold dark:text-zinc-200 text-zinc-800">Buy FVB</div>
+              <div className="mt-0.5 text-[11px] dark:text-zinc-500 text-zinc-500">Minimum $10. Eligible room {remainingEligibilityWei === null ? 'syncing' : `${formatFvbBalance(remainingEligibilityWei)} FVB`}.</div>
+            </div>
+            <button
+              type="button"
+              onClick={manualRefreshBalance}
+              className="rounded p-1.5 dark:text-zinc-500 text-zinc-500 transition-colors hover:text-blue-500"
+              title="Refresh balance"
+              aria-label="Refresh balance"
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+            <div>
+              <div className="relative">
+                <input
+                  id="portfolio-fvb-buy"
+                  value={buyAmount}
+                  onChange={event => {
+                    setBuyAmount(event.target.value.replace(/[^\d.]/g, ''));
+                    setBuyMessage('');
+                    setBuyTxHash(null);
+                  }}
+                  placeholder="0.00"
+                  inputMode="decimal"
+                  className="w-full rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 pr-11 text-sm tabular-nums dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">OKB</span>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {okbUsd ? [10, 25, 50].map(usd => {
+                  const okbAmount = (usd / okbUsd).toFixed(4);
+                  return (
+                    <button
+                      key={usd}
+                      type="button"
+                      onClick={() => {
+                        setBuyAmount(okbAmount);
+                        setBuyMessage('');
+                        setBuyTxHash(null);
+                      }}
+                      className="rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-400 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
+                    >
+                      ${usd}
+                    </button>
+                  );
+                }) : ['0.12', '0.25', '0.5'].map(okbAmount => (
+                  <button
+                    key={okbAmount}
+                    type="button"
+                    onClick={() => setBuyAmount(okbAmount)}
+                    className="rounded-md border dark:border-zinc-800 border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold dark:bg-zinc-950 dark:text-zinc-400 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
+                  >
+                    {okbAmount} OKB
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={buyFvb}
+              disabled={buyPending || buyQuoteLoading || !canBuyFvb}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 md:min-w-[110px]"
+            >
+              <Wallet size={13} />
+              {buyPending ? 'Confirming' : 'Buy'}
+            </button>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+            <span className="font-medium tabular-nums dark:text-zinc-500 text-zinc-500">{buyAmountUsd ?? 'US$0.00'}</span>
+            <span className="font-semibold tabular-nums dark:text-zinc-300 text-zinc-700">{buyQuoteLoading ? 'Quoting...' : `${formatFvbBalance(buyQuoteWei)} FVB est.`}</span>
+          </div>
+
+          {belowMinimum && <div className="mt-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600 dark:text-amber-300">Minimum buy is $10 worth of OKB.</div>}
+          {remainingEligibilityWei === null && <div className="mt-2 rounded-md bg-zinc-500/10 px-3 py-2 text-xs font-semibold dark:text-zinc-400 text-zinc-500">Syncing FVB balance before buy limits are applied.</div>}
+          {aboveEligibilityMax && <div className="mt-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600 dark:text-amber-300">This buy is above your remaining 450K FVB eligibility room.</div>}
+          {remainingEligibilityWei === 0n && <div className="mt-2 rounded-md bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">This wallet already meets the FVB eligibility cap.</div>}
+          {buyMessage && <div className="mt-2 rounded-md bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">{buyMessage}</div>}
+        </div>
       )}
 
       {txHash && (
@@ -880,133 +960,11 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
         </a>
       )}
 
-      {buyModalOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-[420px] overflow-hidden rounded-lg border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b dark:border-zinc-900 border-zinc-100 px-4 py-3">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Portfolio</div>
-                <h3 className="mt-1 text-lg font-semibold dark:text-zinc-50 text-zinc-950">Buy FVB</h3>
-                <p className="mt-1 text-xs leading-5 dark:text-zinc-500 text-zinc-500">Use OKB to get FVB for Matchday Cup eligibility.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setBuyModalOpen(false)}
-                className="rounded-md border dark:border-zinc-800 border-zinc-200 p-2 dark:text-zinc-500 text-zinc-500 transition-colors hover:text-blue-500"
-                aria-label="Close buy FVB modal"
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            <div className="space-y-3 px-4 py-4">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/45 bg-zinc-50 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Minimum</div>
-                  <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">$10</div>
-                </div>
-                <div className="rounded-md border dark:border-zinc-900 border-zinc-100 dark:bg-zinc-900/45 bg-zinc-50 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Max eligible</div>
-                  <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{remainingEligibilityWei === null ? 'Syncing' : `${formatFvbBalance(remainingEligibilityWei)} FVB`}</div>
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <label htmlFor="portfolio-fvb-buy" className="text-xs font-semibold dark:text-zinc-300 text-zinc-700">Amount</label>
-                  <span className="text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{buyAmountUsd ?? 'US$0.00'}</span>
-                </div>
-                <div className="relative">
-                  <input
-                    id="portfolio-fvb-buy"
-                    value={buyAmount}
-                    onChange={event => {
-                      setBuyAmount(event.target.value.replace(/[^\d.]/g, ''));
-                      setBuyMessage('');
-                      setBuyTxHash(null);
-                    }}
-                    placeholder="0.00"
-                    inputMode="decimal"
-                    className="w-full rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 pr-11 text-sm tabular-nums dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">OKB</span>
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
-                  {okbUsd ? [10, 25, 50].map(usd => {
-                    const okbAmount = (usd / okbUsd).toFixed(4);
-                    return (
-                      <button
-                        key={usd}
-                        type="button"
-                        onClick={() => {
-                          setBuyAmount(okbAmount);
-                          setBuyMessage('');
-                          setBuyTxHash(null);
-                        }}
-                        className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1.5 text-xs font-semibold dark:text-zinc-400 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
-                      >
-                        ${usd}
-                      </button>
-                    );
-                  }) : ['0.12', '0.25', '0.5'].map(okbAmount => (
-                    <button
-                      key={okbAmount}
-                      type="button"
-                      onClick={() => setBuyAmount(okbAmount)}
-                      className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2 py-1.5 text-xs font-semibold dark:text-zinc-400 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
-                    >
-                      {okbAmount} OKB
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-md dark:bg-zinc-900/45 bg-zinc-50 px-3 py-2">
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="dark:text-zinc-500 text-zinc-500">Estimated FVB</span>
-                  <span className="font-semibold tabular-nums dark:text-zinc-100 text-zinc-900">{buyQuoteLoading ? 'Quoting...' : `${formatFvbBalance(buyQuoteWei)} FVB`}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-3 text-[11px]">
-                  <span className="dark:text-zinc-600 text-zinc-400">Minimum after slippage</span>
-                  <span className="font-medium tabular-nums dark:text-zinc-500 text-zinc-500">{buyQuoteWei ? `${formatFvbBalance(minWithSlippage(buyQuoteWei))} FVB` : '-'}</span>
-                </div>
-              </div>
-
-              {belowMinimum && <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600 dark:text-amber-300">Minimum buy is $10 worth of OKB.</div>}
-              {remainingEligibilityWei === null && <div className="rounded-md bg-zinc-500/10 px-3 py-2 text-xs font-semibold dark:text-zinc-400 text-zinc-500">Syncing FVB balance before buy limits are applied.</div>}
-              {aboveEligibilityMax && <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600 dark:text-amber-300">This buy is above your remaining 450K FVB eligibility room.</div>}
-              {remainingEligibilityWei === 0n && <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">This wallet already meets the FVB eligibility cap.</div>}
-              {buyMessage && <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">{buyMessage}</div>}
-              {buyTxHash && (
-                <a href={explorerTx(buyTxHash)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
-                  View buy transaction
-                  <ExternalLink size={11} />
-                </a>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2 border-t dark:border-zinc-900 border-zinc-100 px-4 py-3">
-              <button
-                type="button"
-                onClick={buyFvb}
-                disabled={buyPending || buyQuoteLoading || !canBuyFvb}
-                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Wallet size={13} />
-                {buyPending ? 'Confirming' : 'Buy FVB'}
-              </button>
-              <a
-                href={FANVIBE_TOKEN_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border dark:border-zinc-800 border-zinc-200 px-3 text-xs font-semibold dark:text-zinc-400 text-zinc-500 transition-colors hover:border-blue-500/40 hover:text-blue-500"
-              >
-                eulr
-                <ExternalLink size={11} />
-              </a>
-            </div>
-          </div>
-        </div>
+      {buyTxHash && (
+        <a href={explorerTx(buyTxHash)} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
+          View buy transaction
+          <ExternalLink size={11} />
+        </a>
       )}
     </div>
   );
