@@ -1525,10 +1525,10 @@ export default function App() {
                     href={FANVIBE_TOKEN_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
+                    className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-white px-2.5 text-[11px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
                   >
                     Buy $FVB
-                    <ExternalLink size={12} />
+                    <ExternalLink size={10} />
                   </a>
                 </div>
                 <div className="mt-2 inline-flex items-baseline gap-1.5 text-white">
@@ -1549,22 +1549,21 @@ export default function App() {
                   ))}
                 </div>
 
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-300">
-                  <div className="leading-none"><span>1st</span><span className="ml-1 text-xs font-bold text-white">$100</span></div>
-                  <div className="leading-none"><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$60</span></div>
-                  <div className="leading-none"><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$30</span></div>
-                  <div className="leading-none"><span>Wildcard</span><span className="ml-1 text-xs font-bold text-white">$10</span></div>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <div className="matchday-prize-orb" aria-hidden="true">
-                  <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
-                  <div className="matchday-prize-flags">
-                    {matchdayPrizeTeams.map(team => {
-                      const flag = flagUrl(team.iso);
-                      return flag ? <img key={team.code} src={flag} alt="" /> : null;
-                    })}
+                <div className="mt-2 flex items-center gap-2 pl-7">
+                  <div className="matchday-prize-orb" aria-hidden="true">
+                    <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
+                    <div className="matchday-prize-flags">
+                      {matchdayPrizeTeams.map(team => {
+                        const flag = flagUrl(team.iso);
+                        return flag ? <img key={team.code} src={flag} alt="" /> : null;
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-300">
+                    <div className="leading-none"><span>1st</span><span className="ml-1 text-xs font-bold text-white">$100</span></div>
+                    <div className="leading-none"><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$60</span></div>
+                    <div className="leading-none"><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$30</span></div>
+                    <div className="leading-none"><span>Wildcard</span><span className="ml-1 text-xs font-bold text-white">$10</span></div>
                   </div>
                 </div>
               </div>

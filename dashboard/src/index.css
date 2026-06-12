@@ -274,9 +274,9 @@
 
 .matchday-prize-orb {
   position: relative;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   border-radius: 999px;
   background: transparent;
   filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.4));
@@ -288,8 +288,8 @@
 .matchday-prize-flags img {
   position: absolute;
   inset: 0;
-  width: 32px;
-  height: 32px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
   object-fit: cover;
   border: 0;
