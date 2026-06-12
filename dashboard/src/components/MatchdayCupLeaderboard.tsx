@@ -1,18 +1,23 @@
-import { useEffect, useState } from 'react';
-import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePrivy, useSendTransaction, useWallets } from '@privy-io/react-auth';
 import { AlertCircle, CheckCircle2, ExternalLink, Medal, Trophy, Wallet, X } from 'lucide-react';
-import { formatUnits } from 'viem';
+import { encodeFunctionData, formatEther, formatUnits, parseEther } from 'viem';
 import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
 import { fanDisplayName, getStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { xLayerPublicClient } from '../lib/publicClient';
 import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
-import { explorerAddr } from '../lib/chain';
+import { explorerAddr, explorerTx, xLayerMainnet } from '../lib/chain';
+import { walletErrorMessage } from '../lib/walletErrors';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FVB_ENTRY_MIN_WEI = 1n;
 const FVB_REWARD_ELIGIBILITY_CAP = '450,000 FVB';
 const FVB_ENTRY_MINIMUM = '$10 FVB';
+const FVB_EULR_HOOK_ADDRESS = '0xA21240dADA683d2563034C4F43D080b488b07dDD';
+const FVB_EULR_ROUTER_ADDRESS = '0xAcc0354D3F7a92aDF00B9364b91A59Ed7b48b01A';
+const BUY_SLIPPAGE_BPS = 100n;
+const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -20,6 +25,46 @@ const ERC20_BALANCE_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
+const EULR_HOOK_ABI = [
+  {
+    type: 'function',
+    name: 'quoteBuy',
+    stateMutability: 'view',
+    inputs: [{ name: 'okbIn', type: 'uint256' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'grossOkbIn', type: 'uint256' },
+          { name: 'fee', type: 'uint256' },
+          { name: 'effectiveOkbIn', type: 'uint256' },
+          { name: 'oldOkbCum', type: 'uint256' },
+          { name: 'newOkbCum', type: 'uint256' },
+          { name: 'oldMinted', type: 'uint256' },
+          { name: 'newMinted', type: 'uint256' },
+          { name: 'tokensOut', type: 'uint256' },
+          { name: 'burnTaxBps', type: 'uint16' },
+          { name: 'grossTokensOut', type: 'uint256' },
+          { name: 'burnTaxTokens', type: 'uint256' },
+        ],
+      },
+    ],
+  },
+] as const;
+const EULR_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'buy',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'token_', type: 'address' },
+      { name: 'minTokensOut', type: 'uint256' },
+      { name: 'recipient', type: 'address' },
+    ],
+    outputs: [{ name: 'tokensOut', type: 'uint256' }],
   },
 ] as const;
 
@@ -67,6 +112,14 @@ function compactTokenBalance(value: bigint): string {
   return n > 0 ? '< 1' : '0';
 }
 
+function minWithSlippage(value: bigint, slippageBps = BUY_SLIPPAGE_BPS): bigint {
+  return value - ((value * slippageBps) / 10_000n);
+}
+
+function isEmbeddedWallet(walletClientType: string) {
+  return walletClientType === 'privy' || walletClientType === 'privy-v2';
+}
+
 const rankPrize = (rank: number) => {
   if (rank === 1) return '$100';
   if (rank === 2) return '$60';
@@ -84,8 +137,9 @@ const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
 export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
-  const { user } = usePrivy();
+  const { user, ready, authenticated, login, connectWallet } = usePrivy();
   const { wallets } = useWallets();
+  const { sendTransaction } = useSendTransaction();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [countrySupport, setCountrySupport] = useState<CountrySupportEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -93,7 +147,53 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
   const [fvbBalance, setFvbBalance] = useState<bigint | null>(null);
   const [eligibilityLoaded, setEligibilityLoaded] = useState(false);
   const [buyModalOpen, setBuyModalOpen] = useState(false);
-  const connectedAddress = user?.wallet?.address ?? wallets[0]?.address ?? null;
+  const [buyAmountOKB, setBuyAmountOKB] = useState('0.12');
+  const [quoteTokensOut, setQuoteTokensOut] = useState<bigint | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState('');
+  const [buyPending, setBuyPending] = useState(false);
+  const [buyError, setBuyError] = useState('');
+  const [buySuccessHash, setBuySuccessHash] = useState<`0x${string}` | null>(null);
+  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const embeddedWallet = wallets.find(wallet => isEmbeddedWallet(wallet.walletClientType));
+  const buyWallet = externalWallet ?? embeddedWallet ?? null;
+  const connectedAddress = externalWallet?.address ?? embeddedWallet?.address ?? user?.wallet?.address ?? wallets[0]?.address ?? null;
+  const buyRecipient = buyWallet?.address ?? connectedAddress;
+  const buyAmountWei = useMemo(() => {
+    try {
+      return parseEther(buyAmountOKB || '0');
+    } catch {
+      return 0n;
+    }
+  }, [buyAmountOKB]);
+  const quotedFvb = quoteTokensOut ? compactTokenBalance(quoteTokensOut) : null;
+  const minFvbOut = quoteTokensOut ? minWithSlippage(quoteTokensOut) : null;
+  const minFvbOutLabel = minFvbOut ? compactTokenBalance(minFvbOut) : null;
+  const buyUsdLabel = okbUsd && buyAmountWei > 0n
+    ? `$${(Number(formatEther(buyAmountWei)) * okbUsd).toFixed(2)}`
+    : null;
+
+  const refreshFvbBalance = useCallback((address: string | null) => {
+    if (!address) {
+      setFvbBalance(null);
+      setEligibilityLoaded(false);
+      return;
+    }
+    xLayerPublicClient.readContract({
+      address: FANVIBE_TOKEN_ADDRESS as `0x${string}`,
+      abi: ERC20_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [address as `0x${string}`],
+    })
+      .then(balance => {
+        setFvbBalance(balance);
+        setEligibilityLoaded(true);
+      })
+      .catch(() => {
+        setFvbBalance(null);
+        setEligibilityLoaded(true);
+      });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +277,130 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
       clearInterval(timer);
     };
   }, [connectedAddress]);
+
+  useEffect(() => {
+    if (!buyModalOpen || buyAmountWei <= 0n) {
+      setQuoteTokensOut(null);
+      setQuoteError('');
+      setQuoteLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setQuoteLoading(true);
+    setQuoteError('');
+
+    xLayerPublicClient.readContract({
+      address: FVB_EULR_HOOK_ADDRESS as `0x${string}`,
+      abi: EULR_HOOK_ABI,
+      functionName: 'quoteBuy',
+      args: [buyAmountWei],
+    })
+      .then(quote => {
+        if (cancelled) return;
+        setQuoteTokensOut(quote.tokensOut);
+        setQuoteLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setQuoteTokensOut(null);
+        setQuoteError('Quote unavailable. You can still use the eulr fallback link.');
+        setQuoteLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buyAmountWei, buyModalOpen]);
+
+  const handleNativeBuy = async () => {
+    if (!ready) return;
+
+    if (!buyWallet) {
+      connectWallet();
+      return;
+    }
+
+    if (buyWallet === embeddedWallet && PRIVY_ENABLED && !authenticated) {
+      login({ loginMethods: ['email'] });
+      return;
+    }
+
+    if (!buyRecipient) {
+      setBuyError('Connect the wallet that should receive $FVB.');
+      return;
+    }
+
+    if (buyAmountWei <= 0n) {
+      setBuyError('Enter an OKB amount greater than zero.');
+      return;
+    }
+
+    if (!quoteTokensOut || quoteTokensOut <= 0n) {
+      setBuyError('Quote is not ready yet. Try again in a moment.');
+      return;
+    }
+
+    setBuyPending(true);
+    setBuyError('');
+    setBuySuccessHash(null);
+
+    try {
+      const minOut = minWithSlippage(quoteTokensOut);
+      const data = encodeFunctionData({
+        abi: EULR_ROUTER_ABI,
+        functionName: 'buy',
+        args: [
+          FANVIBE_TOKEN_ADDRESS as `0x${string}`,
+          minOut,
+          buyRecipient as `0x${string}`,
+        ],
+      });
+
+      let hash: `0x${string}`;
+      if (buyWallet === externalWallet) {
+        await externalWallet.switchChain(xLayerMainnet.id);
+        const provider = await externalWallet.getEthereumProvider();
+        hash = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: externalWallet.address,
+            to: FVB_EULR_ROUTER_ADDRESS,
+            value: `0x${buyAmountWei.toString(16)}`,
+            data,
+            chainId: `0x${xLayerMainnet.id.toString(16)}`,
+          }],
+        }) as `0x${string}`;
+      } else {
+        const result = await sendTransaction(
+          {
+            to: FVB_EULR_ROUTER_ADDRESS,
+            value: buyAmountWei,
+            data,
+            chainId: xLayerMainnet.id,
+          },
+          {
+            address: buyWallet.address,
+            uiOptions: {
+              showWalletUIs: true,
+              description: `Buy ${quotedFvb ?? '$FVB'} with ${buyAmountOKB} OKB on X Layer.`,
+              buttonText: 'Confirm buy',
+              successHeader: '$FVB buy sent',
+              successDescription: 'Your FanVibe Matchday Cup entry is updating.',
+            },
+          },
+        );
+        hash = result.hash;
+      }
+
+      setBuySuccessHash(hash);
+      setTimeout(() => refreshFvbBalance(buyRecipient), 2500);
+    } catch (err) {
+      setBuyError(walletErrorMessage(err, '$FVB buy failed'));
+    } finally {
+      setBuyPending(false);
+    }
+  };
 
   const topThree = entries.slice(0, 3);
   const eligible = !!connectedAddress && fvbBalance !== null && fvbBalance >= FVB_ENTRY_MIN_WEI;
@@ -349,25 +573,90 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
                 <div className="rounded-lg border border-blue-300/15 bg-blue-400/10 px-3 py-3 text-xs leading-5 text-blue-100">
                   Current phase: buying $FVB mints from the bonding curve. Trading expands after graduation.
                 </div>
+
+                <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="fvb-buy-amount" className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
+                      Buy amount
+                    </label>
+                    {buyUsdLabel && <span className="text-[11px] font-semibold text-zinc-400">{buyUsdLabel}</span>}
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-white/10 bg-black/35 px-3 py-2">
+                    <input
+                      id="fvb-buy-amount"
+                      inputMode="decimal"
+                      value={buyAmountOKB}
+                      onChange={event => {
+                        setBuyAmountOKB(event.target.value.replace(/[^0-9.]/g, ''));
+                        setBuyError('');
+                        setBuySuccessHash(null);
+                      }}
+                      className="min-w-0 flex-1 bg-transparent text-lg font-semibold tabular-nums text-white outline-none"
+                      placeholder="0.12"
+                    />
+                    <span className="shrink-0 text-xs font-black text-zinc-400">OKB</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {['0.12', '0.25', '0.5'].map(amount => (
+                      <button
+                        key={amount}
+                        type="button"
+                        onClick={() => {
+                          setBuyAmountOKB(amount);
+                          setBuyError('');
+                          setBuySuccessHash(null);
+                        }}
+                        className="h-8 rounded-md border border-white/10 bg-black/20 text-xs font-bold text-zinc-300 transition-colors hover:border-blue-300/40 hover:text-blue-100"
+                      >
+                        {amount} OKB
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 rounded-lg border border-white/[0.08] bg-black/25 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-medium text-zinc-400">Estimated receive</span>
+                      <span className="font-semibold tabular-nums text-white">
+                        {quoteLoading ? 'Quoting...' : quotedFvb ? `${quotedFvb} FVB` : '--'}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-3 text-[11px]">
+                      <span className="text-zinc-500">Minimum after 1% slippage</span>
+                      <span className="font-medium tabular-nums text-zinc-400">{minFvbOutLabel ? `${minFvbOutLabel} FVB` : '--'}</span>
+                    </div>
+                  </div>
+                  {quoteError && <div className="mt-2 text-xs leading-5 text-amber-200">{quoteError}</div>}
+                  {buyError && <div className="mt-2 text-xs leading-5 text-red-200">{buyError}</div>}
+                  {buySuccessHash && (
+                    <a
+                      href={explorerTx(buySuccessHash)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-200 hover:text-emerald-100"
+                    >
+                      Buy sent - view transaction
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2 border-t border-white/10 bg-white/[0.03] px-5 py-4">
+                <button
+                  type="button"
+                  onClick={handleNativeBuy}
+                  disabled={buyPending || quoteLoading || buyAmountWei <= 0n}
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-4 text-xs font-black text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Wallet size={13} />
+                  {buyPending ? 'Confirming...' : buyWallet ? 'Buy $FVB in FanVibe' : 'Connect wallet'}
+                </button>
                 <a
                   href={FANVIBE_TOKEN_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-4 text-xs font-black text-zinc-950 transition-colors hover:bg-zinc-200"
-                >
-                  Buy on eulr
-                  <ExternalLink size={12} />
-                </a>
-                <a
-                  href={explorerAddr(FANVIBE_TOKEN_ADDRESS)}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-bold text-zinc-200 transition-colors hover:border-blue-300/50 hover:text-blue-100"
                 >
-                  Contract
+                  eulr
                   <ExternalLink size={12} />
                 </a>
               </div>
