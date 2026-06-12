@@ -892,6 +892,7 @@ app.post('/comments/:fixtureId', (req, res) => {
 // ── Server start ──────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
+const SIMULATION_ENABLED = process.env.ENABLE_SIMULATION === 'true';
 
 httpServer.listen(PORT, async () => {
   console.log(`[FanVibe] HTTP server on port ${PORT}`);
@@ -900,8 +901,12 @@ httpServer.listen(PORT, async () => {
   try {
     appData = await readAppData();
     await engine.start();
-    await seasonController.start();
-    engine.syncChampionSeason(seasonController.getState().seasonNumber);
+    if (SIMULATION_ENABLED) {
+      await seasonController.start();
+      engine.syncChampionSeason(seasonController.getState().seasonNumber);
+    } else {
+      console.log('[FanVibe] Simulation retired - season controller disabled');
+    }
     await retryPendingStakeReports();
     setInterval(() => {
       retryPendingStakeReports().catch(err => {

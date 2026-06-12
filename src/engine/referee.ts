@@ -47,6 +47,7 @@ const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
 const baseFixtureId = (fixtureId: string) => fixtureId.replace(/^s\d+-/, '');
 const MAX_PERSISTED_SETTLEMENTS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENTS ?? '200'));
 const MAX_PERSISTED_SETTLEMENT_JOBS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENT_JOBS ?? '200'));
+const SIMULATION_ENABLED = process.env.ENABLE_SIMULATION === 'true';
 
 const TBD_TEAM: Team = { name: 'TBD', code: 'TBD', flag: '🏆', iso: 'un' };
 const NEXT_SIM_KICKOFF_MS = Number(process.env.SIM_NEXT_KICKOFF_MS ?? '30000');
@@ -622,14 +623,17 @@ export class RefereeEngine {
     this.startWebSocketListener();
     this.startMetabolismLoop();
 
-    // Simulation mode: schedule compressed matches
-    const simulated = this.fixtures.filter(f => f.mode === 'simulated' && f.home.code !== 'TBD' && f.away.code !== 'TBD');
+    const simulated = SIMULATION_ENABLED
+      ? this.fixtures.filter(f => f.mode === 'simulated' && f.home.code !== 'TBD' && f.away.code !== 'TBD')
+      : [];
     if (simulated.length > 0) {
       const delayMins    = parseInt(process.env.SIM_FIRST_KICKOFF_DELAY ?? '5');
       const intervalMins = parseInt(process.env.SIM_MATCH_INTERVAL_MINS ?? '0');
       const firstKickoff = Date.now() + delayMins * 60_000;
       this.simulator.schedule(simulated, firstKickoff, intervalMins * 60_000);
       this.log('SYSTEM', 'success', `Simulation scheduled — ${simulated.length} matches, first kickoff in ${delayMins} min, ${intervalMins} min intervals`);
+    } else if (!SIMULATION_ENABLED) {
+      this.log('SYSTEM', 'info', 'Simulation retired - simulated fixture scheduler disabled');
     }
 
     this.log('SYSTEM', 'success', `Engine live on X Layer Mainnet (chain 196). Watching ${this.fixtures.length} fixtures.`);
@@ -1278,6 +1282,7 @@ export class RefereeEngine {
   // Metabolism loop ──────────────────────────────────────────────────────────
 
   private advanceBracket(fixture: Fixture, outcome: Outcome): void {
+    if (!SIMULATION_ENABLED) return;
     if (fixture.mode !== 'simulated') return;
     const entry = BRACKET[fixture.id];
     if (!entry) return;
@@ -1302,7 +1307,7 @@ export class RefereeEngine {
     next.status = 'upcoming';
     next.baseOdds = { home: 50, draw: 25, away: 25 };
     this.log('SYSTEM', 'info', `Qualified: ${team.code} -> ${next.id} ${target.slot}`);
-    this.simulator.schedule([next], Date.now() + NEXT_SIM_KICKOFF_MS, 0);
+    if (SIMULATION_ENABLED) this.simulator.schedule([next], Date.now() + NEXT_SIM_KICKOFF_MS, 0);
   }
 
   private startMetabolismLoop(): void {

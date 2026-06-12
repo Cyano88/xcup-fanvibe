@@ -403,7 +403,7 @@ export default function App() {
   const [phaseEndsAt, setPhaseEndsAt]           = useState(initialSeason.phaseEndsAt);
   const [seasonClockTick, setSeasonClockTick]   = useState(0);
 
-  const simulationModeVisible = new URLSearchParams(window.location.search).get('sim') === '1';
+  const simulationModeVisible = false;
 
   const wsRef                  = useRef<WebSocket | null>(null);
   const reconnectRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
