@@ -1158,6 +1158,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   const hasMorePositions = visibleCount < sortedPositions.length;
 
   return (
+    <>
     <section className="overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white shadow-sm">
       <div className="border-b dark:border-zinc-900 border-zinc-100 px-4 py-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -1410,10 +1411,14 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
               )}
             </>
           )}
-
-          <GrowthPanel address={address} okbUsd={okbUsd} />
         </div>
       )}
     </section>
+    {address && (
+      <section className="overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white px-4 shadow-sm">
+        <GrowthPanel address={address} okbUsd={okbUsd} />
+      </section>
+    )}
+    </>
   );
 }
