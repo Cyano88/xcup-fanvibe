@@ -137,9 +137,22 @@ async function attachFvbEligibility<T extends { address: string }>(entries: T[])
       })),
     });
 
+    const balanceValues = await Promise.all(balances.map(async (result, index) => {
+      if (result?.status === 'success') return result.result;
+      try {
+        return await fvbPublicClient.readContract({
+          address: FANVIBE_TOKEN_ADDRESS,
+          abi: ERC20_BALANCE_ABI,
+          functionName: 'balanceOf',
+          args: [entries[index].address as Address],
+        });
+      } catch {
+        return null;
+      }
+    }));
+
     return entries.map((entry, index) => {
-      const result = balances[index];
-      const balance = result?.status === 'success' ? result.result : null;
+      const balance = balanceValues[index];
       const eligibleWei = balance === null
         ? null
         : balance > FVB_ELIGIBILITY_CAP_WEI ? FVB_ELIGIBILITY_CAP_WEI : balance;
