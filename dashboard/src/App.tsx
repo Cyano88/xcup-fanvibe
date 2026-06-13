@@ -209,8 +209,7 @@ function positionPortfolioWei(position: UserPosition, fixtures: Fixture[], match
 }
 
 function seasonFixturesFromState(incoming: Fixture[]): Fixture[] {
-  if (!incoming.length) return createSeasonFixtures(1);
-  if (incoming.some(f => f.id.startsWith('r32-'))) return createSeasonFixtures(1);
+  if (!incoming.length) return [];
   return incoming;
 }
 
@@ -227,7 +226,7 @@ function freshSeasonState(
     phase: 'preseason',
     phaseEndsAt: now + timings.preseasonSeconds * 1000,
     phaseTimer: timings.preseasonSeconds,
-    fixtures: createSeasonFixtures(seasonNumber),
+    fixtures: [],
     matchStates: {},
     eliminatedTeams: [],
     champion: null,
@@ -605,8 +604,12 @@ export default function App() {
   }, [applySeasonSnapshot, seasonMode]);
 
   useEffect(() => {
+    if (!simulationModeVisible) {
+      setSeasonHydrated(true);
+      return;
+    }
     loadSeasonSnapshot();
-  }, [loadSeasonSnapshot]);
+  }, [loadSeasonSnapshot, simulationModeVisible]);
 
   useEffect(() => {
     if (!seasonHydrated) return;
@@ -646,12 +649,14 @@ export default function App() {
           setSettlements(prev => [...prev, s]);
           setFixtures(prev => prev.map(f => f.id === s.fixtureId ? { ...f, status: 'settled', result: s.outcome } : f));
         } else if (msg.type === 'season-reset') {
+          if (!simulationModeVisible) return;
           const data = msg.data as { mode?: SeasonStorageMode };
           if (data.mode === seasonMode) {
             if (seasonMode === 'prod') return;
             applySeasonSnapshot(freshSeasonState(1, Date.now(), seasonMode === 'test' ? TEST_SEASON_TIMING : DEFAULT_SEASON_TIMING, seasonMode), seasonMode);
           }
         } else if (msg.type === 'season') {
+          if (!simulationModeVisible) return;
           const snapshot = msg.data as InitialSeasonState;
           if ((snapshot.mode ?? 'prod') === seasonMode) {
             applySeasonSnapshot(snapshot, seasonMode, true);
@@ -1091,13 +1096,14 @@ export default function App() {
   ];
   const projectMatchState = useCallback((state?: MatchState): MatchState | undefined => {
     if (!state || state.status !== 'live') return state;
-    if (state.fixtureId.startsWith('wc-')) return state;
+    const fixture = fixtures.find(item => item.id === state.fixtureId);
+    if (fixture?.mode !== 'simulated') return state;
     const kickoffMs = parseProviderTime(state.simulatedKickoff);
     if (!Number.isFinite(kickoffMs)) return state;
     const minuteMs = Math.max(1000, Math.round(seasonTiming.matchMs / 90));
     const projectedMinute = Math.min(89, Math.max(Math.min(state.minute, 89), Math.floor((Date.now() - kickoffMs) / minuteMs)));
     return projectedMinute === state.minute ? state : { ...state, minute: projectedMinute };
-  }, [liveUiTick, seasonTiming.matchMs]);
+  }, [fixtures, liveUiTick, seasonTiming.matchMs]);
   const displayMatchStates = Object.fromEntries(
     Object.entries(matchStates).map(([id, state]) => [id, projectMatchState(state) ?? state])
   ) as Record<string, MatchState>;
@@ -1420,13 +1426,13 @@ export default function App() {
       : 'Live fixture feed'
     : worldCupFeedReady
       ? 'Provider-backed fixture board'
-      : 'Curated fixture board';
+      : 'Sportmonks fixture feed';
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
       ? `updated ${worldCupFeed.freshnessSeconds}s ago`
       : worldCupFeedReady
         ? 'fixtures available'
-        : 'provider unavailable'
+        : 'awaiting provider'
     : 'updating';
   const appTabs: Array<{ id: AppTab; label: string; icon: typeof Home }> = [
     { id: 'home', label: 'Home', icon: Home },

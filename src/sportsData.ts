@@ -1,4 +1,3 @@
-import { REALTIME_FIXTURES } from './engine/worldCupFixtures.js';
 import type { Fixture, FixtureStatus, MatchState, Team } from './types.js';
 
 export interface WorldCupFeed {
@@ -106,12 +105,61 @@ let cache: WorldCupFeed | null = null;
 const TEAM_BY_NAME = new Map<string, Team>();
 const TEAM_BY_CODE = new Map<string, Team>();
 const TEAM_GROUP_BY_CODE = new Map<string, string>();
-for (const fixture of REALTIME_FIXTURES) {
-  for (const team of [fixture.home, fixture.away]) {
-    TEAM_BY_NAME.set(normalize(team.name), team);
-    TEAM_BY_CODE.set(normalize(team.code), team);
-    TEAM_GROUP_BY_CODE.set(team.code, fixture.group);
-  }
+const TEAM_META: Array<Team & { group: string; aliases?: string[] }> = [
+  { name: 'Mexico', code: 'MEX', flag: '🇲🇽', iso: 'mx', group: 'A' },
+  { name: 'South Africa', code: 'RSA', flag: '🇿🇦', iso: 'za', group: 'A' },
+  { name: 'South Korea', code: 'KOR', flag: '🇰🇷', iso: 'kr', group: 'A', aliases: ['Korea Republic'] },
+  { name: 'Czech Republic', code: 'CZE', flag: '🇨🇿', iso: 'cz', group: 'A', aliases: ['Czechia'] },
+  { name: 'Canada', code: 'CAN', flag: '🇨🇦', iso: 'ca', group: 'B' },
+  { name: 'Bosnia & Herz.', code: 'BIH', flag: '🇧🇦', iso: 'ba', group: 'B', aliases: ['Bosnia and Herzegovina', 'Bosnia & Herzegovina'] },
+  { name: 'Qatar', code: 'QAT', flag: '🇶🇦', iso: 'qa', group: 'B' },
+  { name: 'Switzerland', code: 'SUI', flag: '🇨🇭', iso: 'ch', group: 'B' },
+  { name: 'Brazil', code: 'BRA', flag: '🇧🇷', iso: 'br', group: 'C' },
+  { name: 'Morocco', code: 'MAR', flag: '🇲🇦', iso: 'ma', group: 'C' },
+  { name: 'Haiti', code: 'HAI', flag: '🇭🇹', iso: 'ht', group: 'C' },
+  { name: 'Scotland', code: 'SCO', flag: '🏴', iso: 'gb-sct', group: 'C' },
+  { name: 'United States', code: 'USA', flag: '🇺🇸', iso: 'us', group: 'D', aliases: ['USA'] },
+  { name: 'Paraguay', code: 'PAR', flag: '🇵🇾', iso: 'py', group: 'D' },
+  { name: 'Australia', code: 'AUS', flag: '🇦🇺', iso: 'au', group: 'D' },
+  { name: 'Turkey', code: 'TUR', flag: '🇹🇷', iso: 'tr', group: 'D', aliases: ['Türkiye'] },
+  { name: 'Germany', code: 'GER', flag: '🇩🇪', iso: 'de', group: 'E' },
+  { name: 'Curaçao', code: 'CUW', flag: '🇨🇼', iso: 'cw', group: 'E', aliases: ['Curacao'] },
+  { name: 'Ivory Coast', code: 'CIV', flag: '🇨🇮', iso: 'ci', group: 'E', aliases: ["Côte d'Ivoire", 'Cote d Ivoire'] },
+  { name: 'Ecuador', code: 'ECU', flag: '🇪🇨', iso: 'ec', group: 'E' },
+  { name: 'Netherlands', code: 'NED', flag: '🇳🇱', iso: 'nl', group: 'F' },
+  { name: 'Japan', code: 'JPN', flag: '🇯🇵', iso: 'jp', group: 'F' },
+  { name: 'Sweden', code: 'SWE', flag: '🇸🇪', iso: 'se', group: 'F' },
+  { name: 'Tunisia', code: 'TUN', flag: '🇹🇳', iso: 'tn', group: 'F' },
+  { name: 'Belgium', code: 'BEL', flag: '🇧🇪', iso: 'be', group: 'G' },
+  { name: 'Egypt', code: 'EGY', flag: '🇪🇬', iso: 'eg', group: 'G' },
+  { name: 'Iran', code: 'IRN', flag: '🇮🇷', iso: 'ir', group: 'G' },
+  { name: 'New Zealand', code: 'NZL', flag: '🇳🇿', iso: 'nz', group: 'G' },
+  { name: 'Spain', code: 'ESP', flag: '🇪🇸', iso: 'es', group: 'H' },
+  { name: 'Cape Verde', code: 'CPV', flag: '🇨🇻', iso: 'cv', group: 'H' },
+  { name: 'Saudi Arabia', code: 'KSA', flag: '🇸🇦', iso: 'sa', group: 'H' },
+  { name: 'Uruguay', code: 'URU', flag: '🇺🇾', iso: 'uy', group: 'H' },
+  { name: 'France', code: 'FRA', flag: '🇫🇷', iso: 'fr', group: 'I' },
+  { name: 'Iraq', code: 'IRQ', flag: '🇮🇶', iso: 'iq', group: 'I' },
+  { name: 'Senegal', code: 'SEN', flag: '🇸🇳', iso: 'sn', group: 'I' },
+  { name: 'Norway', code: 'NOR', flag: '🇳🇴', iso: 'no', group: 'I' },
+  { name: 'Argentina', code: 'ARG', flag: '🇦🇷', iso: 'ar', group: 'J' },
+  { name: 'Algeria', code: 'ALG', flag: '🇩🇿', iso: 'dz', group: 'J' },
+  { name: 'Austria', code: 'AUT', flag: '🇦🇹', iso: 'at', group: 'J' },
+  { name: 'Jordan', code: 'JOR', flag: '🇯🇴', iso: 'jo', group: 'J' },
+  { name: 'Portugal', code: 'POR', flag: '🇵🇹', iso: 'pt', group: 'K' },
+  { name: 'DR Congo', code: 'COD', flag: '🇨🇩', iso: 'cd', group: 'K', aliases: ['Congo DR', 'Democratic Republic of the Congo'] },
+  { name: 'Uzbekistan', code: 'UZB', flag: '🇺🇿', iso: 'uz', group: 'K' },
+  { name: 'Colombia', code: 'COL', flag: '🇨🇴', iso: 'co', group: 'K' },
+  { name: 'England', code: 'ENG', flag: '🏴', iso: 'gb-eng', group: 'L' },
+  { name: 'Ghana', code: 'GHA', flag: '🇬🇭', iso: 'gh', group: 'L' },
+  { name: 'Croatia', code: 'CRO', flag: '🇭🇷', iso: 'hr', group: 'L' },
+  { name: 'Panama', code: 'PAN', flag: '🇵🇦', iso: 'pa', group: 'L' },
+];
+for (const team of TEAM_META) {
+  TEAM_BY_NAME.set(normalize(team.name), team);
+  TEAM_BY_CODE.set(normalize(team.code), team);
+  for (const alias of team.aliases ?? []) TEAM_BY_NAME.set(normalize(alias), team);
+  TEAM_GROUP_BY_CODE.set(team.code, team.group);
 }
 
 function normalize(value = ''): string {
@@ -358,8 +406,6 @@ function buildMatchState(fixture: Fixture, source: SportmonksFixture | null, sta
 }
 
 function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
-  const templatesByTeam = new Map(REALTIME_FIXTURES.map(fixture => [matchKey(fixture.home, fixture.away), fixture]));
-
   const matchStates: Record<string, MatchState> = {};
   const fixtures: Fixture[] = [];
   const seen = new Set<string>();
@@ -367,33 +413,32 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
     const home = sportmonksTeam(api, 'home');
     const away = sportmonksTeam(api, 'away');
     if (!home || !away) continue;
-    const template = templatesByTeam.get(matchKey(home, away));
-    const fixtureId = template?.id ?? `sm-${api.id ?? normalize(`${home.code}-${away.code}-${api.starting_at ?? fixtures.length}`)}`;
+    const fixtureId = `sm-${api.id ?? normalize(`${home.code}-${away.code}-${api.starting_at ?? fixtures.length}`)}`;
     if (seen.has(fixtureId)) continue;
     seen.add(fixtureId);
 
     const homeScore = sportmonksScore(api, 'home');
     const awayScore = sportmonksScore(api, 'away');
     const status = sportmonksStatus(api);
-    const kickoff = api.starting_at ?? template?.kickoff ?? new Date().toISOString();
+    const kickoff = api.starting_at ?? new Date().toISOString();
     const fixture: Fixture = {
       id: fixtureId,
-      matchday: sportmonksMatchday(api, template?.matchday),
-      group: sportmonksGroup(api, home, away, template?.group),
-      round: sportmonksRound(api, kickoff, template?.round),
+      matchday: sportmonksMatchday(api),
+      group: sportmonksGroup(api, home, away),
+      round: sportmonksRound(api, kickoff),
       home,
       away,
       kickoff,
-      venue: sportmonksVenue(api, template?.venue ?? 'Venue TBC'),
-      stadium: sportmonksStadium(api, template),
+      venue: sportmonksVenue(api, 'Venue TBC'),
+      stadium: sportmonksStadium(api),
       status,
-      baseOdds: template?.baseOdds ?? { home: 34, draw: 32, away: 34 },
+      baseOdds: { home: 34, draw: 32, away: 34 },
       mode: 'realtime',
       provider: 'sportmonks',
       providerId: api.id ? String(api.id) : undefined,
       result: status === 'settled'
         ? homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw'
-        : template?.result,
+        : undefined,
     };
     const events = sportmonksEvents(api, fixture);
     const matchState = buildMatchState(fixture, api, sportmonksMatchStateStatus(api), homeScore, awayScore, events, kickoff);
@@ -528,57 +573,15 @@ export async function getWorldCupMatchDetail(fixtureId: string): Promise<{
 }
 
 function overlayWc2026(matches: Wc2026Match[]): WorldCupFeed {
-  const templatesByTeam = new Map(REALTIME_FIXTURES.flatMap(fixture => [
-    [matchKey(fixture.home, fixture.away, fixture.group), fixture],
-    [matchKey(fixture.home, fixture.away), fixture],
-  ]));
-
-  const matchStates: Record<string, MatchState> = {};
-  const fixtures: Fixture[] = [];
-  const seen = new Set<string>();
-  for (const api of matches) {
-    const home = teamFromName(teamName(api.home_team));
-    const away = teamFromName(teamName(api.away_team));
-    if (!home || !away) continue;
-    const fixture = templatesByTeam.get(matchKey(home, away, groupName(api)))
-      ?? templatesByTeam.get(matchKey(home, away));
-    if (!fixture || seen.has(fixture.id)) continue;
-    seen.add(fixture.id);
-
-    const homeScore = scoreValue(api.home_score, api.home_goals);
-    const awayScore = scoreValue(api.away_score, api.away_goals);
-    const status = statusFromProvider(api.status);
-    const kickoff = kickoffTime(api, fixture.kickoff);
-    const matchState = buildMatchState(
-      fixture,
-      null,
-      matchStateStatusFromProvider(api.status),
-      homeScore,
-      awayScore,
-      [],
-      kickoff
-    );
-    if (matchState) matchStates[fixture.id] = matchState;
-
-    fixtures.push({
-      ...fixture,
-      kickoff,
-      venue: venueName(api, fixture.venue),
-      status,
-      result: status === 'settled'
-        ? homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw'
-        : fixture.result,
-    } satisfies Fixture);
-  }
-
   return {
-    fixtures,
-    matchStates,
+    fixtures: [],
+    matchStates: {},
     source: WC2026_PROVIDER === 'balldontlie' ? 'balldontlie' : WC2026_PROVIDER === 'zafronix' ? 'zafronix' : 'wc2026api',
-    mode: 'live',
+    mode: 'fallback',
     updatedAt: Date.now(),
     freshnessSeconds: 0,
-    providerConfigured: true,
+    providerConfigured: false,
+    error: 'World Cup realtime data is configured for Sportmonks only',
   };
 }
 
