@@ -228,8 +228,17 @@ function sportmonksGroup(match: SportmonksFixture, home: Team, away: Team, fallb
   return group ?? 'WC';
 }
 
-function sportmonksRound(match: SportmonksFixture, fallback?: Fixture['round']): Fixture['round'] | undefined {
+function sportmonksRound(match: SportmonksFixture, kickoff: string, fallback?: Fixture['round']): Fixture['round'] | undefined {
   if (fallback) return fallback;
+  const kickoffMs = Date.parse(kickoff);
+  if (Number.isFinite(kickoffMs)) {
+    if (kickoffMs >= Date.parse('2026-07-19T00:00:00Z')) return 'F';
+    if (kickoffMs >= Date.parse('2026-07-18T00:00:00Z')) return '3PL';
+    if (kickoffMs >= Date.parse('2026-07-14T00:00:00Z')) return 'SF';
+    if (kickoffMs >= Date.parse('2026-07-09T00:00:00Z')) return 'QF';
+    if (kickoffMs >= Date.parse('2026-07-04T12:00:00Z')) return 'R16';
+    if (kickoffMs >= Date.parse('2026-06-28T00:00:00Z')) return 'R32';
+  }
   const source = normalize([match.stage?.name, match.round?.name, match.name].filter(Boolean).join(' '));
   if (source.includes('roundof16') || source.includes('last16')) return 'R16';
   if (source.includes('roundof32') || source.includes('last32')) return 'R32';
@@ -245,6 +254,18 @@ function sportmonksMatchday(match: SportmonksFixture, fallback?: number): number
   const roundText = match.round?.name ?? '';
   const numeric = Number(roundText.match(/\d+/)?.[0]);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 1;
+}
+
+function assignGroupMatchdays(fixtures: Fixture[]): void {
+  const groups = new Set(fixtures.filter(fixture => !fixture.round).map(fixture => fixture.group));
+  for (const group of groups) {
+    fixtures
+      .filter(fixture => !fixture.round && fixture.group === group)
+      .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff))
+      .forEach((fixture, index) => {
+        fixture.matchday = Math.floor(index / 2) + 1;
+      });
+  }
 }
 
 function sportmonksStadium(match: SportmonksFixture, template?: Fixture): Fixture['stadium'] {
@@ -328,7 +349,7 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
       id: fixtureId,
       matchday: sportmonksMatchday(api, template?.matchday),
       group: sportmonksGroup(api, home, away, template?.group),
-      round: sportmonksRound(api, template?.round),
+      round: sportmonksRound(api, kickoff, template?.round),
       home,
       away,
       kickoff,
@@ -346,6 +367,7 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
     if (matchState) matchStates[fixture.id] = matchState;
     fixtures.push(fixture);
   }
+  assignGroupMatchdays(fixtures);
 
   return {
     fixtures,

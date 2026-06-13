@@ -1,6 +1,5 @@
 import { GitBranch, Zap } from 'lucide-react';
 import type { Fixture, MatchState } from '../types';
-import { baseFixtureId } from '../lib/seasonTournament';
 
 interface Props {
   fixtures: Fixture[];
@@ -9,21 +8,27 @@ interface Props {
 }
 
 const ROUNDS = [
-  { key: 'R32', label: 'Qualified 32' },
+  { key: 'R32', label: 'Round of 32' },
   { key: 'R16', label: 'Last 16' },
   { key: 'QF', label: 'Quarter-Finals' },
   { key: 'SF', label: 'Semi-Finals' },
+  { key: '3PL', label: 'Third Place' },
   { key: 'F', label: 'Final' },
 ] as const;
 
+const PLACEHOLDER_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
+
 function slotLabel(fixture: Fixture, side: 'home' | 'away') {
   const team = fixture[side];
-  if (team.code !== 'TBD') return team.code;
-  return side === 'home' ? 'Qualifier' : 'Qualifier';
+  if (!PLACEHOLDER_CODES.has(team.code)) return team.code;
+  if (team.code === 'WIN') return 'Winner';
+  if (team.code === 'LOS') return 'Loser';
+  if (['1ST', '2ND', '3RD'].includes(team.code)) return `${team.code} Group ${fixture.group}`;
+  return 'Qualifier';
 }
 
 function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchState?: MatchState; onWatch: () => void }) {
-  const isReady = fixture.home.code !== 'TBD' && fixture.away.code !== 'TBD';
+  const isReady = !PLACEHOLDER_CODES.has(fixture.home.code) && !PLACEHOLDER_CODES.has(fixture.away.code);
   const isLive = matchState?.status === 'live';
   const isHalfTime = matchState?.status === 'half_time';
   const isDone = matchState?.status === 'finished';
@@ -43,7 +48,7 @@ function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchSt
       <div className="flex items-center justify-between gap-3">
         <div className={`flex items-center gap-2 min-w-0 ${homeWin ? 'dark:text-emerald-300 text-emerald-700' : 'dark:text-zinc-200 text-zinc-800'}`}>
           <span className="h-5 w-5 rounded-full border dark:border-zinc-700 border-zinc-300 dark:bg-zinc-900 bg-white grid place-items-center text-[9px] font-semibold">
-            {fixture.home.code === 'TBD' ? '' : fixture.home.code.slice(0, 1)}
+            {PLACEHOLDER_CODES.has(fixture.home.code) ? '' : fixture.home.code.slice(0, 1)}
           </span>
           <span className="text-xs font-semibold truncate">{slotLabel(fixture, 'home')}</span>
         </div>
@@ -54,14 +59,14 @@ function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchSt
       <div className="my-1 flex items-center gap-2">
         <div className="h-px flex-1 dark:bg-zinc-800 bg-zinc-200" />
         <span className={`text-[9px] font-semibold uppercase tracking-widest ${isLive ? 'text-emerald-400' : 'dark:text-zinc-600 text-zinc-400'}`}>
-          {isLive ? `${matchState!.minute}'` : isHalfTime ? 'HT' : isDone ? matchState?.penaltyShootout ? 'PENS' : 'FT' : isReady ? 'Ready' : 'Pending'}
+          {isLive ? `${matchState!.minute}'` : isHalfTime ? 'HT' : isDone ? matchState?.penaltyShootout ? 'PENS' : 'FT' : isReady ? 'Ready' : 'Seeded'}
         </span>
         <div className="h-px flex-1 dark:bg-zinc-800 bg-zinc-200" />
       </div>
       <div className="flex items-center justify-between gap-3">
         <div className={`flex items-center gap-2 min-w-0 ${awayWin ? 'dark:text-emerald-300 text-emerald-700' : 'dark:text-zinc-200 text-zinc-800'}`}>
           <span className="h-5 w-5 rounded-full border dark:border-zinc-700 border-zinc-300 dark:bg-zinc-900 bg-white grid place-items-center text-[9px] font-semibold">
-            {fixture.away.code === 'TBD' ? '' : fixture.away.code.slice(0, 1)}
+            {PLACEHOLDER_CODES.has(fixture.away.code) ? '' : fixture.away.code.slice(0, 1)}
           </span>
           <span className="text-xs font-semibold truncate">{slotLabel(fixture, 'away')}</span>
         </div>
@@ -76,7 +81,11 @@ function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchSt
 export function BracketView({ fixtures, matchStates, onWatch }: Props) {
   const knockoutFixtures = fixtures.filter(f => !!f.round);
   const liveCount = knockoutFixtures.filter(f => matchStates[f.id]?.status === 'live').length;
-  const qualifiedCount = knockoutFixtures.filter(f => baseFixtureId(f.id).startsWith('k32-') && f.home.code !== 'TBD' && f.away.code !== 'TBD').length * 2;
+  const qualifiedCount = knockoutFixtures.filter(f =>
+    f.round === 'R32' &&
+    !PLACEHOLDER_CODES.has(f.home.code) &&
+    !PLACEHOLDER_CODES.has(f.away.code)
+  ).length * 2;
 
   return (
     <div className="dark:bg-zinc-950 bg-white border dark:border-zinc-900 border-zinc-200 rounded-lg overflow-hidden">

@@ -1029,6 +1029,7 @@ export default function App() {
     { id: 'R16', label: 'R16', tone: 'knockout' },
     { id: 'QF', label: 'QF', tone: 'knockout' },
     { id: 'SF', label: 'SF', tone: 'knockout' },
+    { id: '3PL', label: '3rd', tone: 'knockout' },
     { id: 'F', label: 'Final', tone: 'knockout' },
     { id: 'bracket', label: 'Bracket', tone: 'bracket' },
   ];
@@ -1144,9 +1145,9 @@ export default function App() {
       : SEASON_GROUPS.includes(fixtureGroupFilter)
         ? simFixtures.filter(f => f.group === fixtureGroupFilter && !f.round)
         : fixtureGroupFilter === 'knockouts'
-          ? simFixtures.filter(f => !!f.round)
-          : ['R32', 'R16', 'QF', 'SF', 'F'].includes(fixtureGroupFilter)
-            ? simFixtures.filter(f => f.round === fixtureGroupFilter)
+          ? []
+          : ['R32', 'R16', 'QF', 'SF', '3PL', 'F'].includes(fixtureGroupFilter)
+            ? []
             : fixtureGroupFilter === 'bracket'
               ? []
               : simFixtures;
@@ -2062,7 +2063,7 @@ export default function App() {
         )}
 
         {/* -- Bracket view OR fixture grid -------------------------------- */}
-        {(activeTab === 'search' || (activeTab === 'home' && homeCupView === 'matches')) && !showPreseasonSearchLiveEmpty && (viewMode !== 'simulated' || seasonHydrated) && ((viewMode === 'simulated' && fixtureRoundFilter === 'bracket') || (viewMode === 'realtime' && fixtureGroupFilter === 'bracket') ? (
+        {(activeTab === 'search' || (activeTab === 'home' && homeCupView === 'matches')) && !showPreseasonSearchLiveEmpty && (viewMode !== 'simulated' || seasonHydrated) && ((viewMode === 'simulated' && fixtureRoundFilter === 'bracket') || (viewMode === 'realtime' && (fixtureGroupFilter === 'bracket' || fixtureGroupFilter === 'knockouts' || ['R32', 'R16', 'QF', 'SF', '3PL', 'F'].includes(fixtureGroupFilter))) ? (
           <BracketView
             fixtures={simFixtures}
             matchStates={visibleMatchStates}
@@ -2107,7 +2108,7 @@ export default function App() {
                 </div>
               </div>
             )}
-            {viewMode === 'realtime' && (fixtureGroupFilter === 'knockouts' || ['R32', 'R16', 'QF', 'SF', 'F'].includes(fixtureGroupFilter)) && (
+            {viewMode === 'realtime' && (fixtureGroupFilter === 'knockouts' || ['R32', 'R16', 'QF', 'SF', '3PL', 'F'].includes(fixtureGroupFilter)) && (
               <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
                 {fixtureGroupFilter === 'knockouts' ? 'Knockout Fixtures' : `${fixtureGroupFilter === 'F' ? 'Final' : fixtureGroupFilter} Fixtures`}
               </div>
