@@ -432,6 +432,12 @@ export default function App() {
   }, [activeTab, groupFilter, viewMode]);
 
   useEffect(() => {
+    if (viewMode === 'realtime' && activeTab === 'home' && homeCupView === 'matches' && groupFilter === 'all') {
+      setGroupFilter('live');
+    }
+  }, [activeTab, groupFilter, homeCupView, viewMode]);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(ACTIVE_TAB_KEY, activeTab);
     } catch {
@@ -1085,7 +1091,9 @@ export default function App() {
   const displayWatchingMatchState = watchingMatchState ? projectMatchState(watchingMatchState) ?? watchingMatchState : null;
   const activeGroupMatchday = currentGroupMatchday(simFixtures, matchStates);
   const fixtureRoundFilter = activeTab === 'search' ? roundFilter : 'all';
-  const fixtureGroupFilter = activeTab === 'search' ? groupFilter : 'all';
+  const fixtureGroupFilter = viewMode === 'realtime' && (activeTab === 'search' || (activeTab === 'home' && homeCupView === 'matches'))
+    ? groupFilter
+    : 'all';
   const archivedPreseasonFixtures = viewMode === 'simulated' && phase === 'preseason' && previousKnockoutResults
     ? previousKnockoutResults.fixtures
       .filter(fixture => ['R16', 'QF', 'SF', '3PL', 'F'].includes(fixture.round ?? ''))
@@ -1656,6 +1664,28 @@ export default function App() {
           </section>
         )}
 
+        {activeTab === 'home' && homeCupView === 'matches' && viewMode === 'realtime' && (
+          <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
+            {realtimeTabs.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setGroupFilter(t.id)}
+                className={`season-filter-tab shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
+                  ${groupFilter === t.id
+                    ? t.tone === 'live'
+                      ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
+                      : t.tone === 'group'
+                        ? 'dark:bg-blue-500 bg-blue-600 text-white shadow-sm'
+                        : 'bg-rose-600 text-white shadow-sm'
+                    : 'dark:text-zinc-400 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-300 dark:hover:text-zinc-100 hover:text-zinc-900 dark:bg-zinc-900/35 bg-zinc-50'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {activeTab === 'home' && homeCupView === 'leaderboard' && (
           <MatchdayCupLeaderboard
             okbUsd={okbUsd}
@@ -1696,7 +1726,7 @@ export default function App() {
                   return (
                     <button
                       key={`${id}-${index}`}
-                      onClick={() => setActiveTab('search')}
+                      onClick={() => setGroupFilter('live')}
                       className="live-score-card shrink-0 flex items-center gap-2 rounded-lg border border-white/12 px-3 py-2 text-white shadow-sm backdrop-blur-[2px] transition-all hover:border-blue-300/60 active:scale-95"
                       style={{
                         '--home-flag': `url(${flagUrl(fx.home.iso)})`,
