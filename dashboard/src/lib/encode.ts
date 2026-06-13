@@ -74,7 +74,7 @@ export function countdown(kickoff: string): string {
     ? `${kickoff.replace(' ', 'T')}Z`
     : kickoff;
   const diff = Date.parse(normalized) - Date.now();
-  if (diff <= 0) return 'Started';
+  if (diff <= 0) return 'Awaiting feed';
   const d = Math.floor(diff / 86_400_000);
   const h = Math.floor((diff % 86_400_000) / 3_600_000);
   const m = Math.floor((diff % 3_600_000) / 60_000);
