@@ -1081,6 +1081,17 @@ export default function App() {
   const visibleMatchStates = activeTab === 'home' && archivedPreseasonFixtures.length > 0
     ? archivedPreseasonMatchStates
     : displayMatchStates;
+  const realtimeActiveMatchday = viewMode === 'realtime'
+    ? ([...simFixtures]
+      .filter(fixture => fixture.status !== 'settled' && visibleMatchStates[fixture.id]?.status !== 'finished')
+      .sort((a, b) => {
+        const aTime = Date.parse(a.kickoff);
+        const bTime = Date.parse(b.kickoff);
+        return (Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER)
+          - (Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER);
+      })[0]?.matchday
+      ?? Math.max(1, ...simFixtures.map(fixture => fixture.matchday)))
+    : 1;
   const homeSeasonFixtures = simFixtures.filter(f =>
     f.home.code !== 'TBD' &&
     f.away.code !== 'TBD' &&
@@ -1098,7 +1109,11 @@ export default function App() {
         : SEASON_GROUPS.includes(fixtureRoundFilter)
           ? simFixtures.filter(f => f.group === fixtureRoundFilter && isGroupStageFixture(f))
           : simFixtures)
-    : (fixtureGroupFilter === 'all' ? simFixtures : simFixtures.filter(f => f.group === fixtureGroupFilter));
+    : fixtureGroupFilter === 'all'
+      ? activeTab === 'home'
+        ? simFixtures.filter(f => f.matchday === realtimeActiveMatchday || visibleMatchStates[f.id]?.status === 'live' || visibleMatchStates[f.id]?.status === 'half_time')
+        : simFixtures
+      : simFixtures.filter(f => f.group === fixtureGroupFilter);
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const visibleFixtures = activeTab === 'search' && normalizedSearchQuery
     ? baseVisibleFixtures.filter(fixture => [
@@ -2008,6 +2023,16 @@ export default function App() {
             {viewMode === 'realtime' && fixtureGroupFilter !== 'all' && (
               <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
                 Group {fixtureGroupFilter} Fixtures
+              </div>
+            )}
+            {viewMode === 'realtime' && fixtureGroupFilter === 'all' && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                  Matchday {realtimeActiveMatchday} Fixtures
+                </div>
+                <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
+                  Live first, upcoming next, FT last
+                </div>
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
