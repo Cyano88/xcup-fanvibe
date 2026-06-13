@@ -237,7 +237,7 @@ function sportmonksRound(match: SportmonksFixture, kickoff: string, fallback?: F
     if (kickoffMs >= Date.parse('2026-07-14T00:00:00Z')) return 'SF';
     if (kickoffMs >= Date.parse('2026-07-09T00:00:00Z')) return 'QF';
     if (kickoffMs >= Date.parse('2026-07-04T12:00:00Z')) return 'R16';
-    if (kickoffMs >= Date.parse('2026-06-28T00:00:00Z')) return 'R32';
+    if (kickoffMs >= Date.parse('2026-06-28T12:00:00Z')) return 'R32';
   }
   const source = normalize([match.stage?.name, match.round?.name, match.name].filter(Boolean).join(' '));
   if (source.includes('roundof16') || source.includes('last16')) return 'R16';
