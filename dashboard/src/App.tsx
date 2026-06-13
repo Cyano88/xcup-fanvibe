@@ -691,8 +691,15 @@ export default function App() {
       fetch(`${BACKEND_HTTP}/worldcup/feed`)
         .then(r => r.json())
         .then((feed: WorldCupFeed) => {
+          const feedFixtures = Array.isArray(feed.fixtures) && feed.fixtures.length ? feed.fixtures : REALTIME_FIXTURES;
           if (Array.isArray(feed.fixtures) && feed.fixtures.length) setRealtimeFixtures(feed.fixtures);
-          if (feed.matchStates) setMatchStates(prev => ({ ...prev, ...feed.matchStates }));
+          if (feed.matchStates) {
+            const realtimeIds = new Set(feedFixtures.map(fixture => fixture.id));
+            setMatchStates(prev => ({
+              ...Object.fromEntries(Object.entries(prev).filter(([fixtureId]) => !realtimeIds.has(fixtureId))),
+              ...feed.matchStates,
+            }));
+          }
           setWorldCupFeed(feed);
         })
         .catch(() => {

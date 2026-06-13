@@ -423,6 +423,10 @@ export function FixtureCard({
               <span className="text-sm font-bold text-zinc-100 uppercase tracking-widest">
                 {fixture.result === 'draw' ? 'DRAW' : fixture.result === 'home' ? fixture.home.code : fixture.away.code}
               </span>
+            ) : isSettled ? (
+              <span className="text-sm font-bold text-zinc-100 uppercase tracking-widest">
+                ENDED
+              </span>
             ) : (
               <>
                 <span className="text-xs font-bold text-white/40 tracking-widest">VS</span>
