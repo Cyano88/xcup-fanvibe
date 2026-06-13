@@ -997,8 +997,12 @@ export default function App() {
     };
   }, [seasonMode, viewMode, watchingFixtureId]);
 
+  const worldCupFeedReady = viewMode === 'realtime'
+    && Array.isArray(realtimeFixtures)
+    && realtimeFixtures.length > 0
+    && worldCupFeed?.providerConfigured !== false;
   const worldCupLiveDataActive = viewMode === 'realtime' && worldCupFeed?.mode === 'live';
-  const simFixtures    = viewMode === 'simulated' ? fixtures : worldCupLiveDataActive ? realtimeFixtures : [];
+  const simFixtures    = viewMode === 'simulated' ? fixtures : worldCupFeedReady ? realtimeFixtures : [];
   const rtGroups       = ['all', ...Array.from(new Set(simFixtures.map(f => f.group))).sort()];
   const projectMatchState = useCallback((state?: MatchState): MatchState | undefined => {
     if (!state || state.status !== 'live') return state;
@@ -1100,6 +1104,17 @@ export default function App() {
         fixture.venue,
       ].some(value => value.toLowerCase().includes(normalizedSearchQuery)))
     : baseVisibleFixtures;
+  const realtimeFixtureRank = (fixture: Fixture) => {
+    const state = visibleMatchStates[fixture.id];
+    if (state?.status === 'live' || state?.status === 'half_time' || fixture.status === 'locked') return 0;
+    if (state?.status === 'finished' || fixture.status === 'settled') return 2;
+    return 1;
+  };
+  const realtimeFixtureTime = (fixture: Fixture) => {
+    const state = visibleMatchStates[fixture.id];
+    const rawTime = state?.status === 'finished' && state.finishedAt ? state.finishedAt : Date.parse(fixture.kickoff);
+    return Number.isFinite(rawTime) ? rawTime : 0;
+  };
   const orderedVisibleFixtures = activeTab === 'home' && viewMode === 'simulated'
     ? [...visibleFixtures].sort((a, b) => {
       const latestEventMinute = (fixture: Fixture) => {
@@ -1125,6 +1140,22 @@ export default function App() {
       }
       return a.matchday - b.matchday || a.id.localeCompare(b.id);
     })
+    : viewMode === 'realtime'
+      ? [...visibleFixtures].sort((a, b) => {
+        const aRank = realtimeFixtureRank(a);
+        const bRank = realtimeFixtureRank(b);
+        const rankDiff = aRank - bRank;
+        if (rankDiff !== 0) return rankDiff;
+        if (aRank === 0) {
+          const aMinute = visibleMatchStates[a.id]?.minute ?? 0;
+          const bMinute = visibleMatchStates[b.id]?.minute ?? 0;
+          return bMinute - aMinute || a.matchday - b.matchday || a.id.localeCompare(b.id);
+        }
+        if (aRank === 2) {
+          return realtimeFixtureTime(b) - realtimeFixtureTime(a) || b.matchday - a.matchday || b.id.localeCompare(a.id);
+        }
+        return realtimeFixtureTime(a) - realtimeFixtureTime(b) || a.matchday - b.matchday || a.id.localeCompare(b.id);
+      })
     : visibleFixtures;
   const selectedGroupFixtures = activeTab === 'search' && viewMode === 'realtime' && fixtureGroupFilter !== 'all'
     ? simFixtures.filter(f => f.group === fixtureGroupFilter)
@@ -1267,13 +1298,17 @@ export default function App() {
   const displayedSeasonWinners = seasonWinners;
   const worldCupSourceLabel = worldCupFeed?.mode === 'live'
     ? worldCupFeed.source === 'sportmonks'
-      ? 'Sportmonks live feed'
+      ? 'Sportmonks fixture feed'
       : 'Live fixture feed'
-    : 'Curated fixture board';
+    : worldCupFeedReady
+      ? 'Provider-backed fixture board'
+      : 'Curated fixture board';
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
       ? `updated ${worldCupFeed.freshnessSeconds}s ago`
-      : 'provider unavailable'
+      : worldCupFeedReady
+        ? 'fixtures available'
+        : 'provider unavailable'
     : 'updating';
   const appTabs: Array<{ id: AppTab; label: string; icon: typeof Home }> = [
     { id: 'home', label: 'Home', icon: Home },
@@ -1989,7 +2024,7 @@ export default function App() {
             </div>
             {orderedVisibleFixtures.length === 0 && (
               <div className="rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white px-4 py-8 text-center text-sm dark:text-zinc-500 text-zinc-500">
-                {viewMode === 'realtime' && !worldCupLiveDataActive
+                {viewMode === 'realtime' && !worldCupFeedReady
                   ? 'Real World Cup markets open after the live sports data provider is active.'
                   : 'No matches found. Try a team name, code, group, or venue.'}
               </div>
