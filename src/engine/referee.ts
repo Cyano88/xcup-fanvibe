@@ -592,7 +592,7 @@ export class RefereeEngine {
       if (stake.outcome === 'draw') continue;
 
       const team = stake.outcome === 'home' ? fixture.home : fixture.away;
-      if (team.code === 'TBD' || team.iso === 'tbd') continue;
+      if (UNRESOLVED_TEAM_CODES.has(team.code) || team.iso === 'tbd') continue;
 
       const entry = entryFor(team);
       entry.volumeWei += BigInt(stake.amountWei);
