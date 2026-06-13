@@ -95,10 +95,12 @@ let cache: WorldCupFeed | null = null;
 
 const TEAM_BY_NAME = new Map<string, Team>();
 const TEAM_BY_CODE = new Map<string, Team>();
+const TEAM_GROUP_BY_CODE = new Map<string, string>();
 for (const fixture of REALTIME_FIXTURES) {
   for (const team of [fixture.home, fixture.away]) {
     TEAM_BY_NAME.set(normalize(team.name), team);
     TEAM_BY_CODE.set(normalize(team.code), team);
+    TEAM_GROUP_BY_CODE.set(team.code, fixture.group);
   }
 }
 
@@ -216,8 +218,11 @@ function sportmonksVenue(match: SportmonksFixture, fallback: string): string {
   return place ? `${match.venue.name} - ${place}` : match.venue.name;
 }
 
-function sportmonksGroup(match: SportmonksFixture, fallback?: string): string {
+function sportmonksGroup(match: SportmonksFixture, home: Team, away: Team, fallback?: string): string {
   if (fallback) return fallback;
+  const homeGroup = TEAM_GROUP_BY_CODE.get(home.code);
+  const awayGroup = TEAM_GROUP_BY_CODE.get(away.code);
+  if (homeGroup && homeGroup === awayGroup) return homeGroup;
   const source = [match.stage?.name, match.round?.name, match.name].filter(Boolean).join(' ');
   const group = source.match(/\bGroup\s+([A-L])\b/i)?.[1]?.toUpperCase();
   return group ?? 'WC';
@@ -226,12 +231,12 @@ function sportmonksGroup(match: SportmonksFixture, fallback?: string): string {
 function sportmonksRound(match: SportmonksFixture, fallback?: Fixture['round']): Fixture['round'] | undefined {
   if (fallback) return fallback;
   const source = normalize([match.stage?.name, match.round?.name, match.name].filter(Boolean).join(' '));
-  if (source.includes('final') && !source.includes('semifinal') && !source.includes('third')) return 'F';
-  if (source.includes('thirdplace')) return '3PL';
-  if (source.includes('semifinal')) return 'SF';
-  if (source.includes('quarterfinal')) return 'QF';
   if (source.includes('roundof16') || source.includes('last16')) return 'R16';
   if (source.includes('roundof32') || source.includes('last32')) return 'R32';
+  if (source.includes('quarterfinal')) return 'QF';
+  if (source.includes('semifinal')) return 'SF';
+  if (source.includes('thirdplace')) return '3PL';
+  if (source.includes('final')) return 'F';
   return undefined;
 }
 
@@ -322,7 +327,7 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
     const fixture: Fixture = {
       id: fixtureId,
       matchday: sportmonksMatchday(api, template?.matchday),
-      group: sportmonksGroup(api, template?.group),
+      group: sportmonksGroup(api, home, away, template?.group),
       round: sportmonksRound(api, template?.round),
       home,
       away,
