@@ -102,11 +102,18 @@ const REWARD_RPC_URL = process.env.REWARD_RPC_URL
   ?? xLayerMainnet.rpcUrls.default.http[0];
 const FANVIBE_TOKEN_ADDRESS = (process.env.FANVIBE_TOKEN_ADDRESS ?? '0x35a676Ca9347499f97819813a38ED14e6a7C5e3F') as Address;
 const FVB_ELIGIBILITY_CAP_WEI = 450_000n * 10n ** 18n;
-const FVB_RPC_URL = process.env.FVB_RPC_URL
+const PRIVATE_X_LAYER_RPC_URL = process.env.FVB_RPC_URL
   ?? process.env.X_LAYER_HTTP_RPC
   ?? process.env.X_LAYER_RPC_URL
-  ?? xLayerMainnet.rpcUrls.default.http[0];
-const fvbPublicClient = createPublicClient({ chain: xLayerMainnet, transport: http(FVB_RPC_URL) });
+  ?? process.env.REWARD_RPC_URL;
+const FVB_RPC_URLS = [
+  PRIVATE_X_LAYER_RPC_URL,
+  'https://xlayer.drpc.org',
+  'https://rpc.xlayer.tech',
+  'https://xlayerrpc.okx.com',
+  xLayerMainnet.rpcUrls.default.http[0],
+].filter((url, index, urls): url is string => Boolean(url) && urls.indexOf(url) === index);
+const fvbPublicClients = FVB_RPC_URLS.map(url => createPublicClient({ chain: xLayerMainnet, transport: http(url) }));
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -116,6 +123,22 @@ const ERC20_BALANCE_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
   },
 ] as const;
+
+async function readFvbBalance(address: string): Promise<bigint | null> {
+  for (const client of fvbPublicClients) {
+    try {
+      return await client.readContract({
+        address: FANVIBE_TOKEN_ADDRESS,
+        abi: ERC20_BALANCE_ABI,
+        functionName: 'balanceOf',
+        args: [address as Address],
+      });
+    } catch {
+      // Try the next public RPC; X Layer providers occasionally disagree on contract reads.
+    }
+  }
+  return null;
+}
 
 async function attachFvbEligibility<T extends { address: string }>(entries: T[]) {
   if (!entries.length) return entries.map(entry => ({
@@ -127,29 +150,7 @@ async function attachFvbEligibility<T extends { address: string }>(entries: T[])
   }));
 
   try {
-    const balances = await fvbPublicClient.multicall({
-      allowFailure: true,
-      contracts: entries.map(entry => ({
-        address: FANVIBE_TOKEN_ADDRESS,
-        abi: ERC20_BALANCE_ABI,
-        functionName: 'balanceOf',
-        args: [entry.address as Address],
-      })),
-    });
-
-    const balanceValues = await Promise.all(balances.map(async (result, index) => {
-      if (result?.status === 'success') return result.result;
-      try {
-        return await fvbPublicClient.readContract({
-          address: FANVIBE_TOKEN_ADDRESS,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'balanceOf',
-          args: [entries[index].address as Address],
-        });
-      } catch {
-        return null;
-      }
-    }));
+    const balanceValues = await Promise.all(entries.map(entry => readFvbBalance(entry.address)));
 
     return entries.map((entry, index) => {
       const balance = balanceValues[index];
@@ -461,6 +462,25 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       capTokens: '450000',
     },
     scoreRules: engine.getMatchdayCupScoreRules(),
+  });
+});
+
+app.get('/matchday-cup/fvb-balance/:address', async (req, res) => {
+  const parsed = addressSchema.safeParse(req.params.address);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+  const balance = await readFvbBalance(parsed.data);
+  const eligibleWei = balance === null
+    ? null
+    : balance > FVB_ELIGIBILITY_CAP_WEI ? FVB_ELIGIBILITY_CAP_WEI : balance;
+  res.json({
+    address: parsed.data,
+    tokenAddress: FANVIBE_TOKEN_ADDRESS,
+    balanceWei: balance?.toString() ?? null,
+    eligibleWei: eligibleWei?.toString() ?? null,
+    eligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+    eligible: balance === null ? null : balance > 0n,
+    privateRpcConfigured: Boolean(PRIVATE_X_LAYER_RPC_URL),
+    rpcFallbacks: FVB_RPC_URLS.length,
   });
 });
 
