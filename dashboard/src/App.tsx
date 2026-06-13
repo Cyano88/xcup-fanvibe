@@ -1574,6 +1574,7 @@ export default function App() {
         {activeTab === 'home' && homeCupView === 'leaderboard' && (
           <MatchdayCupLeaderboard
             okbUsd={okbUsd}
+            address={settlementWalletAddress}
             onOpenWorldCup={() => {
               setHomeCupView('matches');
               setViewMode('realtime');

@@ -9,7 +9,7 @@ const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const LEADERBOARD_BATCH_SIZE = 20;
 
 interface MatchdayEntry {
-  rank: number;
+  rank: number | null;
   address: string;
   displayName?: string;
   volumeWei: string;
@@ -47,6 +47,7 @@ interface CountrySupportEntry {
 
 interface Props {
   okbUsd: number | null;
+  address?: string | null;
   onOpenWorldCup: () => void;
 }
 
@@ -80,10 +81,12 @@ function formatScore(value: number | undefined): string {
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
-export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
+export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Props) {
   const [activeBoard, setActiveBoard] = useState<'matchday' | 'countries'>('matchday');
   const [matchdayEntries, setMatchdayEntries] = useState<MatchdayEntry[]>([]);
   const [countrySupport, setCountrySupport] = useState<CountrySupportEntry[]>([]);
+  const [myRank, setMyRank] = useState<MatchdayEntry | null>(null);
+  const [myRankLoaded, setMyRankLoaded] = useState(false);
   const [matchdayLoaded, setMatchdayLoaded] = useState(false);
   const [supportLoaded, setSupportLoaded] = useState(false);
   const [visibleMatchday, setVisibleMatchday] = useState(LEADERBOARD_BATCH_SIZE);
@@ -112,6 +115,35 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
       clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!address) {
+      setMyRank(null);
+      setMyRankLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      fetch(`${BACKEND_HTTP}/matchday-cup/rank/${address}`)
+        .then(res => res.ok ? res.json() : Promise.reject(new Error('my rank')))
+        .then((data: { entry?: MatchdayEntry }) => {
+          if (cancelled) return;
+          setMyRank(data.entry ?? null);
+          setMyRankLoaded(true);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMyRank(null);
+          setMyRankLoaded(true);
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [address]);
 
   useEffect(() => {
     let cancelled = false;
@@ -184,6 +216,63 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
 
       <section className="mt-4 overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white shadow-sm">
         <div className="p-3 sm:p-4">
+          {address && (
+            <div className="mb-3 rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-900/45 bg-zinc-50 px-3 py-3">
+              {myRankLoaded && myRank ? (() => {
+                const volumeUsd = compactUsd(formatOkbUsdFromWei(myRank.volumeWei, okbUsd));
+                const fvbStatus = myRank.fvbEligible === null || myRank.fvbEligible === undefined
+                  ? 'FVB syncing'
+                  : myRank.fvbEligible
+                    ? `${formatFvbBalance(myRank.fvbEligibleWei)} FVB eligible`
+                    : 'Needs FVB';
+                return (
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] dark:text-zinc-500 text-zinc-500">My Rank</div>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <span className="text-lg font-black tabular-nums dark:text-white text-zinc-950">
+                          {myRank.rank ? `#${myRank.rank}` : 'Unranked'}
+                        </span>
+                        <span className="text-sm font-bold tabular-nums dark:text-zinc-300 text-zinc-700">
+                          {formatScore(myRank.score)} pts
+                        </span>
+                        <span className="truncate text-xs font-semibold dark:text-zinc-500 text-zinc-500">
+                          {shortWallet(myRank.address)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
+                        {fvbStatus}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-right sm:min-w-[260px]">
+                      <div>
+                        <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{myRank.wins}</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Wins</div>
+                      </div>
+                      <div>
+                        <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{myRank.active}</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Live</div>
+                      </div>
+                      <div>
+                        <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{formatOkbVolume(myRank.volumeWei)}</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">{volumeUsd}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] dark:text-zinc-500 text-zinc-500">My Rank</div>
+                    <div className="mt-1 text-sm font-semibold dark:text-zinc-300 text-zinc-700">
+                      {myRankLoaded ? 'Rank unavailable right now.' : 'Loading your Matchday Cup rank...'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex rounded-md dark:bg-zinc-900 bg-zinc-100 p-0.5">
               <button

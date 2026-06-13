@@ -451,6 +451,51 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
   });
 });
 
+app.get('/matchday-cup/rank/:address', async (req, res) => {
+  const parsed = addressSchema.safeParse(req.params.address);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+  const address = parsed.data;
+  const key = address.toLowerCase();
+  const entries = engine.getMatchdayCupLeaderboard(10_000).map(entry => ({
+    ...entry,
+    displayName: profileNameFor(entry.address),
+  }));
+  const ranked = entries.find(entry => entry.address.toLowerCase() === key);
+  const entry = ranked ?? {
+    rank: null,
+    address,
+    displayName: profileNameFor(address),
+    volumeWei: '0',
+    returnedWei: '0',
+    wins: 0,
+    losses: 0,
+    active: 0,
+    refunded: 0,
+    positions: 0,
+    winRate: null,
+    lastActiveAt: 0,
+    score: 0,
+    scoreComponents: {
+      volume: 0,
+      wins: 0,
+      active: 0,
+      participation: 0,
+    },
+    scoreRules: engine.getMatchdayCupScoreRules(),
+  };
+  const [entryWithEligibility] = await attachFvbEligibility([entry]);
+  res.json({
+    entry: entryWithEligibility,
+    ranked: !!ranked,
+    fvbEligibility: {
+      tokenAddress: FANVIBE_TOKEN_ADDRESS,
+      capWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+      capTokens: '450000',
+    },
+    scoreRules: engine.getMatchdayCupScoreRules(),
+  });
+});
+
 app.get('/matchday-cup/country-support', (req, res) => {
   const parsed = z.coerce.number().int().min(1).max(50).default(12).safeParse(req.query.limit);
   if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
