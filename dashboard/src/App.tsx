@@ -9,7 +9,6 @@ import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
 import { MatchdayCupLeaderboard } from './components/MatchdayCupLeaderboard';
 import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team, UserPosition } from './types';
-import { REALTIME_FIXTURES } from './types';
 import { BracketView } from './components/BracketView';
 import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
@@ -361,7 +360,7 @@ export default function App() {
   const [refereeAddress, setRefereeAddress]     = useState(REFEREE_ADDR);
   const [metabolism, setMetabolism]             = useState<MetabolicState>(defaultMetabolism);
   const [fixtures, setFixtures]                 = useState<Fixture[]>(initialSeason.fixtures);
-  const [realtimeFixtures, setRealtimeFixtures] = useState<Fixture[]>(REALTIME_FIXTURES);
+  const [realtimeFixtures, setRealtimeFixtures] = useState<Fixture[]>([]);
   const [worldCupFeed, setWorldCupFeed]         = useState<WorldCupFeed | null>(null);
   const [pools, setPools]                       = useState<Record<string, Pool>>({});
   const [logs, setLogs]                         = useState<DaemonLog[]>([]);
@@ -701,8 +700,8 @@ export default function App() {
       fetch(`${BACKEND_HTTP}/worldcup/feed`)
         .then(r => r.json())
         .then((feed: WorldCupFeed) => {
-          const feedFixtures = Array.isArray(feed.fixtures) && feed.fixtures.length ? feed.fixtures : REALTIME_FIXTURES;
-          if (Array.isArray(feed.fixtures) && feed.fixtures.length) setRealtimeFixtures(feed.fixtures);
+          const feedFixtures = Array.isArray(feed.fixtures) ? feed.fixtures : [];
+          setRealtimeFixtures(feedFixtures);
           if (feed.matchStates) {
             const realtimeIds = new Set(feedFixtures.map(fixture => fixture.id));
             setMatchStates(prev => ({
@@ -713,8 +712,9 @@ export default function App() {
           setWorldCupFeed(feed);
         })
         .catch(() => {
+          setRealtimeFixtures([]);
           setWorldCupFeed({
-            fixtures: REALTIME_FIXTURES,
+            fixtures: [],
             matchStates: {},
             source: 'static',
             mode: 'fallback',
