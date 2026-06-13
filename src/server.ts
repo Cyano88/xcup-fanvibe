@@ -788,6 +788,25 @@ function outcomeFromMatchState(matchState: MatchState): Outcome {
   return 'draw';
 }
 
+async function refreshWorldCupFixture(fixtureId: string): Promise<{ mode: string; providerConfigured: boolean } | null> {
+  try {
+    const detail = await getWorldCupMatchDetail(fixtureId);
+    if (process.env.LIVE_SPORTS_REQUIRED === '1' && detail.mode !== 'live') {
+      return { mode: detail.mode, providerConfigured: detail.providerConfigured };
+    }
+
+    engine.syncFixtures([detail.fixture]);
+    if (detail.matchState.status === 'finished') {
+      const result = await engine.settleSyncedFixture(detail.matchState.fixtureId, outcomeFromMatchState(detail.matchState));
+      if (result) broadcast('settlement', result);
+    }
+    return { mode: detail.mode, providerConfigured: detail.providerConfigured };
+  } catch (err: unknown) {
+    console.warn(`[FanVibe] World Cup fixture refresh failed for ${fixtureId}: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
 async function syncSeasonSnapshotWithReferee(state: PersistedSeasonState): Promise<void> {
   if (!Array.isArray(state.fixtures)) return;
 
@@ -988,13 +1007,22 @@ app.post('/stake/report', async (req, res) => {
 });
 
 app.get('/stake/status/:fixtureId', async (req, res) => {
+  const fixtureId = req.params.fixtureId;
+  const shouldRefreshWorldCup = fixtureId.startsWith('wc-') || fixtureId.startsWith('sm-');
+  const refresh = shouldRefreshWorldCup ? await refreshWorldCupFixture(fixtureId) : null;
   const fixture = engine.getState().fixtures.find(f => f.id === req.params.fixtureId);
-  const canStake = !!fixture
+  const liveProviderRequiredButUnavailable = shouldRefreshWorldCup
+    && process.env.LIVE_SPORTS_REQUIRED === '1'
+    && refresh?.mode !== 'live';
+  const canStake = !liveProviderRequiredButUnavailable
+    && !!fixture
     && fixture.home.code !== 'TBD'
     && fixture.away.code !== 'TBD'
     && fixture.status !== 'locked'
     && fixture.status !== 'settled';
-  const reason = !fixture
+  const reason = liveProviderRequiredButUnavailable
+    ? 'Live sports provider is not available for this fixture yet.'
+    : !fixture
     ? 'Fixture is not available yet.'
     : fixture.status === 'locked'
       ? 'This match is already live. Staking is closed.'
@@ -1003,7 +1031,7 @@ app.get('/stake/status/:fixtureId', async (req, res) => {
         : fixture.home.code === 'TBD' || fixture.away.code === 'TBD'
           ? 'Fixture teams are not resolved yet.'
           : 'Staking is open.';
-  res.json({ fixtureId: req.params.fixtureId, canStake, status: fixture?.status ?? 'missing', reason });
+  res.json({ fixtureId, canStake, status: fixture?.status ?? 'missing', reason });
 });
 
 app.post('/metabolism/refresh', async (_req, res) => {
