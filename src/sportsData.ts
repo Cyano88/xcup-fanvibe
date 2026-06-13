@@ -149,13 +149,13 @@ function matchKey(home?: Team | null, away?: Team | null, group?: string): strin
 
 function buildStaticFeed(error?: string): WorldCupFeed {
   return {
-    fixtures: REALTIME_FIXTURES,
+    fixtures: [],
     matchStates: {},
     source: 'static',
     mode: 'fallback',
     updatedAt: Date.now(),
     freshnessSeconds: 0,
-    providerConfigured: !!(process.env.SPORTMONKS_API_KEY || process.env.WC2026_API_KEY),
+    providerConfigured: false,
     error,
   };
 }
@@ -225,19 +225,6 @@ function sportmonksEvents(match: SportmonksFixture, fixture: Fixture): MatchStat
   });
 }
 
-function timeGuardedFixture(fixture: Fixture, kickoff = fixture.kickoff): Fixture {
-  const kickoffMs = Date.parse(kickoff);
-  if (!Number.isFinite(kickoffMs)) return { ...fixture, kickoff };
-  const now = Date.now();
-  if (now >= kickoffMs + MATCH_SETTLED_FALLBACK_MS) {
-    return { ...fixture, kickoff, status: 'settled' };
-  }
-  if (now >= kickoffMs) {
-    return { ...fixture, kickoff, status: 'locked' };
-  }
-  return { ...fixture, kickoff, status: 'open' };
-}
-
 function buildMatchState(fixture: Fixture, stateStatus: MatchState['status'] | null, homeScore: number, awayScore: number, events: MatchState['events'], kickoff: string): MatchState | null {
   if (!stateStatus) return null;
   const latestMinute = events.length ? Math.max(...events.map(event => event.minute ?? 0)) : 1;
@@ -255,18 +242,18 @@ function buildMatchState(fixture: Fixture, stateStatus: MatchState['status'] | n
 }
 
 function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
-  const apiByTeam = new Map<string, SportmonksFixture>();
-  for (const match of matches) {
-    const home = sportmonksTeam(match, 'home');
-    const away = sportmonksTeam(match, 'away');
-    if (!home || !away) continue;
-    apiByTeam.set(matchKey(home, away), match);
-  }
+  const templatesByTeam = new Map(REALTIME_FIXTURES.map(fixture => [matchKey(fixture.home, fixture.away), fixture]));
 
   const matchStates: Record<string, MatchState> = {};
-  const fixtures = REALTIME_FIXTURES.map(fixture => {
-    const api = apiByTeam.get(matchKey(fixture.home, fixture.away));
-    if (!api) return timeGuardedFixture(fixture);
+  const fixtures: Fixture[] = [];
+  const seen = new Set<string>();
+  for (const api of matches) {
+    const home = sportmonksTeam(api, 'home');
+    const away = sportmonksTeam(api, 'away');
+    if (!home || !away) continue;
+    const fixture = templatesByTeam.get(matchKey(home, away));
+    if (!fixture || seen.has(fixture.id)) continue;
+    seen.add(fixture.id);
 
     const homeScore = sportmonksScore(api, 'home');
     const awayScore = sportmonksScore(api, 'away');
@@ -276,7 +263,7 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
     const matchState = buildMatchState(fixture, sportmonksMatchStateStatus(api), homeScore, awayScore, events, kickoff);
     if (matchState) matchStates[fixture.id] = matchState;
 
-    return {
+    fixtures.push({
       ...fixture,
       kickoff,
       venue: sportmonksVenue(api, fixture.venue),
@@ -284,8 +271,8 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
       result: status === 'settled'
         ? homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw'
         : fixture.result,
-    } satisfies Fixture;
-  });
+    } satisfies Fixture);
+  }
 
   return {
     fixtures,
@@ -299,20 +286,22 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
 }
 
 function overlayWc2026(matches: Wc2026Match[]): WorldCupFeed {
-  const apiByTeam = new Map<string, Wc2026Match>();
-  for (const match of matches) {
-    const home = teamFromName(teamName(match.home_team));
-    const away = teamFromName(teamName(match.away_team));
-    if (!home || !away) continue;
-    apiByTeam.set(matchKey(home, away, groupName(match)), match);
-    apiByTeam.set(matchKey(home, away), match);
-  }
+  const templatesByTeam = new Map(REALTIME_FIXTURES.flatMap(fixture => [
+    [matchKey(fixture.home, fixture.away, fixture.group), fixture],
+    [matchKey(fixture.home, fixture.away), fixture],
+  ]));
 
   const matchStates: Record<string, MatchState> = {};
-  const fixtures = REALTIME_FIXTURES.map(fixture => {
-    const api = apiByTeam.get(matchKey(fixture.home, fixture.away, fixture.group))
-      ?? apiByTeam.get(matchKey(fixture.home, fixture.away));
-    if (!api) return timeGuardedFixture(fixture);
+  const fixtures: Fixture[] = [];
+  const seen = new Set<string>();
+  for (const api of matches) {
+    const home = teamFromName(teamName(api.home_team));
+    const away = teamFromName(teamName(api.away_team));
+    if (!home || !away) continue;
+    const fixture = templatesByTeam.get(matchKey(home, away, groupName(api)))
+      ?? templatesByTeam.get(matchKey(home, away));
+    if (!fixture || seen.has(fixture.id)) continue;
+    seen.add(fixture.id);
 
     const homeScore = scoreValue(api.home_score, api.home_goals);
     const awayScore = scoreValue(api.away_score, api.away_goals);
@@ -328,7 +317,7 @@ function overlayWc2026(matches: Wc2026Match[]): WorldCupFeed {
     );
     if (matchState) matchStates[fixture.id] = matchState;
 
-    return {
+    fixtures.push({
       ...fixture,
       kickoff,
       venue: venueName(api, fixture.venue),
@@ -336,8 +325,8 @@ function overlayWc2026(matches: Wc2026Match[]): WorldCupFeed {
       result: status === 'settled'
         ? homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw'
         : fixture.result,
-    } satisfies Fixture;
-  });
+    } satisfies Fixture);
+  }
 
   return {
     fixtures,

@@ -74,7 +74,7 @@ function MatchNode({ fixture, matchState, onWatch }: { fixture: Fixture; matchSt
 }
 
 export function BracketView({ fixtures, matchStates, onWatch }: Props) {
-  const knockoutFixtures = fixtures.filter(f => f.mode === 'simulated' && !!f.round);
+  const knockoutFixtures = fixtures.filter(f => !!f.round);
   const liveCount = knockoutFixtures.filter(f => matchStates[f.id]?.status === 'live').length;
   const qualifiedCount = knockoutFixtures.filter(f => baseFixtureId(f.id).startsWith('k32-') && f.home.code !== 'TBD' && f.away.code !== 'TBD').length * 2;
 

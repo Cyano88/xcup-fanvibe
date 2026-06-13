@@ -428,6 +428,10 @@ export default function App() {
   }, [simulationModeVisible, viewMode]);
 
   useEffect(() => {
+    if (viewMode === 'realtime' && activeTab === 'search' && groupFilter === 'all') setGroupFilter('live');
+  }, [activeTab, groupFilter, viewMode]);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(ACTIVE_TAB_KEY, activeTab);
     } catch {
@@ -1010,9 +1014,21 @@ export default function App() {
     && worldCupFeed?.providerConfigured !== false;
   const worldCupLiveDataActive = viewMode === 'realtime' && worldCupFeed?.mode === 'live';
   const simFixtures    = viewMode === 'simulated' ? fixtures : worldCupFeedReady ? realtimeFixtures : [];
-  const rtGroups       = ['all', ...Array.from(new Set(simFixtures.map(f => f.group))).sort()];
+  const rtGroups       = Array.from(new Set(simFixtures.filter(f => !f.round).map(f => f.group))).sort();
+  const realtimeTabs = [
+    { id: 'live', label: 'Live', tone: 'live' },
+    ...rtGroups.map(g => ({ id: g, label: g, tone: 'group' })),
+    { id: 'knockouts', label: 'Knockouts', tone: 'knockout' },
+    { id: 'R32', label: 'R32', tone: 'knockout' },
+    { id: 'R16', label: 'R16', tone: 'knockout' },
+    { id: 'QF', label: 'QF', tone: 'knockout' },
+    { id: 'SF', label: 'SF', tone: 'knockout' },
+    { id: 'F', label: 'Final', tone: 'knockout' },
+    { id: 'bracket', label: 'Bracket', tone: 'bracket' },
+  ];
   const projectMatchState = useCallback((state?: MatchState): MatchState | undefined => {
     if (!state || state.status !== 'live') return state;
+    if (state.fixtureId.startsWith('wc-')) return state;
     const kickoffMs = Date.parse(state.simulatedKickoff);
     if (!Number.isFinite(kickoffMs)) return state;
     const minuteMs = Math.max(1000, Math.round(seasonTiming.matchMs / 90));
@@ -1081,17 +1097,23 @@ export default function App() {
   const visibleMatchStates = activeTab === 'home' && archivedPreseasonFixtures.length > 0
     ? archivedPreseasonMatchStates
     : displayMatchStates;
+  const liveOrCurrentRealtimeFixtures = [...simFixtures]
+    .filter(fixture => fixture.status !== 'settled' && visibleMatchStates[fixture.id]?.status !== 'finished')
+    .sort((a, b) => {
+      const aTime = Date.parse(a.kickoff);
+      const bTime = Date.parse(b.kickoff);
+      return (Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER)
+        - (Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER);
+    });
   const realtimeActiveMatchday = viewMode === 'realtime'
-    ? ([...simFixtures]
-      .filter(fixture => fixture.status !== 'settled' && visibleMatchStates[fixture.id]?.status !== 'finished')
-      .sort((a, b) => {
-        const aTime = Date.parse(a.kickoff);
-        const bTime = Date.parse(b.kickoff);
-        return (Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER)
-          - (Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER);
-      })[0]?.matchday
-      ?? Math.max(1, ...simFixtures.map(fixture => fixture.matchday)))
+    ? liveOrCurrentRealtimeFixtures[0]?.matchday
+      ?? Math.max(1, ...simFixtures.map(fixture => fixture.matchday))
     : 1;
+  const currentRealtimeFixtures = simFixtures.filter(fixture =>
+    fixture.matchday === realtimeActiveMatchday
+    || visibleMatchStates[fixture.id]?.status === 'live'
+    || visibleMatchStates[fixture.id]?.status === 'half_time'
+  );
   const homeSeasonFixtures = simFixtures.filter(f =>
     f.home.code !== 'TBD' &&
     f.away.code !== 'TBD' &&
@@ -1109,11 +1131,17 @@ export default function App() {
         : SEASON_GROUPS.includes(fixtureRoundFilter)
           ? simFixtures.filter(f => f.group === fixtureRoundFilter && isGroupStageFixture(f))
           : simFixtures)
-    : fixtureGroupFilter === 'all'
-      ? activeTab === 'home'
-        ? simFixtures.filter(f => f.matchday === realtimeActiveMatchday || visibleMatchStates[f.id]?.status === 'live' || visibleMatchStates[f.id]?.status === 'half_time')
-        : simFixtures
-      : simFixtures.filter(f => f.group === fixtureGroupFilter);
+    : fixtureGroupFilter === 'live' || (activeTab === 'home' && fixtureGroupFilter === 'all')
+      ? currentRealtimeFixtures
+      : SEASON_GROUPS.includes(fixtureGroupFilter)
+        ? simFixtures.filter(f => f.group === fixtureGroupFilter && !f.round)
+        : fixtureGroupFilter === 'knockouts'
+          ? simFixtures.filter(f => !!f.round)
+          : ['R32', 'R16', 'QF', 'SF', 'F'].includes(fixtureGroupFilter)
+            ? simFixtures.filter(f => f.round === fixtureGroupFilter)
+            : fixtureGroupFilter === 'bracket'
+              ? []
+              : simFixtures;
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const visibleFixtures = activeTab === 'search' && normalizedSearchQuery
     ? baseVisibleFixtures.filter(fixture => [
@@ -1179,7 +1207,7 @@ export default function App() {
         return realtimeFixtureTime(a) - realtimeFixtureTime(b) || a.matchday - b.matchday || a.id.localeCompare(b.id);
       })
     : visibleFixtures;
-  const selectedGroupFixtures = activeTab === 'search' && viewMode === 'realtime' && fixtureGroupFilter !== 'all'
+  const selectedGroupFixtures = activeTab === 'search' && viewMode === 'realtime' && SEASON_GROUPS.includes(fixtureGroupFilter)
     ? simFixtures.filter(f => f.group === fixtureGroupFilter)
     : [];
   const selectedGroupResults = selectedGroupFixtures.filter(f => matchStates[f.id]?.status === 'finished');
@@ -1893,13 +1921,17 @@ export default function App() {
           </div>
         ) : (
           <div className="flex items-center gap-2 overflow-x-auto rounded-xl border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/80 bg-white p-1.5 shadow-sm scrollbar-none">
-            {rtGroups.map(g => (
-              <button key={g} onClick={() => setGroupFilter(g)}
+            {realtimeTabs.map(t => (
+              <button key={t.id} onClick={() => setGroupFilter(t.id)}
                 className={`season-filter-tab shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150
-                  ${groupFilter === g
-                    ? 'dark:bg-blue-500 dark:text-white bg-blue-600 text-white'
+                  ${groupFilter === t.id
+                    ? t.tone === 'live'
+                      ? 'dark:bg-blue-500/20 bg-blue-50 dark:text-blue-300 text-blue-700 border dark:border-blue-500/30 border-blue-200 shadow-sm'
+                      : t.tone === 'group'
+                        ? 'dark:bg-blue-500 bg-blue-600 text-white shadow-sm'
+                        : 'bg-rose-600 text-white shadow-sm'
                     : 'dark:text-zinc-400 text-zinc-500 border dark:border-zinc-800 border-zinc-200 dark:hover:border-zinc-600 hover:border-zinc-300 dark:hover:text-zinc-100 hover:text-zinc-900 dark:bg-zinc-900/35 bg-zinc-50'}`}>
-                {g === 'all' ? 'All' : g}
+                {t.label}
               </button>
             ))}
           </div>
@@ -1925,7 +1957,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'search' && viewMode === 'realtime' && groupFilter !== 'all' && (
+        {activeTab === 'search' && viewMode === 'realtime' && SEASON_GROUPS.includes(groupFilter) && (
           <section className="space-y-4">
             <div className="flex items-end justify-between gap-4 border-b dark:border-zinc-900 border-zinc-200 pb-3">
               <div>
@@ -2000,10 +2032,10 @@ export default function App() {
         )}
 
         {/* -- Bracket view OR fixture grid -------------------------------- */}
-        {(activeTab === 'search' || (activeTab === 'home' && homeCupView === 'matches')) && !showPreseasonSearchLiveEmpty && (viewMode !== 'simulated' || seasonHydrated) && (viewMode === 'simulated' && fixtureRoundFilter === 'bracket' ? (
+        {(activeTab === 'search' || (activeTab === 'home' && homeCupView === 'matches')) && !showPreseasonSearchLiveEmpty && (viewMode !== 'simulated' || seasonHydrated) && ((viewMode === 'simulated' && fixtureRoundFilter === 'bracket') || (viewMode === 'realtime' && fixtureGroupFilter === 'bracket') ? (
           <BracketView
-            fixtures={fixtures}
-            matchStates={matchStates}
+            fixtures={simFixtures}
+            matchStates={visibleMatchStates}
             onWatch={handleWatch}
           />
         ) : (
@@ -2020,19 +2052,34 @@ export default function App() {
                 )}
               </div>
             )}
-            {viewMode === 'realtime' && fixtureGroupFilter !== 'all' && (
+            {viewMode === 'realtime' && SEASON_GROUPS.includes(fixtureGroupFilter) && (
               <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
                 Group {fixtureGroupFilter} Fixtures
               </div>
             )}
-            {viewMode === 'realtime' && fixtureGroupFilter === 'all' && (
+            {viewMode === 'realtime' && fixtureGroupFilter === 'live' && (
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
-                  Matchday {realtimeActiveMatchday} Fixtures
+                  Live Fixtures
                 </div>
                 <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
                   Live first, upcoming next, FT last
                 </div>
+              </div>
+            )}
+            {viewMode === 'realtime' && fixtureGroupFilter === 'all' && activeTab === 'home' && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                  Live Fixtures
+                </div>
+                <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
+                  Live first, upcoming next, FT last
+                </div>
+              </div>
+            )}
+            {viewMode === 'realtime' && (fixtureGroupFilter === 'knockouts' || ['R32', 'R16', 'QF', 'SF', 'F'].includes(fixtureGroupFilter)) && (
+              <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
+                {fixtureGroupFilter === 'knockouts' ? 'Knockout Fixtures' : `${fixtureGroupFilter === 'F' ? 'Final' : fixtureGroupFilter} Fixtures`}
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">

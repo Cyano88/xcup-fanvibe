@@ -204,7 +204,7 @@ export function FixtureCard({
   const isSeasonPlay = fixture.mode === 'simulated';
   const isLiveMatch = matchState?.status === 'live' || matchState?.status === 'half_time';
   const isFinishedMatch = matchState?.status === 'finished';
-  const canStream = isLiveMatch || isFinishedMatch;
+  const canStream = isLiveMatch;
 
   // Countdown refresh
   useEffect(() => {
@@ -339,7 +339,7 @@ export function FixtureCard({
           <span className="text-[11px] text-white/60 uppercase tracking-widest">
             {fixture.round
               ? `${ROUND_LABEL[fixture.round] ?? 'Knockout'}  - Match ${fixture.matchday}`
-              : `Group ${fixture.group}  - MD${fixture.matchday}`}
+              : `Group ${fixture.group}  - Matchday ${fixture.matchday}`}
           </span>
           {matchState?.status === 'live' ? (
             <span className="text-[10px] font-bold text-emerald-200 bg-emerald-500/25 border border-emerald-300/40 px-2 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1.5">
@@ -483,7 +483,7 @@ export function FixtureCard({
             <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
               <Lock size={11} />
               <span>
-                {isLiveMatch ? 'Match already started' : isFinishedMatch ? 'Match ended' : `Staking ${isSettled ? 'closed' : 'locked'}`}
+                {isLiveMatch ? 'Match already started' : isFinishedMatch ? 'Result final' : `Staking ${isSettled ? 'closed' : 'locked'}`}
               </span>
               {isSettled && fixture.result && (
                 <span className="dark:text-zinc-300 text-zinc-600 font-semibold capitalize ml-1"> - {fixture.result}</span>
@@ -497,7 +497,7 @@ export function FixtureCard({
                   dark:hover:bg-white hover:bg-zinc-800 active:scale-95"
               >
                 <MonitorPlay size={12} />
-                {isFinishedMatch ? 'Match Recap' : 'Live Center'}
+                Live Center
               </button>
             )}
           </div>
