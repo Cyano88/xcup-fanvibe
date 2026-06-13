@@ -179,6 +179,20 @@ async function attachFvbEligibility<T extends { address: string }>(entries: T[])
   }
 }
 
+async function matchdayEntriesWithEligibility(limit: number) {
+  const entries = engine.getMatchdayCupLeaderboard(limit).map(entry => ({
+    ...entry,
+    displayName: profileNameFor(entry.address),
+  }));
+  return attachFvbEligibility(entries);
+}
+
+function qualifiedMatchdayEntries<T extends { rank: number | null; fvbEligible?: boolean | null }>(entries: T[]): T[] {
+  return entries
+    .filter(entry => entry.fvbEligible === true)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
 function rewardStatusFor(referral: PersistedReferral, side: ReferralRewardSide): ReferralRewardStatus | undefined {
   return side === 'referrer'
     ? referral.referrerRewardStatus ?? referral.rewardStatus
@@ -451,12 +465,9 @@ app.get('/leaderboard', (req, res) => {
 app.get('/matchday-cup/leaderboard', async (req, res) => {
   const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
   if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
-  const entries = engine.getMatchdayCupLeaderboard(parsed.data).map(entry => ({
-    ...entry,
-    displayName: profileNameFor(entry.address),
-  }));
+  const entries = qualifiedMatchdayEntries(await matchdayEntriesWithEligibility(10_000)).slice(0, parsed.data);
   res.json({
-    entries: await attachFvbEligibility(entries),
+    entries,
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
       capWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
@@ -490,12 +501,11 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
   const address = parsed.data;
   const key = address.toLowerCase();
-  const entries = engine.getMatchdayCupLeaderboard(10_000).map(entry => ({
-    ...entry,
-    displayName: profileNameFor(entry.address),
-  }));
-  const ranked = entries.find(entry => entry.address.toLowerCase() === key);
-  const entry = ranked ?? {
+  const entries = await matchdayEntriesWithEligibility(10_000);
+  const qualifiedEntries = qualifiedMatchdayEntries(entries);
+  const ranked = qualifiedEntries.find(entry => entry.address.toLowerCase() === key);
+  const unqualifiedStats = entries.find(entry => entry.address.toLowerCase() === key);
+  const emptyEntry = {
     rank: null,
     address,
     displayName: profileNameFor(address),
@@ -517,9 +527,10 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
     },
     scoreRules: engine.getMatchdayCupScoreRules(),
   };
-  const [entryWithEligibility] = await attachFvbEligibility([entry]);
+  const entry = ranked ?? (unqualifiedStats ? { ...unqualifiedStats, rank: null } : emptyEntry);
+  const entryWithEligibility = ranked || unqualifiedStats ? entry : (await attachFvbEligibility([entry]))[0];
   res.json({
-    entry: entryWithEligibility,
+    entry: ranked ? entryWithEligibility : { ...entryWithEligibility, rank: null },
     ranked: !!ranked,
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
@@ -530,10 +541,12 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
   });
 });
 
-app.get('/matchday-cup/country-support', (req, res) => {
+app.get('/matchday-cup/country-support', async (req, res) => {
   const parsed = z.coerce.number().int().min(1).max(50).default(12).safeParse(req.query.limit);
   if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
-  res.json({ entries: engine.getMatchdayCountrySupport(parsed.data) });
+  const eligibleEntries = qualifiedMatchdayEntries(await matchdayEntriesWithEligibility(10_000));
+  const eligibleAddresses = new Set(eligibleEntries.map(entry => entry.address.toLowerCase()));
+  res.json({ entries: engine.getMatchdayCountrySupport(parsed.data, eligibleAddresses) });
 });
 
 app.get('/profiles/:address', (req, res) => {

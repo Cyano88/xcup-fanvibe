@@ -558,7 +558,7 @@ export class RefereeEngine {
     };
   }
 
-  getMatchdayCountrySupport(limit = 12) {
+  getMatchdayCountrySupport(limit = 12, eligibleAddresses?: Set<string>) {
     type CountrySupportEntry = {
       code: string;
       name: string;
@@ -590,6 +590,7 @@ export class RefereeEngine {
       const fixture = stake.fixture ?? this.fixtures.find(f => f.id === stake.fixtureId);
       if (fixture?.mode !== 'realtime') continue;
       if (stake.outcome === 'draw') continue;
+      if (eligibleAddresses && !eligibleAddresses.has(stake.staker.toLowerCase())) continue;
 
       const team = stake.outcome === 'home' ? fixture.home : fixture.away;
       if (UNRESOLVED_TEAM_CODES.has(team.code) || team.iso === 'tbd') continue;
