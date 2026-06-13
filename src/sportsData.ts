@@ -204,10 +204,6 @@ function sportmonksStatus(match: SportmonksFixture): FixtureStatus {
   if (['inplay', 'live', '1sthalf', '2ndhalf', 'halftime', 'break'].includes(state)) return 'locked';
   if (['finished', 'ft', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'settled';
   if (['postponed', 'cancelled', 'suspended', 'interrupted'].includes(state)) return 'locked';
-  const kickoffMs = parseProviderTime(match.starting_at);
-  if (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs && Date.now() < kickoffMs + MATCH_SETTLED_FALLBACK_MS) {
-    return 'locked';
-  }
   return 'open';
 }
 
@@ -216,10 +212,6 @@ function sportmonksMatchStateStatus(match: SportmonksFixture): MatchState['statu
   if (['halftime', 'break'].includes(state)) return 'half_time';
   if (['inplay', 'live', '1sthalf', '2ndhalf'].includes(state)) return 'live';
   if (['finished', 'ft', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'finished';
-  const kickoffMs = parseProviderTime(match.starting_at);
-  if (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs && Date.now() < kickoffMs + MATCH_SETTLED_FALLBACK_MS) {
-    return 'live';
-  }
   return null;
 }
 
@@ -248,7 +240,7 @@ function sportmonksGroup(match: SportmonksFixture, home: Team, away: Team, fallb
 
 function sportmonksRound(match: SportmonksFixture, kickoff: string, fallback?: Fixture['round']): Fixture['round'] | undefined {
   if (fallback) return fallback;
-  const kickoffMs = Date.parse(kickoff);
+  const kickoffMs = parseProviderTime(kickoff);
   if (Number.isFinite(kickoffMs)) {
     if (kickoffMs >= Date.parse('2026-07-19T00:00:00Z')) return 'F';
     if (kickoffMs >= Date.parse('2026-07-18T00:00:00Z')) return '3PL';
@@ -279,7 +271,7 @@ function assignGroupMatchdays(fixtures: Fixture[]): void {
   for (const group of groups) {
     fixtures
       .filter(fixture => !fixture.round && fixture.group === group)
-      .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff))
+      .sort((a, b) => parseProviderTime(a.kickoff) - parseProviderTime(b.kickoff))
       .forEach((fixture, index) => {
         fixture.matchday = Math.floor(index / 2) + 1;
       });
@@ -287,8 +279,7 @@ function assignGroupMatchdays(fixtures: Fixture[]): void {
 }
 
 function sportmonksStadium(match: SportmonksFixture, template?: Fixture): Fixture['stadium'] {
-  if (template?.stadium) return template.stadium;
-  if (!match.venue?.name) return undefined;
+  if (!match.venue?.name) return template?.stadium;
   return {
     name: match.venue.name,
     city: match.venue.city_name ?? '',

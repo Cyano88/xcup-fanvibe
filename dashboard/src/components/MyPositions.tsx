@@ -114,7 +114,12 @@ function formatOKB(wei: string): string {
 
 function formatTime(ts?: number | string): string {
   if (!ts) return '-';
-  const ms = typeof ts === 'number' ? (ts > 10_000_000_000 ? ts : ts * 1000) : Date.parse(ts);
+  const normalized = typeof ts === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(ts)
+    ? `${ts.replace(' ', 'T')}Z`
+    : ts;
+  const ms = typeof normalized === 'number'
+    ? (normalized > 10_000_000_000 ? normalized : normalized * 1000)
+    : Date.parse(normalized);
   if (!Number.isFinite(ms)) return '-';
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',

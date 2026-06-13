@@ -70,8 +70,11 @@ export function shortAddr(addr: string): string {
 }
 
 export function countdown(kickoff: string): string {
-  const diff = new Date(kickoff).getTime() - Date.now();
-  if (diff <= 0) return 'LIVE';
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(kickoff)
+    ? `${kickoff.replace(' ', 'T')}Z`
+    : kickoff;
+  const diff = Date.parse(normalized) - Date.now();
+  if (diff <= 0) return 'Started';
   const d = Math.floor(diff / 86_400_000);
   const h = Math.floor((diff % 86_400_000) / 3_600_000);
   const m = Math.floor((diff % 3_600_000) / 60_000);

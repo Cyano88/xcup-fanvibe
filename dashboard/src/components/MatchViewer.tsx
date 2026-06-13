@@ -8,6 +8,12 @@ import { baseFixtureId } from '../lib/seasonTournament';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
+const parseProviderTime = (value: string) => {
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  return Date.parse(normalized);
+};
 
 interface Comment { id: number; name: string; text: string; ts: string; fixtureId: string; }
 interface Props { fixture: Fixture; fixtures?: Fixture[]; matchState: MatchState; onClose: () => void; }
@@ -843,7 +849,7 @@ function RealtimeLiveCenter({
           </div>
           <div className="flex justify-between gap-3">
             <span className="text-zinc-500">Kickoff</span>
-            <span className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{new Date(fixture.kickoff).toLocaleString()}</span>
+            <span className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{new Date(parseProviderTime(fixture.kickoff)).toLocaleString()}</span>
           </div>
         </div>
       </div>

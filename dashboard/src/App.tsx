@@ -1079,7 +1079,7 @@ export default function App() {
   const projectMatchState = useCallback((state?: MatchState): MatchState | undefined => {
     if (!state || state.status !== 'live') return state;
     if (state.fixtureId.startsWith('wc-')) return state;
-    const kickoffMs = Date.parse(state.simulatedKickoff);
+    const kickoffMs = parseProviderTime(state.simulatedKickoff);
     if (!Number.isFinite(kickoffMs)) return state;
     const minuteMs = Math.max(1000, Math.round(seasonTiming.matchMs / 90));
     const projectedMinute = Math.min(89, Math.max(Math.min(state.minute, 89), Math.floor((Date.now() - kickoffMs) / minuteMs)));
@@ -1152,8 +1152,8 @@ export default function App() {
   const liveOrCurrentRealtimeFixtures = [...simFixtures]
     .filter(fixture => isResolvedFixture(fixture) && fixture.status !== 'settled' && visibleMatchStates[fixture.id]?.status !== 'finished')
     .sort((a, b) => {
-      const aTime = Date.parse(a.kickoff);
-      const bTime = Date.parse(b.kickoff);
+      const aTime = parseProviderTime(a.kickoff);
+      const bTime = parseProviderTime(b.kickoff);
       return (Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER)
         - (Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER);
     });
@@ -2144,7 +2144,7 @@ export default function App() {
                   Fixture Board
                 </div>
                 <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
-                  Live first, upcoming next, FT last
+                  Active first, upcoming next, FT last
                 </div>
               </div>
             )}
@@ -2154,7 +2154,7 @@ export default function App() {
                   Fixture Board
                 </div>
                 <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
-                  Live first, upcoming next, FT last
+                  Active first, upcoming next, FT last
                 </div>
               </div>
             )}
