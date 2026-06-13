@@ -916,7 +916,9 @@ export default function App() {
   }, []);
 
   const handleStake    = useCallback((fixtureId: string, outcome: Outcome) => {
-    const fixture = fixtures.find(f => f.id === fixtureId);
+    const fixture = viewMode === 'realtime'
+      ? realtimeFixtures.find(f => f.id === fixtureId)
+      : fixtures.find(f => f.id === fixtureId);
     const matchState = matchStates[fixtureId];
     if (!fixture) return false;
     if (fixture.status === 'locked' || fixture.status === 'settled') {
@@ -929,7 +931,7 @@ export default function App() {
     }
     void outcome;
     return true;
-  }, [fixtures, matchStates, showStakeClosedNotice]);
+  }, [fixtures, matchStates, realtimeFixtures, showStakeClosedNotice, viewMode]);
   const dismissSettlementNotice = useCallback((s: SettlementResult) => {
     setDismissedSettlementNotices(prev => {
       const next = new Set(prev);
