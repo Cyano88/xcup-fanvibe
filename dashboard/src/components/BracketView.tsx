@@ -5,6 +5,7 @@ interface Props {
   fixtures: Fixture[];
   matchStates: Record<string, MatchState>;
   onWatch: (fixtureId: string) => void;
+  activeRound?: Fixture['round'] | 'knockouts' | 'bracket';
 }
 
 const ROUNDS = [
@@ -227,7 +228,7 @@ function MatchNode({
   );
 }
 
-export function BracketView({ fixtures, matchStates, onWatch }: Props) {
+export function BracketView({ fixtures, matchStates, onWatch, activeRound = 'bracket' }: Props) {
   const knockoutFixtures = fixtures.filter(f => !!f.round);
   const liveCount = knockoutFixtures.filter(f => matchStates[f.id]?.status === 'live').length;
   const qualifiedCodes = new Set(
@@ -259,7 +260,9 @@ export function BracketView({ fixtures, matchStates, onWatch }: Props) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 p-4">
-        {ROUNDS.map(round => {
+        {ROUNDS
+          .filter(round => activeRound === 'bracket' || activeRound === 'knockouts' || activeRound === round.key)
+          .map(round => {
           const roundFixtures = knockoutFixtures.filter(f => f.round === round.key);
           return (
             <section key={round.key} className="space-y-2">

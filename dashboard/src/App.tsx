@@ -2102,6 +2102,11 @@ export default function App() {
             fixtures={simFixtures}
             matchStates={visibleMatchStates}
             onWatch={handleWatch}
+            activeRound={viewMode === 'realtime'
+              ? (['R32', 'R16', 'QF', 'SF', '3PL', 'F', 'knockouts', 'bracket'].includes(fixtureGroupFilter)
+                ? fixtureGroupFilter as 'R32' | 'R16' | 'QF' | 'SF' | '3PL' | 'F' | 'knockouts' | 'bracket'
+                : 'bracket')
+              : (fixtureRoundFilter === 'bracket' ? 'bracket' : 'knockouts')}
           />
         ) : (
           <section className="space-y-3">
