@@ -43,6 +43,7 @@ interface SportmonksParticipant {
 interface SportmonksScore {
   participant_id?: number;
   score?: { goals?: number; participant?: string };
+  description?: string;
 }
 
 interface SportmonksEvent {
@@ -67,6 +68,13 @@ interface SportmonksFixture {
   stage?: { name?: string };
   participants?: SportmonksParticipant[];
   scores?: SportmonksScore[];
+  periods?: {
+    ticking?: boolean;
+    minutes?: number;
+    seconds?: number;
+    description?: string;
+    sort_order?: number;
+  }[];
   events?: SportmonksEvent[];
   venue?: { name?: string; city_name?: string; country_name?: string };
 }
@@ -208,6 +216,7 @@ function sportmonksStatus(match: SportmonksFixture): FixtureStatus {
 }
 
 function sportmonksMatchStateStatus(match: SportmonksFixture): MatchState['status'] | null {
+  if (match.periods?.some(period => period.ticking)) return 'live';
   const state = normalize(match.state?.developer_name ?? match.state?.short_name ?? match.state?.name);
   if (['halftime', 'break'].includes(state)) return 'half_time';
   if (['inplay', 'live', '1sthalf', '2ndhalf'].includes(state)) return 'live';
@@ -218,8 +227,17 @@ function sportmonksMatchStateStatus(match: SportmonksFixture): MatchState['statu
 function sportmonksScore(match: SportmonksFixture, location: 'home' | 'away'): number {
   const participant = match.participants?.find(item => item.meta?.location === location);
   if (!participant?.id) return 0;
-  const score = match.scores?.find(item => item.participant_id === participant.id);
+  const scores = match.scores?.filter(item => item.participant_id === participant.id) ?? [];
+  const score = scores.find(item => normalize(item.description) === 'current') ?? scores[0];
   return Number(score?.score?.goals ?? 0);
+}
+
+function sportmonksMinute(match: SportmonksFixture, fallbackMinute: number): number {
+  const periods = match.periods ?? [];
+  const activePeriod = periods.find(period => period.ticking)
+    ?? [...periods].sort((a, b) => Number(b.sort_order ?? 0) - Number(a.sort_order ?? 0))[0];
+  const minute = Number(activePeriod?.minutes);
+  return Number.isFinite(minute) && minute > 0 ? minute : fallbackMinute;
 }
 
 function sportmonksVenue(match: SportmonksFixture, fallback: string): string {
@@ -320,15 +338,16 @@ function sportmonksEvents(match: SportmonksFixture, fixture: Fixture): MatchStat
   });
 }
 
-function buildMatchState(fixture: Fixture, stateStatus: MatchState['status'] | null, homeScore: number, awayScore: number, events: MatchState['events'], kickoff: string): MatchState | null {
+function buildMatchState(fixture: Fixture, source: SportmonksFixture | null, stateStatus: MatchState['status'] | null, homeScore: number, awayScore: number, events: MatchState['events'], kickoff: string): MatchState | null {
   if (!stateStatus) return null;
   const kickoffMs = parseProviderTime(kickoff);
   const elapsedMinute = Number.isFinite(kickoffMs) ? Math.floor((Date.now() - kickoffMs) / 60_000) + 1 : 1;
   const latestMinute = events.length ? Math.max(...events.map(event => event.minute ?? 0)) : elapsedMinute;
+  const providerMinute = source ? sportmonksMinute(source, latestMinute) : latestMinute;
   return {
     fixtureId: fixture.id,
     status: stateStatus,
-    minute: stateStatus === 'finished' ? 90 : Math.min(90, Math.max(1, latestMinute)),
+    minute: stateStatus === 'finished' ? 90 : Math.min(120, Math.max(1, providerMinute)),
     homeScore,
     awayScore,
     events,
@@ -377,7 +396,7 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
         : template?.result,
     };
     const events = sportmonksEvents(api, fixture);
-    const matchState = buildMatchState(fixture, sportmonksMatchStateStatus(api), homeScore, awayScore, events, kickoff);
+    const matchState = buildMatchState(fixture, api, sportmonksMatchStateStatus(api), homeScore, awayScore, events, kickoff);
     if (matchState) matchStates[fixture.id] = matchState;
     fixtures.push(fixture);
   }
@@ -462,8 +481,8 @@ export async function getWorldCupMatchDetail(fixtureId: string): Promise<{
   }
 
   const includes = [
-    'participants;league;venue;state;scores;events.type;events.period;events.player;statistics.type;sidelined.sideline.player;sidelined.sideline.type;weatherReport',
-    'participants;league;venue;state;scores;events.type;events.period;events.player',
+    'participants;league;venue;state;scores;periods;events.type;events.period;events.player;statistics.type;sidelined.sideline.player;sidelined.sideline.type;weatherReport',
+    'participants;league;venue;state;scores;periods;events.type;events.period;events.player',
   ];
 
   let detail: SportmonksFixture | null = null;
@@ -532,6 +551,7 @@ function overlayWc2026(matches: Wc2026Match[]): WorldCupFeed {
     const kickoff = kickoffTime(api, fixture.kickoff);
     const matchState = buildMatchState(
       fixture,
+      null,
       matchStateStatusFromProvider(api.status),
       homeScore,
       awayScore,
@@ -581,7 +601,7 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
         const fixtures: SportmonksFixture[] = [];
         let page = 1;
         for (;;) {
-          const res = await fetch(buildSportmonksUrl(path, token, 'scores;participants;events;state;venue;round;stage', page), { signal: AbortSignal.timeout(10000) });
+          const res = await fetch(buildSportmonksUrl(path, token, 'scores;participants;periods;events;state;venue;round;stage', page), { signal: AbortSignal.timeout(10000) });
           if (!res.ok) throw new Error(`Sportmonks API ${res.status}`);
           const json = await res.json() as SportmonksResponse;
           if (Array.isArray(json.data)) fixtures.push(...json.data);
