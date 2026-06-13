@@ -21,6 +21,13 @@ interface MatchdayEntry {
   positions: number;
   winRate: number | null;
   lastActiveAt: number;
+  score?: number;
+  scoreComponents?: {
+    volume: number;
+    wins: number;
+    active: number;
+    participation: number;
+  };
   fvbBalanceWei?: string | null;
   fvbEligibleWei?: string | null;
   fvbEligibilityCapWei?: string;
@@ -63,6 +70,11 @@ function formatFvbBalance(value: string | null | undefined): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 1 : 2)}K`;
   if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return n > 0 ? '< 1' : '0';
+}
+
+function formatScore(value: number | undefined): string {
+  if (!Number.isFinite(value)) return '0';
+  return Math.round(value ?? 0).toLocaleString();
 }
 
 const flagUrl = (iso: string) =>
@@ -227,11 +239,12 @@ export function MatchdayCupLeaderboard({ okbUsd, onOpenWorldCup }: Props) {
                     </div>
                     <div className="text-right">
                       <div className="text-xs font-bold tabular-nums dark:text-white text-zinc-950">
-                        {entry.wins}W / {entry.active} live
+                        {formatScore(entry.score)} pts
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">
-                        {formatOkbVolume(entry.volumeWei)} OKB - {volumeUsd}
+                        {entry.wins}W / {entry.active} live - {formatOkbVolume(entry.volumeWei)} OKB
                       </div>
+                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{volumeUsd}</div>
                     </div>
                   </a>
                 );

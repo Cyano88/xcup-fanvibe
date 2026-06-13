@@ -48,6 +48,10 @@ const baseFixtureId = (fixtureId: string) => fixtureId.replace(/^s\d+-/, '');
 const MAX_PERSISTED_SETTLEMENTS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENTS ?? '200'));
 const MAX_PERSISTED_SETTLEMENT_JOBS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENT_JOBS ?? '200'));
 const SIMULATION_ENABLED = process.env.ENABLE_SIMULATION === 'true';
+const MATCHDAY_VOLUME_POINT_WEI = 1_000_000_000_000_000n; // 0.001 OKB
+const MATCHDAY_WIN_BONUS_POINTS = 5_000;
+const MATCHDAY_ACTIVE_BONUS_POINTS = 500;
+const MATCHDAY_POSITION_BONUS_POINTS = 250;
 
 const TBD_TEAM: Team = { name: 'TBD', code: 'TBD', flag: '🏆', iso: 'un' };
 const NEXT_SIM_KICKOFF_MS = Number(process.env.SIM_NEXT_KICKOFF_MS ?? '30000');
@@ -442,6 +446,20 @@ export class RefereeEngine {
       lastActiveAt: number;
     };
 
+    const scoreFor = (entry: LeaderboardEntry) => {
+      const volumePoints = Number(entry.volumeWei / MATCHDAY_VOLUME_POINT_WEI);
+      const winPoints = entry.wins * MATCHDAY_WIN_BONUS_POINTS;
+      const activePoints = entry.active * MATCHDAY_ACTIVE_BONUS_POINTS;
+      const participationPoints = entry.positions * MATCHDAY_POSITION_BONUS_POINTS;
+      return {
+        total: volumePoints + winPoints + activePoints + participationPoints,
+        volumePoints,
+        winPoints,
+        activePoints,
+        participationPoints,
+      };
+    };
+
     const entries = new Map<string, LeaderboardEntry>();
     const entryFor = (address: string) => {
       const key = address.toLowerCase();
@@ -492,25 +510,51 @@ export class RefereeEngine {
     return Array.from(entries.values())
       .filter(entry => entry.positions > 0)
       .sort((a, b) => {
-        const leftScore = a.wins * 1_000_000 + a.positions * 1_000 + Number(a.volumeWei / 1_000_000_000_000_000n);
-        const rightScore = b.wins * 1_000_000 + b.positions * 1_000 + Number(b.volumeWei / 1_000_000_000_000_000n);
+        const leftScore = scoreFor(a).total;
+        const rightScore = scoreFor(b).total;
         if (leftScore !== rightScore) return rightScore - leftScore;
         return b.lastActiveAt - a.lastActiveAt;
       })
       .slice(0, limit)
-      .map((entry, index) => ({
-        rank: index + 1,
-        address: entry.address,
-        volumeWei: entry.volumeWei.toString(),
-        returnedWei: entry.returnedWei.toString(),
-        wins: entry.wins,
-        losses: entry.losses,
-        active: entry.active,
-        refunded: entry.refunded,
-        positions: entry.positions,
-        winRate: entry.wins + entry.losses > 0 ? entry.wins / (entry.wins + entry.losses) : null,
-        lastActiveAt: entry.lastActiveAt,
-      }));
+      .map((entry, index) => {
+        const score = scoreFor(entry);
+        return {
+          rank: index + 1,
+          address: entry.address,
+          volumeWei: entry.volumeWei.toString(),
+          returnedWei: entry.returnedWei.toString(),
+          wins: entry.wins,
+          losses: entry.losses,
+          active: entry.active,
+          refunded: entry.refunded,
+          positions: entry.positions,
+          winRate: entry.wins + entry.losses > 0 ? entry.wins / (entry.wins + entry.losses) : null,
+          lastActiveAt: entry.lastActiveAt,
+          score: score.total,
+          scoreComponents: {
+            volume: score.volumePoints,
+            wins: score.winPoints,
+            active: score.activePoints,
+            participation: score.participationPoints,
+          },
+          scoreRules: {
+            volumePointWei: MATCHDAY_VOLUME_POINT_WEI.toString(),
+            winBonus: MATCHDAY_WIN_BONUS_POINTS,
+            activeBonus: MATCHDAY_ACTIVE_BONUS_POINTS,
+            positionBonus: MATCHDAY_POSITION_BONUS_POINTS,
+          },
+        };
+      });
+  }
+
+  getMatchdayCupScoreRules() {
+    return {
+      volumePointWei: MATCHDAY_VOLUME_POINT_WEI.toString(),
+      volumePointOKB: '0.001',
+      winBonus: MATCHDAY_WIN_BONUS_POINTS,
+      activeBonus: MATCHDAY_ACTIVE_BONUS_POINTS,
+      positionBonus: MATCHDAY_POSITION_BONUS_POINTS,
+    };
   }
 
   getMatchdayCountrySupport(limit = 12) {

@@ -447,6 +447,7 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       capWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
       capTokens: '450000',
     },
+    scoreRules: engine.getMatchdayCupScoreRules(),
   });
 });
 
