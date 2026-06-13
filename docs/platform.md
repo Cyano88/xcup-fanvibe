@@ -9,8 +9,8 @@ FanVibe lets users:
 - Sign in with a wallet or email smart wallet.
 - Stake OKB on match outcomes.
 - Stake OKB on champion markets.
-- Watch simulated football seasons progress through group stages and knockouts.
-- Follow upcoming and live World Cup match coverage alongside FanVibe markets.
+- Follow Sportmonks-backed World Cup fixtures across live, upcoming, and finished states.
+- Enter the FVB Matchday Cup by using the same wallet for FVB and real World Cup stakes.
 - Track every position in one portfolio.
 - Review payouts, refunds, wallet balance, and total account value.
 - Invite users through account-based referral links with backend-qualified rewards.
@@ -34,10 +34,10 @@ FanVibe lets users:
 
 1. Open `fanvibe.xyz`.
 2. Sign in with a wallet or email.
-3. Choose a fixture market or champion market.
+3. Choose a real World Cup fixture market.
 4. Enter an OKB amount.
 5. Confirm the wallet transaction.
-6. Watch the match or season progress.
+6. Watch the match progress through the live center.
 7. Open Portfolio to review position status, account value, payouts, refunds, and proof links.
 8. Open News to follow World Cup, OKX, and X Layer updates.
 
@@ -55,7 +55,7 @@ The app keeps account identity simple: if a profile name is set, it is used in t
 FanVibe supports two market types:
 
 - Fixture markets: home, draw, away.
-- Champion markets: pick a team to win the season.
+- Matchday Cup leaderboard: rank through real World Cup stakes, FVB eligibility, wins, and activity.
 
 Markets are denominated in OKB. USD value is shown where OKB balances or stake values appear so users can quickly understand position size.
 
@@ -121,27 +121,15 @@ Verified behavior:
 
 This gives FanVibe an operational layer for gas rebalancing: user stakes remain visible as positions, while the payout account has a monitored fallback path for maintaining gas capacity.
 
-## Live Simulation
-
-FanVibe seasons include:
-
-- Group stages.
-- Knockout qualification.
-- Round of 32, Round of 16, quarter-finals, semi-finals, third-place playoff, and final.
-- Live match viewer.
-- Match comments.
-- Goal and event animations.
-
-The simulation is consumer-facing; it is separate from real FIFA results and is labeled as FanVibe season play inside the product.
-
 ## Live World Cup Coverage
 
-FanVibe also includes upcoming and live World Cup match coverage so the app is not only a simulation surface. Users can follow the football calendar and live World Cup-facing information while using FanVibe markets.
+FanVibe uses Sportmonks as the production source of truth for World Cup fixtures. Users can follow the football calendar, live scores, finished results, and match events while using FanVibe markets.
 
-This gives the product two layers:
+This gives the product three connected layers:
 
-- FanVibe markets: simulated seasons, fixture markets, champion picks, and account settlement.
-- World Cup coverage: upcoming and live match context plus news that keeps users engaged between market actions.
+- Prediction markets: OKB stakes on real World Cup outcomes and account settlement.
+- FVB Matchday Cup: FVB eligibility, country support, and campaign leaderboards.
+- World Cup coverage: provider-backed match context plus news that keeps users engaged between market actions.
 
 ## News
 
@@ -162,8 +150,8 @@ FanVibe uses X Layer because it needs:
 
 | Area | FanVibe implementation |
 | --- | --- |
-| World Cup consumer surface | Upcoming and live World Cup match coverage, football news, and FanVibe simulated seasons |
-| Prediction markets | OKB fixture markets, champion markets, portfolio history, wallet and email smart-wallet sign-in |
+| World Cup consumer surface | Sportmonks-backed live, upcoming, and finished World Cup fixtures plus football news |
+| Prediction markets | OKB fixture markets, Matchday Cup leaderboard, portfolio history, wallet and email smart-wallet sign-in |
 | X Layer proof | Stake indexing, payout/refund records, explorer links, public proof panel |
 | Autonomous operations | Referee settlement jobs, restart recovery, champion settlement, refund queue |
 | Gas resilience | O2-style metabolism loop, threshold monitoring, reserve rebalancing, OKX route plus fallback route |
@@ -231,7 +219,7 @@ npm run build
 - Open `https://fanvibe.xyz`.
 - Sign in by wallet or email.
 - Stake a small OKB amount on a fixture.
-- Stake a small OKB amount on a champion market.
+- Open the Matchday leaderboard and verify FVB eligibility/country backing.
 - Open Portfolio and verify the position appears.
 - Open News and review World Cup plus OKX/X Layer updates.
 - Expand `Why X Layer` and open the v4 hook proof links.
@@ -241,7 +229,7 @@ npm run build
 
 1. Open `https://fanvibe.xyz`.
 2. Connect a wallet or sign in with email.
-3. Choose a fixture market or champion market.
+3. Choose a real World Cup fixture market.
 4. Enter a small OKB amount while testing.
 5. Confirm the wallet prompt.
 6. Use Portfolio to track positions, wallet balance, total account value, settlement status, and explorer links.

@@ -158,7 +158,7 @@ export function DocsPage() {
               A live football market with transparent X Layer settlement.
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              FanVibe lets users sign in, stake OKB on simulated football markets, follow upcoming and live World Cup match coverage, read football and OKX/X Layer news, and review every position from one portfolio. The platform keeps account activity visible, compact, and verifiable on X Layer.
+              FanVibe lets users sign in, stake OKB on real World Cup match markets, hold FVB for Matchday Cup eligibility, follow live World Cup coverage, read football and OKX/X Layer news, and review every position from one portfolio. The platform keeps account activity visible, compact, and verifiable on X Layer.
             </p>
             <div className="mt-8 grid gap-3 border-y border-zinc-200 py-4 dark:border-zinc-900 sm:grid-cols-3">
               <div>
@@ -180,17 +180,17 @@ export function DocsPage() {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">World Cup coverage</h2>
               <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-                FanVibe is built around football attention. The app combines FanVibe simulated seasons with upcoming and live World Cup match coverage plus a news feed that keeps users current between markets.
+                FanVibe is built around football attention. The app combines Sportmonks-backed World Cup fixtures, live match states, the FVB Matchday Cup, and a news feed that keeps users current between markets.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="border border-zinc-200 p-5 dark:border-zinc-900">
                 <div className="text-sm font-semibold">Live World Cup matches</div>
-                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">The product includes a real World Cup section so users can follow upcoming and live match coverage alongside FanVibe markets.</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">The product uses provider-backed World Cup fixtures so users can follow live, upcoming, and finished matches inside the same staking flow.</p>
               </div>
               <div className="border border-blue-200 bg-blue-50/70 p-5 dark:border-blue-500/25 dark:bg-blue-500/10">
                 <div className="text-sm font-semibold text-blue-700 dark:text-blue-300">World Cup news</div>
-                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Football news cards help users stay entertained and informed while seasons and markets move.</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Football news cards help users stay informed while match markets, country backing, and FVB campaign activity move.</p>
               </div>
               <div className="border border-zinc-200 p-5 dark:border-zinc-900">
                 <div className="text-sm font-semibold">OKX and X Layer updates</div>
@@ -245,7 +245,7 @@ export function DocsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="border border-zinc-200 p-5 dark:border-zinc-900">
                 <div className="text-sm font-semibold">Fixture markets</div>
-                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Home, draw, and away outcomes for live or upcoming simulated fixtures.</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Home, draw, and away outcomes for live or upcoming World Cup fixtures.</p>
               </div>
               <div className="border border-zinc-200 p-5 dark:border-zinc-900">
                 <div className="text-sm font-semibold">Champion markets</div>

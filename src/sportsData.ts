@@ -237,11 +237,11 @@ function matchKey(home?: Team | null, away?: Team | null, group?: string): strin
   return `${home?.code ?? ''}:${away?.code ?? ''}:${group ?? ''}`;
 }
 
-function buildStaticFeed(error?: string): WorldCupFeed {
+function buildProviderUnavailableFeed(error?: string): WorldCupFeed {
   return {
     fixtures: [],
     matchStates: {},
-    source: 'static',
+    source: WC2026_PROVIDER === 'sportmonks' ? 'sportmonks' : 'static',
     mode: 'fallback',
     updatedAt: Date.now(),
     freshnessSeconds: 0,
@@ -572,7 +572,7 @@ export async function getWorldCupMatchDetail(fixtureId: string): Promise<{
   };
 }
 
-function overlayWc2026(matches: Wc2026Match[]): WorldCupFeed {
+function overlayUnsupportedProvider(_matches: Wc2026Match[]): WorldCupFeed {
   return {
     fixtures: [],
     matchStates: {},
@@ -594,7 +594,7 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
     ? process.env.SPORTMONKS_API_KEY
     : process.env.WC2026_API_KEY;
   if (!token) {
-    cache = buildStaticFeed(`${WC2026_PROVIDER === 'sportmonks' ? 'SPORTMONKS_API_KEY' : 'WC2026_API_KEY'} is not configured`);
+    cache = buildProviderUnavailableFeed(`${WC2026_PROVIDER === 'sportmonks' ? 'SPORTMONKS_API_KEY' : 'WC2026_API_KEY'} is not configured`);
     return cache;
   }
 
@@ -654,10 +654,10 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
       : Array.isArray(json.data)
         ? json.data
         : json.data?.matches ?? json.data?.fixtures ?? json.matches ?? json.fixtures ?? json.tournament?.matches ?? json.tournament?.fixtures ?? [];
-    cache = overlayWc2026(matches);
+    cache = overlayUnsupportedProvider(matches);
     return cache;
   } catch (err: unknown) {
-    cache = buildStaticFeed(err instanceof Error ? err.message : String(err));
+    cache = buildProviderUnavailableFeed(err instanceof Error ? err.message : String(err));
     return cache;
   }
 }

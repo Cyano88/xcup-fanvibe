@@ -55,22 +55,13 @@ const OFFICIAL_OKX_NEWS: WorldCupNewsItem[] = [
     tag: 'Infrastructure',
   },
   {
-    title: 'Build X: X Cup Hackathon is live for World Cup markets on X Layer',
-    description: 'Official OKX Web3 hackathon track for football prediction experiences, running May 19-28 with a 14,000 USDT prize pool.',
+    title: 'Build X: World Cup x Hooks is live on X Layer',
+    description: 'Official OKX Web3 campaign for World Cup-themed Uniswap v4 hooks on X Layer, running June 11-July 12.',
     source: 'OKX Web3',
     image: '/assets/okx-layer-x.jpg',
-    url: 'https://web3.okx.com/zh-hans/xlayer/build-x-hackathon/xcup',
-    publishedAt: '2026-05-19T23:59:00.000Z',
-    tag: 'Hackathon',
-  },
-  {
-    title: 'Build X: Hook the Future brings Uniswap v4 hooks to X Layer builders',
-    description: 'Official OKX Web3 hackathon track for X Layer and Uniswap v4 hook applications, running May 22-28 with a 14,000 USDT prize pool.',
-    source: 'OKX Web3',
-    image: '/assets/okx-layer-x.jpg',
-    url: 'https://web3.okx.com/ar/xlayer/build-x-hackathon/hook',
-    publishedAt: '2026-05-22T23:59:00.000Z',
-    tag: 'Hackathon',
+    url: 'https://web3.okx.com/xlayer',
+    publishedAt: '2026-06-11T23:59:00.000Z',
+    tag: 'X Layer',
   },
 ];
 
@@ -89,7 +80,7 @@ function fallbackFeed(error?: string): WorldCupNewsFeed {
   return {
     articles: OFFICIAL_OKX_NEWS,
     source: 'fallback',
-    mode: 'live',
+    mode: 'fallback',
     updatedAt: Date.now(),
     freshnessSeconds: 0,
     providerConfigured: !!process.env.NEWS_API_KEY,
@@ -160,9 +151,15 @@ export async function getWorldCupNews(force = false): Promise<WorldCupNewsFeed> 
     url.searchParams.set('apikey', token);
 
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`GNews API ${res.status}`);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`GNews API ${res.status}${detail ? `: ${detail.slice(0, 180)}` : ''}`);
+    }
     const json = await res.json() as { articles?: GNewsArticle[] };
     const articles = mergeOfficialNews(normalizeArticles(json.articles ?? []));
+    if (!articles.length) {
+      throw new Error('GNews API returned no usable articles');
+    }
 
     cache = {
       articles,

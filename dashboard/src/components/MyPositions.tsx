@@ -3,7 +3,6 @@ import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Send, Wallet 
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import { encodeFunctionData, formatEther, formatUnits, isAddress, parseEther } from 'viem';
 import type { Fixture, MatchState, UserPosition } from '../types';
-import { REALTIME_FIXTURES } from '../types';
 import { explorerTx, xLayerMainnet } from '../lib/chain';
 import { FANVIBE_TOKEN_ADDRESS } from '../lib/fanvibeToken';
 import { baseFixtureId, seasonFixtureStartAtMs } from '../lib/seasonTournament';
@@ -135,8 +134,6 @@ function stripUsdPrefix(value: string | null): string | null {
 
 function friendlyFixtureId(fixtureId: string): string {
   const normalized = baseFixtureId(fixtureId).replace(/^season-/, '');
-  const known = REALTIME_FIXTURES.find(fixture => fixture.id === normalized);
-  if (known) return `${known.home.code} vs ${known.away.code}`;
   const seasonGroup = normalized.match(/^wc-([a-l])-/i)?.[1];
   if (seasonGroup) return `Season Group ${seasonGroup.toUpperCase()} match`;
   return 'Updating match';

@@ -739,7 +739,7 @@ export default function App() {
           setWorldCupFeed({
             fixtures: [],
             matchStates: {},
-            source: 'static',
+            source: 'sportmonks',
             mode: 'fallback',
             updatedAt: Date.now(),
             freshnessSeconds: 0,

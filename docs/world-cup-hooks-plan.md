@@ -134,7 +134,7 @@ Add a hook phase sync service:
 
 ## Real Match Data
 
-Production World Cup mode must use a real sports data provider, not the curated fallback fixture board.
+Production World Cup mode must use Sportmonks-backed data, not local fixture files or curated demo schedules.
 
 Recommended provider:
 
@@ -153,9 +153,16 @@ Required backend env:
 
 Behavior:
 
-- If Sportmonks is configured and available, FanVibe displays `Sportmonks live feed`.
-- If no live provider is configured, FanVibe displays `Curated fixture board`.
-- If `LIVE_SPORTS_REQUIRED=1` and the provider is missing or unavailable, `/worldcup/feed` returns `503` instead of silently serving fallback data.
+- If Sportmonks is configured and available, FanVibe displays provider-backed fixtures and match states.
+- If Sportmonks is missing or unavailable in production, FanVibe must show no fixture markets rather than serving curated or stale data.
+- `LIVE_SPORTS_REQUIRED=1` should remain enabled in production so `/worldcup/feed` returns `503` instead of silently serving fallback data.
+
+Current integration status:
+
+- Sportmonks is the active source of truth for fixture IDs, teams, kickoff times, states, scores, and provider events.
+- Local World Cup fixture arrays are empty by design and kept only as type-safe legacy exports.
+- Knockout placeholder brackets are display-only until qualified teams are known from provider/settlement state.
+- Stale `wc-*` local fixtures must not appear in production feeds.
 
 ## Campaign Cadence
 

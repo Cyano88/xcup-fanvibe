@@ -201,7 +201,7 @@ export interface DaemonState {
   championPool?: ChampionPool;
 }
 
-// ── Static fallback fixtures (shown when daemon is offline) ──────────────────
+// ── Retired local fixture exports ────────────────────────────────────────────
 
 export const STATIC_FIXTURES: Fixture[] = [];
 

@@ -31,11 +31,11 @@ const FALLBACK_NEWS: NewsItem[] = [
     tag: 'Markets',
   },
   {
-    title: 'Synthetic season model now blends team strength, form, confederation and upset volatility',
+    title: 'FVB Matchday Cup ties real World Cup stakes, FVB holding and country backing into one leaderboard',
     source: 'FanVibe Desk',
-    image: '/assets/fanvibe-hero-logo.jpeg',
+    image: '/assets/fvb-token-logo.png',
     url: '#',
-    tag: 'Simulation',
+    tag: 'Matchday',
   },
   {
     title: 'X Layer settlement proof keeps stake, payout and refund history linked to explorer records',
@@ -55,11 +55,21 @@ export function WorldCupNews() {
   const lead = items.length ? items[active % items.length] : null;
   const hasLeadUrl = !!lead?.url && lead.url !== '#';
   const leadImage = lead && brokenImages[lead.image] ? '/assets/fanvibe-season-bg.jpeg' : lead?.image;
+  const statusText = loading
+    ? 'Refreshing feed'
+    : feed?.mode === 'live'
+      ? `Updated ${feed.freshnessSeconds}s ago`
+      : feed?.error
+        ? 'Provider feed unavailable'
+        : 'FanVibe desk feed';
 
   useEffect(() => {
     setLoading(true);
     fetch(`${BACKEND_HTTP}/worldcup/news`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`News route ${res.status}`);
+        return res.json();
+      })
       .then((data: NewsFeed) => setFeed(data))
       .catch(() => setFeed(null))
       .finally(() => setLoading(false));
@@ -88,7 +98,7 @@ export function WorldCupNews() {
           </h2>
         </div>
         <div className="hidden sm:block text-right text-xs dark:text-zinc-500 text-zinc-500">
-          {feed?.mode === 'live' ? `Updated ${feed.freshnessSeconds}s ago` : 'FanVibe desk feed'}
+          {statusText}
         </div>
       </div>
 

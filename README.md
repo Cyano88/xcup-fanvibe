@@ -1,6 +1,6 @@
 # FanVibe
 
-FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on simulated football markets, follow upcoming and live World Cup match coverage, read football and OKX/X Layer news, and review every position, payout, refund, and proof link from one account.
+FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on real World Cup match markets, hold FVB for Matchday Cup eligibility, follow live World Cup coverage, read football and OKX/X Layer news, and review every position, payout, refund, and proof link from one account.
 
 This repository is a monorepo. It contains the production app, backend referee service, dashboard, public documentation, and an experimental Uniswap v4 hook module that connects FanVibe consumer activity on X Layer to DeFi liquidity behavior.
 
@@ -18,8 +18,8 @@ This repository is a monorepo. It contains the production app, backend referee s
 
 - Wallet and email sign-in through Privy smart wallets.
 - OKB staking on match markets and champion markets.
-- Live simulated football seasons with group play, knockouts, and champions.
-- Upcoming and live World Cup match coverage alongside FanVibe markets.
+- Sportmonks-backed World Cup fixtures with live, upcoming, and finished match states.
+- Matchday Cup campaign flow that connects OKB stakes, FVB holding, and country support.
 - World Cup news and OKX/X Layer news in the News tab.
 - Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, and total account value.
 - Invite rewards with backend qualification, daily caps, claimable balances, and separate reward-wallet payouts.
@@ -28,7 +28,7 @@ This repository is a monorepo. It contains the production app, backend referee s
 - Explorer-linked stake, payout, refund, and proof transactions.
 - A public `Why X Layer` proof panel inside the app.
 - A dedicated `/docs` page for users, builders, and reviewers.
-- An experimental Uniswap v4 hook that connects FanVibe match phases to WOKB/USDT liquidity fees.
+- An experimental Uniswap v4 hook proof module, plus the FVB launchpad path toward Uniswap v4 liquidity.
 
 ## Live Links
 
@@ -36,17 +36,18 @@ This repository is a monorepo. It contains the production app, backend referee s
 - Docs: https://fanvibe.xyz/docs
 - GitHub docs: [`docs/platform.md`](docs/platform.md)
 - Hook docs: [`contracts/README.md`](contracts/README.md)
+- OKX campaign progress: [`docs/okx-campaign-progress.md`](docs/okx-campaign-progress.md)
 - Audit notes: [`docs/audit.md`](docs/audit.md)
 
 ## X Layer App Flow
 
 1. A user signs in with wallet or email.
-2. The user picks a fixture or champion market.
+2. The user picks a real World Cup fixture market.
 3. The user stakes OKB from the connected account.
 4. The backend indexes the transaction and ties it to the account.
 5. Completed markets are processed by the autonomous referee service.
 6. The portfolio keeps a permanent account-level history with explorer links.
-7. The News tab keeps users current with World Cup, OKX, and X Layer updates.
+7. The News tab keeps users current with World Cup, OKX, X Layer, and FVB campaign updates.
 
 ## Autonomous Settlement And Gas Insurance
 
@@ -58,7 +59,7 @@ The referee also runs an O2-style metabolism loop as fallback gas insurance. Eve
 
 1. Open `https://fanvibe.xyz`.
 2. Connect a wallet or sign in with email.
-3. Pick a fixture market or champion market.
+3. Pick a real World Cup fixture market.
 4. Enter a small OKB amount while testing.
 5. Confirm the wallet prompt.
 6. Open Portfolio to track active positions, settlement status, payouts, refunds, and explorer links.
@@ -140,7 +141,10 @@ Backend:
 | `REFERRAL_CLAIMS_ENABLED` | Set to `0` to pause reward claims |
 | `ADMIN_ADDRESS` | Settlement signer address |
 | `ADMIN_TEST_SECRET` | Admin-only season reset secret |
-| `NEWS_API_KEY` | Optional news feed key |
+| `NEWS_API_KEY` | GNews API key for the dashboard News tab |
+| `NEWS_API_URL` | Optional provider URL, defaults to `https://gnews.io/api/v4/search` |
+| `NEWS_QUERY` | Optional provider query, defaults to `World Cup 2026 OR FIFA World Cup` |
+| `NEWS_CACHE_MS` | Optional provider cache time, defaults to `900000` |
 | `PORT` | Backend port, defaults to `3001` |
 
 Dashboard:
@@ -174,5 +178,5 @@ Recent audit status is tracked in [`docs/audit.md`](docs/audit.md). Backend audi
 
 - Do not commit `.env`, `.env.local`, private keys, or wallet secrets.
 - Use small OKB amounts while testing.
-- The Uniswap v4 hook is experimental and isolated from user staking and settlement.
+- The Uniswap v4 hook proof module is experimental and isolated from user staking and settlement.
 - Public proof records are available from the app’s `Why X Layer` panel and the docs page.
