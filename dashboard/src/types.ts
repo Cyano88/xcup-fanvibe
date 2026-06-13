@@ -34,6 +34,8 @@ export interface Fixture {
   baseOdds: { home: number; draw: number; away: number };
   simulatedKickoff?: string;
   mode: 'realtime' | 'simulated';
+  provider?: 'sportmonks' | 'wc2026api' | 'balldontlie' | 'zafronix' | 'static';
+  providerId?: string;
 }
 
 export interface MatchEvent {

@@ -939,13 +939,20 @@ export default function App() {
   }, []);
   const handleWatch    = useCallback((fixtureId: string) => {
     setWatchingId(fixtureId);
-    fetch(`${BACKEND_HTTP}/season/match/${encodeURIComponent(fixtureId)}?mode=${seasonMode}`)
+    const endpoint = viewMode === 'realtime'
+      ? `${BACKEND_HTTP}/worldcup/match/${encodeURIComponent(fixtureId)}`
+      : `${BACKEND_HTTP}/season/match/${encodeURIComponent(fixtureId)}?mode=${seasonMode}`;
+    fetch(endpoint)
       .then(r => r.ok ? r.json() : null)
       .then((res: { fixture?: Fixture; matchState?: MatchState | null } | null) => {
         if (!res) return;
         if (res.fixture) {
           watchedFixtureRef.current[fixtureId] = res.fixture;
-          setFixtures(prev => prev.map(fixture => fixture.id === res.fixture!.id ? res.fixture! : fixture));
+          if (viewMode === 'realtime') {
+            setRealtimeFixtures(prev => prev.map(fixture => fixture.id === res.fixture!.id ? res.fixture! : fixture));
+          } else {
+            setFixtures(prev => prev.map(fixture => fixture.id === res.fixture!.id ? res.fixture! : fixture));
+          }
         }
         if (res.matchState) {
           watchedStateRef.current[fixtureId] = res.matchState;
@@ -953,7 +960,7 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, [seasonMode]);
+  }, [seasonMode, viewMode]);
   const resetTestSeason = useCallback(() => {
     if (seasonMode !== 'test') return;
     const fresh = freshSeasonState(1, Date.now(), TEST_SEASON_TIMING, 'test');
@@ -976,7 +983,7 @@ export default function App() {
   }, [matchStates]);
 
   const watchingFixture = watchingFixtureId
-    ? fixtures.find(f => f.id === watchingFixtureId) ?? watchedFixtureRef.current[watchingFixtureId] ?? null
+    ? realtimeFixtures.find(f => f.id === watchingFixtureId) ?? fixtures.find(f => f.id === watchingFixtureId) ?? watchedFixtureRef.current[watchingFixtureId] ?? null
     : null;
   const watchingMatchState = watchingFixtureId
     ? richerMatchState(matchStates[watchingFixtureId], watchedStateRef.current[watchingFixtureId])
@@ -1013,6 +1020,33 @@ export default function App() {
       clearInterval(timer);
     };
   }, [seasonMode, viewMode, watchingFixtureId]);
+
+  useEffect(() => {
+    if (!watchingFixtureId || viewMode !== 'realtime') return;
+    let cancelled = false;
+    const loadWatchedMatch = () => {
+      fetch(`${BACKEND_HTTP}/worldcup/match/${encodeURIComponent(watchingFixtureId)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then((res: { fixture?: Fixture; matchState?: MatchState | null } | null) => {
+          if (cancelled || !res) return;
+          if (res.fixture) {
+            watchedFixtureRef.current[watchingFixtureId] = res.fixture;
+            setRealtimeFixtures(prev => prev.map(fixture => fixture.id === res.fixture!.id ? res.fixture! : fixture));
+          }
+          if (res.matchState) {
+            watchedStateRef.current[watchingFixtureId] = res.matchState;
+            setMatchStates(prev => mergeLiveMatchStates(prev, { ...prev, [watchingFixtureId]: res.matchState! }));
+          }
+        })
+        .catch(() => {});
+    };
+    loadWatchedMatch();
+    const timer = setInterval(loadWatchedMatch, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [viewMode, watchingFixtureId]);
 
   const worldCupFeedReady = viewMode === 'realtime'
     && Array.isArray(realtimeFixtures)
@@ -2408,7 +2442,7 @@ export default function App() {
       {watchingFixture && displayWatchingMatchState && (
         <MatchViewer
           fixture={watchingFixture}
-          fixtures={fixtures}
+          fixtures={viewMode === 'realtime' ? realtimeFixtures : fixtures}
           matchState={displayWatchingMatchState}
           onClose={() => setWatchingId(null)}
         />

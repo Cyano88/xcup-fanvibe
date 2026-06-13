@@ -10,7 +10,7 @@ import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
 import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
-import { getWorldCupFeed } from './sportsData.js';
+import { getWorldCupFeed, getWorldCupMatchDetail } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
 import { explorerTx, xLayerMainnet } from './chain.js';
 
@@ -678,6 +678,20 @@ app.get('/worldcup/feed', async (req, res) => {
     if (result) broadcast('settlement', result);
   }
   res.json(feed);
+});
+
+app.get('/worldcup/match/:fixtureId', async (req, res) => {
+  try {
+    const detail = await getWorldCupMatchDetail(req.params.fixtureId);
+    engine.syncFixtures([detail.fixture]);
+    if (detail.matchState.status === 'finished') {
+      const result = await engine.settleSyncedFixture(detail.matchState.fixtureId, outcomeFromMatchState(detail.matchState));
+      if (result) broadcast('settlement', result);
+    }
+    res.json(detail);
+  } catch (err: unknown) {
+    res.status(404).json({ error: err instanceof Error ? err.message : 'World Cup match not found' });
+  }
 });
 
 app.get('/worldcup/news', async (req, res) => {

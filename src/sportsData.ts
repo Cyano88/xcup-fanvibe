@@ -53,6 +53,8 @@ interface SportmonksEvent {
   participant_id?: number;
   player_name?: string;
   related_player_name?: string;
+  player?: { display_name?: string; name?: string; common_name?: string };
+  related_player?: { display_name?: string; name?: string; common_name?: string };
   info?: string;
 }
 
@@ -70,7 +72,7 @@ interface SportmonksFixture {
 }
 
 interface SportmonksResponse {
-  data?: SportmonksFixture[];
+  data?: SportmonksFixture[] | SportmonksFixture;
   pagination?: {
     count?: number;
     per_page?: number;
@@ -292,7 +294,8 @@ function sportmonksEvents(match: SportmonksFixture, fixture: Fixture): MatchStat
         ? 'away'
         : 'neutral';
     const type = sportmonksEventType(event);
-    const player = event.player_name;
+    const player = event.player_name ?? event.player?.display_name ?? event.player?.common_name ?? event.player?.name;
+    const player2 = event.related_player_name ?? event.related_player?.display_name ?? event.related_player?.common_name ?? event.related_player?.name;
     const commentary = [
       `${type} ${fixture.home.code} vs ${fixture.away.code}`,
       player,
@@ -305,7 +308,7 @@ function sportmonksEvents(match: SportmonksFixture, fixture: Fixture): MatchStat
       team,
       commentary,
       player,
-      player2: event.related_player_name,
+      player2,
     };
   });
 }
@@ -358,6 +361,8 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
       status,
       baseOdds: template?.baseOdds ?? { home: 34, draw: 32, away: 34 },
       mode: 'realtime',
+      provider: 'sportmonks',
+      providerId: api.id ? String(api.id) : undefined,
       result: status === 'settled'
         ? homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw'
         : template?.result,
@@ -376,6 +381,120 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
     mode: 'live',
     updatedAt: Date.now(),
     freshnessSeconds: 0,
+    providerConfigured: true,
+  };
+}
+
+function buildSportmonksUrl(path: string, token: string, include: string, page = 1): URL {
+  const url = new URL(`${SPORTMONKS_BASE_URL.replace(/\/$/, '')}${path}`);
+  url.searchParams.set('api_token', token);
+  url.searchParams.set('filters', `fixtureLeagues:${SPORTMONKS_WORLD_CUP_LEAGUE_ID}`);
+  url.searchParams.set('include', include);
+  url.searchParams.set('per_page', '100');
+  url.searchParams.set('page', String(page));
+  return url;
+}
+
+function scheduledMatchState(fixture: Fixture): MatchState {
+  return {
+    fixtureId: fixture.id,
+    status: 'scheduled',
+    minute: 0,
+    homeScore: 0,
+    awayScore: 0,
+    events: [],
+    simulatedKickoff: fixture.kickoff,
+    possession: 50,
+  };
+}
+
+function sportmonksFixtureIdFromFanVibeId(fixtureId: string, feed?: WorldCupFeed): string | null {
+  if (fixtureId.startsWith('sm-')) return fixtureId.slice(3);
+  const fixture = feed?.fixtures.find(item => item.id === fixtureId);
+  return fixture?.provider === 'sportmonks' && fixture.providerId ? fixture.providerId : null;
+}
+
+export async function getWorldCupMatchDetail(fixtureId: string): Promise<{
+  fixture: Fixture;
+  matchState: MatchState;
+  source: WorldCupFeed['source'];
+  mode: WorldCupFeed['mode'];
+  updatedAt: number;
+  providerConfigured: boolean;
+}> {
+  const feed = await getWorldCupFeed(false);
+  const feedFixture = feed.fixtures.find(fixture => fixture.id === fixtureId);
+  if (WC2026_PROVIDER !== 'sportmonks') {
+    if (!feedFixture) throw new Error('World Cup fixture not found');
+    return {
+      fixture: feedFixture,
+      matchState: feed.matchStates[fixtureId] ?? scheduledMatchState(feedFixture),
+      source: feed.source,
+      mode: feed.mode,
+      updatedAt: feed.updatedAt,
+      providerConfigured: feed.providerConfigured,
+    };
+  }
+
+  const token = process.env.SPORTMONKS_API_KEY;
+  if (!token) throw new Error('SPORTMONKS_API_KEY is not configured');
+
+  const providerId = sportmonksFixtureIdFromFanVibeId(fixtureId, feed);
+  if (!providerId) {
+    if (!feedFixture) throw new Error('World Cup fixture not found');
+    return {
+      fixture: feedFixture,
+      matchState: feed.matchStates[fixtureId] ?? scheduledMatchState(feedFixture),
+      source: feed.source,
+      mode: feed.mode,
+      updatedAt: feed.updatedAt,
+      providerConfigured: feed.providerConfigured,
+    };
+  }
+
+  const includes = [
+    'participants;league;venue;state;scores;events.type;events.period;events.player;statistics.type;sidelined.sideline.player;sidelined.sideline.type;weatherReport',
+    'participants;league;venue;state;scores;events.type;events.period;events.player',
+  ];
+
+  let detail: SportmonksFixture | null = null;
+  for (const include of includes) {
+    const res = await fetch(buildSportmonksUrl(`/fixtures/${providerId}`, token, include), {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const json = await res.json() as SportmonksResponse;
+      detail = Array.isArray(json.data) ? json.data[0] ?? null : json.data ?? null;
+      break;
+    }
+    if (res.status < 400 || res.status >= 500) throw new Error(`Sportmonks API ${res.status}`);
+  }
+
+  if (!detail) {
+    if (!feedFixture) throw new Error('World Cup fixture not found');
+    return {
+      fixture: feedFixture,
+      matchState: feed.matchStates[fixtureId] ?? scheduledMatchState(feedFixture),
+      source: feed.source,
+      mode: feed.mode,
+      updatedAt: Date.now(),
+      providerConfigured: true,
+    };
+  }
+
+  const detailFeed = overlaySportmonks([detail]);
+  const fixture = detailFeed.fixtures.find(item => item.id === fixtureId)
+    ?? detailFeed.fixtures[0]
+    ?? feedFixture;
+  if (!fixture) throw new Error('World Cup fixture not found');
+  const matchState = detailFeed.matchStates[fixture.id] ?? feed.matchStates[fixture.id] ?? feed.matchStates[fixtureId] ?? scheduledMatchState(fixture);
+  const normalizedMatchState = matchState.fixtureId === fixtureId ? matchState : { ...matchState, fixtureId: fixture.id };
+  return {
+    fixture,
+    matchState: normalizedMatchState,
+    source: 'sportmonks',
+    mode: 'live',
+    updatedAt: Date.now(),
     providerConfigured: true,
   };
 }
@@ -449,24 +568,15 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
 
   try {
     if (WC2026_PROVIDER === 'sportmonks') {
-      const buildSportmonksUrl = (path: string, page = 1) => {
-        const url = new URL(`${SPORTMONKS_BASE_URL.replace(/\/$/, '')}${path}`);
-        url.searchParams.set('api_token', token);
-        url.searchParams.set('filters', `fixtureLeagues:${SPORTMONKS_WORLD_CUP_LEAGUE_ID}`);
-        url.searchParams.set('include', 'scores;participants;events;state;venue;round;stage');
-        url.searchParams.set('per_page', '100');
-        url.searchParams.set('page', String(page));
-        return url;
-      };
-
       const fetchAllSportmonksPages = async (path: string): Promise<SportmonksFixture[]> => {
         const fixtures: SportmonksFixture[] = [];
         let page = 1;
         for (;;) {
-          const res = await fetch(buildSportmonksUrl(path, page), { signal: AbortSignal.timeout(10000) });
+          const res = await fetch(buildSportmonksUrl(path, token, 'scores;participants;events;state;venue;round;stage', page), { signal: AbortSignal.timeout(10000) });
           if (!res.ok) throw new Error(`Sportmonks API ${res.status}`);
           const json = await res.json() as SportmonksResponse;
           if (Array.isArray(json.data)) fixtures.push(...json.data);
+          else if (json.data) fixtures.push(json.data);
           const hasMore = json.pagination?.has_more === true || !!json.pagination?.next_page;
           if (!hasMore) break;
           page += 1;
@@ -479,10 +589,10 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
       try {
         matches = await fetchAllSportmonksPages(`/fixtures/between/${SPORTMONKS_WORLD_CUP_START_DATE}/${SPORTMONKS_WORLD_CUP_END_DATE}`);
       } catch {
-        const res = await fetch(buildSportmonksUrl('/livescores/inplay'), { signal: AbortSignal.timeout(10000) });
+        const res = await fetch(buildSportmonksUrl('/livescores/inplay', token, 'participants;scores;periods;events;league.country;round'), { signal: AbortSignal.timeout(10000) });
         if (!res.ok) throw new Error(`Sportmonks API ${res.status}`);
         const json = await res.json() as SportmonksResponse;
-        matches = Array.isArray(json.data) ? json.data : [];
+        matches = Array.isArray(json.data) ? json.data : json.data ? [json.data] : [];
       }
       cache = overlaySportmonks(matches);
       return cache;
