@@ -45,6 +45,7 @@ const REFERRAL_MIN_STAKE_WEI = parseEther('0.001');
 const REFERRER_REWARD_WEI = parseEther('0.0005');
 const REFERRED_REWARD_WEI = parseEther('0.0002');
 const REFERRAL_DAILY_CAP = 10;
+const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
 
 // ── WebSocket broadcast ───────────────────────────────────────────────────────
 
@@ -1016,8 +1017,8 @@ app.get('/stake/status/:fixtureId', async (req, res) => {
     && refresh?.mode !== 'live';
   const canStake = !liveProviderRequiredButUnavailable
     && !!fixture
-    && fixture.home.code !== 'TBD'
-    && fixture.away.code !== 'TBD'
+    && !UNRESOLVED_TEAM_CODES.has(fixture.home.code)
+    && !UNRESOLVED_TEAM_CODES.has(fixture.away.code)
     && fixture.status !== 'locked'
     && fixture.status !== 'settled';
   const reason = liveProviderRequiredButUnavailable
@@ -1028,7 +1029,7 @@ app.get('/stake/status/:fixtureId', async (req, res) => {
       ? 'This match is already live. Staking is closed.'
       : fixture.status === 'settled'
         ? 'This match has already settled.'
-        : fixture.home.code === 'TBD' || fixture.away.code === 'TBD'
+        : UNRESOLVED_TEAM_CODES.has(fixture.home.code) || UNRESOLVED_TEAM_CODES.has(fixture.away.code)
           ? 'Fixture teams are not resolved yet.'
           : 'Staking is open.';
   res.json({ fixtureId, canStake, status: fixture?.status ?? 'missing', reason });

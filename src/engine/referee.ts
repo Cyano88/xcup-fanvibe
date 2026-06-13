@@ -52,6 +52,7 @@ const MATCHDAY_VOLUME_POINT_WEI = 1_000_000_000_000_000n; // 0.001 OKB
 const MATCHDAY_WIN_BONUS_POINTS = 5_000;
 const MATCHDAY_ACTIVE_BONUS_POINTS = 500;
 const MATCHDAY_POSITION_BONUS_POINTS = 250;
+const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
 
 const TBD_TEAM: Team = { name: 'TBD', code: 'TBD', flag: '🏆', iso: 'un' };
 const NEXT_SIM_KICKOFF_MS = Number(process.env.SIM_NEXT_KICKOFF_MS ?? '30000');
@@ -213,7 +214,7 @@ export class RefereeEngine {
     let changed = false;
 
     for (const incoming of fixtures) {
-      if (!incoming?.id || incoming.home?.code === 'TBD' || incoming.away?.code === 'TBD') continue;
+      if (!incoming?.id || UNRESOLVED_TEAM_CODES.has(incoming.home?.code) || UNRESOLVED_TEAM_CODES.has(incoming.away?.code)) continue;
 
       const existing = this.fixtures.find(f => f.id === incoming.id);
       if (existing) {
@@ -1023,7 +1024,13 @@ export class RefereeEngine {
         return;
       }
 
-      if (!fixture || fixture.home.code === 'TBD' || fixture.away.code === 'TBD' || fixture.status === 'locked' || fixture.status === 'settled') {
+      if (
+        !fixture
+        || UNRESOLVED_TEAM_CODES.has(fixture.home.code)
+        || UNRESOLVED_TEAM_CODES.has(fixture.away.code)
+        || fixture.status === 'locked'
+        || fixture.status === 'settled'
+      ) {
         const reason = fixture?.status === 'locked'
           ? `fixture "${fixtureId}" already live`
           : fixture?.status === 'settled'

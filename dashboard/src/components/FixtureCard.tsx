@@ -28,6 +28,7 @@ const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const MIN_STAKE_OKB = 0.001;
 const MIN_STAKE_OKB_LABEL = '0.001';
+const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
 
 const FLAG_URL = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -183,7 +184,7 @@ export function FixtureCard({
   onStake,
   onWatch,
 }: Props) {
-  if (fixture.home.code === 'TBD' && fixture.away.code === 'TBD') {
+  if (UNRESOLVED_TEAM_CODES.has(fixture.home.code) || UNRESOLVED_TEAM_CODES.has(fixture.away.code)) {
     return <TBDCard fixture={fixture} />;
   }
   const { user } = usePrivy();

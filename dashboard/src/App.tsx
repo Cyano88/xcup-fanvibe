@@ -57,10 +57,11 @@ const SETTLEMENT_NOTICE_MS = 5 * 60 * 1000;
 const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
+const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
 const isResolvedFixture = (fixture?: Fixture | null) =>
   !!fixture
-  && fixture.home.code !== 'TBD'
-  && fixture.away.code !== 'TBD'
+  && !UNRESOLVED_TEAM_CODES.has(fixture.home.code)
+  && !UNRESOLVED_TEAM_CODES.has(fixture.away.code)
   && fixture.home.iso !== 'tbd'
   && fixture.away.iso !== 'tbd';
 const explorerBlock = (blockNumber: number) =>
@@ -1143,7 +1144,7 @@ export default function App() {
     ? archivedPreseasonMatchStates
     : displayMatchStates;
   const liveOrCurrentRealtimeFixtures = [...simFixtures]
-    .filter(fixture => fixture.status !== 'settled' && visibleMatchStates[fixture.id]?.status !== 'finished')
+    .filter(fixture => isResolvedFixture(fixture) && fixture.status !== 'settled' && visibleMatchStates[fixture.id]?.status !== 'finished')
     .sort((a, b) => {
       const aTime = Date.parse(a.kickoff);
       const bTime = Date.parse(b.kickoff);
@@ -1155,13 +1156,15 @@ export default function App() {
       ?? Math.max(1, ...simFixtures.map(fixture => fixture.matchday))
     : 1;
   const currentRealtimeFixtures = simFixtures.filter(fixture =>
-    fixture.matchday === realtimeActiveMatchday
-    || visibleMatchStates[fixture.id]?.status === 'live'
-    || visibleMatchStates[fixture.id]?.status === 'half_time'
+    isResolvedFixture(fixture)
+    && (
+      fixture.matchday === realtimeActiveMatchday
+      || visibleMatchStates[fixture.id]?.status === 'live'
+      || visibleMatchStates[fixture.id]?.status === 'half_time'
+    )
   );
   const homeSeasonFixtures = simFixtures.filter(f =>
-    f.home.code !== 'TBD' &&
-    f.away.code !== 'TBD' &&
+    isResolvedFixture(f) &&
     (isGroupStageFixture(f) || !!f.round)
   );
   const baseVisibleFixtures = viewMode === 'simulated'
