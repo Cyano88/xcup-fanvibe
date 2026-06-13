@@ -90,7 +90,7 @@ interface SportmonksResponse {
   };
 }
 
-const CACHE_MS = Number(process.env.SPORTS_DATA_CACHE_MS ?? '120000');
+const CACHE_MS = Number(process.env.SPORTS_DATA_CACHE_MS ?? '30000');
 const WC2026_URL = process.env.WC2026_API_URL ?? 'https://api.wc2026api.com/matches';
 const WC2026_PROVIDER = process.env.WC2026_API_PROVIDER
   ?? (process.env.SPORTMONKS_API_KEY ? 'sportmonks' : undefined)

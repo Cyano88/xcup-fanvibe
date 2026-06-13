@@ -299,6 +299,18 @@ function richerMatchState(primary?: MatchState | null, fallback?: MatchState | n
   return primary;
 }
 
+function replaceRealtimeMatchStates(
+  current: Record<string, MatchState>,
+  realtimeFixtures: Fixture[],
+  incoming: Record<string, MatchState>,
+): Record<string, MatchState> {
+  const realtimeIds = new Set(realtimeFixtures.map(fixture => fixture.id));
+  return {
+    ...Object.fromEntries(Object.entries(current).filter(([fixtureId]) => !realtimeIds.has(fixtureId))),
+    ...incoming,
+  };
+}
+
 function fixtureStageLabel(fixture?: Fixture | null, fallbackMatchday = 1): string {
   if (!fixture) return `Matchday ${fallbackMatchday}`;
   if (fixture.round === 'R32') return 'Round of 32';
@@ -710,16 +722,15 @@ export default function App() {
           const feedFixtures = Array.isArray(feed.fixtures) ? feed.fixtures : [];
           setRealtimeFixtures(feedFixtures);
           if (feed.matchStates) {
-            const realtimeIds = new Set(feedFixtures.map(fixture => fixture.id));
-            setMatchStates(prev => ({
-              ...Object.fromEntries(Object.entries(prev).filter(([fixtureId]) => !realtimeIds.has(fixtureId))),
-              ...feed.matchStates,
-            }));
+            setMatchStates(prev => replaceRealtimeMatchStates(prev, feedFixtures, feed.matchStates));
           }
           setWorldCupFeed(feed);
         })
         .catch(() => {
           setRealtimeFixtures([]);
+          setMatchStates(prev => ({
+            ...Object.fromEntries(Object.entries(prev).filter(([fixtureId]) => !fixtureId.startsWith('wc-') && !fixtureId.startsWith('sm-'))),
+          }));
           setWorldCupFeed({
             fixtures: [],
             matchStates: {},
@@ -734,7 +745,7 @@ export default function App() {
     };
 
     loadWorldCupFeed();
-    const timer = setInterval(loadWorldCupFeed, 120_000);
+    const timer = setInterval(loadWorldCupFeed, 30_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -965,7 +976,9 @@ export default function App() {
         }
         if (res.matchState) {
           watchedStateRef.current[fixtureId] = res.matchState;
-          setMatchStates(prev => mergeLiveMatchStates(prev, { ...prev, [fixtureId]: res.matchState! }));
+          setMatchStates(prev => viewMode === 'realtime'
+            ? { ...prev, [fixtureId]: res.matchState! }
+            : mergeLiveMatchStates(prev, { ...prev, [fixtureId]: res.matchState! }));
         }
       })
       .catch(() => {});
@@ -1017,7 +1030,7 @@ export default function App() {
           }
           if (res.matchState) {
             watchedStateRef.current[watchingFixtureId] = res.matchState;
-            setMatchStates(prev => mergeLiveMatchStates(prev, { ...prev, [watchingFixtureId]: res.matchState! }));
+            setMatchStates(prev => ({ ...prev, [watchingFixtureId]: res.matchState! }));
           }
         })
         .catch(() => {});
@@ -1044,7 +1057,7 @@ export default function App() {
           }
           if (res.matchState) {
             watchedStateRef.current[watchingFixtureId] = res.matchState;
-            setMatchStates(prev => mergeLiveMatchStates(prev, { ...prev, [watchingFixtureId]: res.matchState! }));
+            setMatchStates(prev => ({ ...prev, [watchingFixtureId]: res.matchState! }));
           }
         })
         .catch(() => {});
@@ -1150,7 +1163,7 @@ export default function App() {
     ? archivedPreseasonMatchStates
     : displayMatchStates;
   const liveOrCurrentRealtimeFixtures = [...simFixtures]
-    .filter(fixture => isResolvedFixture(fixture) && fixture.status !== 'settled' && visibleMatchStates[fixture.id]?.status !== 'finished')
+    .filter(fixture => isResolvedFixture(fixture))
     .sort((a, b) => {
       const aTime = parseProviderTime(a.kickoff);
       const bTime = parseProviderTime(b.kickoff);
@@ -1164,7 +1177,8 @@ export default function App() {
   const currentRealtimeFixtures = simFixtures.filter(fixture =>
     isResolvedFixture(fixture)
     && (
-      fixture.matchday === realtimeActiveMatchday
+      viewMode === 'realtime'
+      || fixture.matchday === realtimeActiveMatchday
       || visibleMatchStates[fixture.id]?.status === 'live'
       || visibleMatchStates[fixture.id]?.status === 'half_time'
     )
