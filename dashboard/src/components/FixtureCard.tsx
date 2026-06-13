@@ -493,7 +493,7 @@ export function FixtureCard({
                   dark:hover:bg-white hover:bg-zinc-800 active:scale-95"
               >
                 <MonitorPlay size={12} />
-                {isFinishedMatch ? 'Replay' : 'Stream'}
+                {isFinishedMatch ? 'Match Recap' : 'Live Center'}
               </button>
             )}
           </div>

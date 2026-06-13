@@ -1983,7 +1983,7 @@ export default function App() {
                   stakeClosedNotice={stakeClosedNotices[fixture.id]}
                   refereeAddress={refereeAddress}
                   onStake={handleStake}
-                  onWatch={viewMode === 'simulated' ? handleWatch : () => {}}
+                  onWatch={handleWatch}
                 />
               ))}
             </div>
