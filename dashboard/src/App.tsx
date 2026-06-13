@@ -58,6 +58,12 @@ const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module 
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
+const parseProviderTime = (value: string) => {
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  return Date.parse(normalized);
+};
 const isResolvedFixture = (fixture?: Fixture | null) =>
   !!fixture
   && !UNRESOLVED_TEAM_CODES.has(fixture.home.code)
@@ -1210,7 +1216,7 @@ export default function App() {
   };
   const realtimeFixtureTime = (fixture: Fixture) => {
     const state = visibleMatchStates[fixture.id];
-    const rawTime = state?.status === 'finished' && state.finishedAt ? state.finishedAt : Date.parse(fixture.kickoff);
+    const rawTime = state?.status === 'finished' && state.finishedAt ? state.finishedAt : parseProviderTime(fixture.kickoff);
     return Number.isFinite(rawTime) ? rawTime : 0;
   };
   const orderedVisibleFixtures = activeTab === 'home' && viewMode === 'simulated'
@@ -2135,7 +2141,7 @@ export default function App() {
             {viewMode === 'realtime' && fixtureGroupFilter === 'live' && (
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
-                  Live Fixtures
+                  Fixture Board
                 </div>
                 <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
                   Live first, upcoming next, FT last
@@ -2145,7 +2151,7 @@ export default function App() {
             {viewMode === 'realtime' && fixtureGroupFilter === 'all' && activeTab === 'home' && (
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-400">
-                  Live Fixtures
+                  Fixture Board
                 </div>
                 <div className="text-[11px] dark:text-zinc-500 text-zinc-400">
                   Live first, upcoming next, FT last

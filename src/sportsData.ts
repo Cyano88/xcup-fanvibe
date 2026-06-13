@@ -153,6 +153,14 @@ function scoreValue(primary?: number, fallback?: number): number {
   return Number(primary ?? fallback ?? 0);
 }
 
+function parseProviderTime(value?: string): number {
+  if (!value) return Number.NaN;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  return Date.parse(normalized);
+}
+
 function statusFromProvider(status?: string): FixtureStatus {
   const value = normalize(status);
   if (['live', 'inplay', 'halftime', 'firsthalf', 'secondhalf'].includes(value)) return 'locked';
@@ -196,6 +204,10 @@ function sportmonksStatus(match: SportmonksFixture): FixtureStatus {
   if (['inplay', 'live', '1sthalf', '2ndhalf', 'halftime', 'break'].includes(state)) return 'locked';
   if (['finished', 'ft', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'settled';
   if (['postponed', 'cancelled', 'suspended', 'interrupted'].includes(state)) return 'locked';
+  const kickoffMs = parseProviderTime(match.starting_at);
+  if (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs && Date.now() < kickoffMs + MATCH_SETTLED_FALLBACK_MS) {
+    return 'locked';
+  }
   return 'open';
 }
 
@@ -204,6 +216,10 @@ function sportmonksMatchStateStatus(match: SportmonksFixture): MatchState['statu
   if (['halftime', 'break'].includes(state)) return 'half_time';
   if (['inplay', 'live', '1sthalf', '2ndhalf'].includes(state)) return 'live';
   if (['finished', 'ft', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'finished';
+  const kickoffMs = parseProviderTime(match.starting_at);
+  if (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs && Date.now() < kickoffMs + MATCH_SETTLED_FALLBACK_MS) {
+    return 'live';
+  }
   return null;
 }
 
@@ -315,17 +331,19 @@ function sportmonksEvents(match: SportmonksFixture, fixture: Fixture): MatchStat
 
 function buildMatchState(fixture: Fixture, stateStatus: MatchState['status'] | null, homeScore: number, awayScore: number, events: MatchState['events'], kickoff: string): MatchState | null {
   if (!stateStatus) return null;
-  const latestMinute = events.length ? Math.max(...events.map(event => event.minute ?? 0)) : 1;
+  const kickoffMs = parseProviderTime(kickoff);
+  const elapsedMinute = Number.isFinite(kickoffMs) ? Math.floor((Date.now() - kickoffMs) / 60_000) + 1 : 1;
+  const latestMinute = events.length ? Math.max(...events.map(event => event.minute ?? 0)) : elapsedMinute;
   return {
     fixtureId: fixture.id,
     status: stateStatus,
-    minute: stateStatus === 'finished' ? 90 : Math.max(1, latestMinute),
+    minute: stateStatus === 'finished' ? 90 : Math.min(90, Math.max(1, latestMinute)),
     homeScore,
     awayScore,
     events,
     simulatedKickoff: kickoff,
     possession: 50,
-    finishedAt: stateStatus === 'finished' ? Date.parse(kickoff) + MATCH_SETTLED_FALLBACK_MS : undefined,
+    finishedAt: stateStatus === 'finished' && Number.isFinite(kickoffMs) ? kickoffMs + MATCH_SETTLED_FALLBACK_MS : undefined,
   };
 }
 

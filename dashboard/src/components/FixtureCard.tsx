@@ -32,6 +32,12 @@ const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']
 
 const FLAG_URL = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
+const parseProviderTime = (value: string) => {
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  return Date.parse(normalized);
+};
 
 const ROUND_LABEL: Record<string, string> = {
   R32: 'Knockout',
@@ -299,7 +305,7 @@ export function FixtureCard({
     return true;
   }, [fixture.id, onStake, stakeAmountValid, stakeOutcome]);
 
-  const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(fixture.kickoff).toLocaleString('en-US', {
+  const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(parseProviderTime(fixture.kickoff)).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
   });
 
