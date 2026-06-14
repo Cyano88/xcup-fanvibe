@@ -51,6 +51,13 @@ interface Props {
   onOpenWorldCup: () => void;
 }
 
+interface MatchdayActivityMeta {
+  totalFans: number;
+  eligibleFans: number;
+  pendingFvbFans: number;
+  syncingFvbFans: number;
+}
+
 function compactUsd(value: string | null): string {
   return value?.replace(/^US/, '') ?? '$0.00';
 }
@@ -100,6 +107,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   const [myRankLoaded, setMyRankLoaded] = useState(false);
   const [matchdayLoaded, setMatchdayLoaded] = useState(false);
   const [supportLoaded, setSupportLoaded] = useState(false);
+  const [matchdayActivity, setMatchdayActivity] = useState<MatchdayActivityMeta | null>(null);
   const [visibleMatchday, setVisibleMatchday] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleCountries, setVisibleCountries] = useState(LEADERBOARD_BATCH_SIZE);
 
@@ -108,14 +116,16 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
     const refresh = () => {
       fetch(`${BACKEND_HTTP}/matchday-cup/leaderboard?limit=50`)
         .then(res => res.ok ? res.json() : Promise.reject(new Error('matchday leaderboard')))
-        .then((data: { entries?: MatchdayEntry[] }) => {
+        .then((data: { entries?: MatchdayEntry[]; activity?: MatchdayActivityMeta }) => {
           if (cancelled) return;
           setMatchdayEntries(data.entries ?? []);
+          setMatchdayActivity(data.activity ?? null);
           setMatchdayLoaded(true);
         })
         .catch(() => {
           if (cancelled) return;
           setMatchdayEntries([]);
+          setMatchdayActivity(null);
           setMatchdayLoaded(true);
         });
     };
@@ -236,6 +246,11 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                   : myRank.fvbEligible
                     ? `${formatFvbBalance(myRank.fvbEligibleWei)} FVB eligible`
                     : 'Needs FVB';
+                const rankStatus = myRank.rank
+                  ? fvbStatus
+                  : myRank.fvbEligible === false && (myRank.score ?? 0) > 0
+                    ? 'Activity recorded. Hold FVB to enter the ranked board.'
+                    : fvbStatus;
                 return (
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
                     <div className="min-w-0">
@@ -252,7 +267,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         </span>
                       </div>
                       <div className="mt-1 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
-                        {fvbStatus}
+                        {rankStatus}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {(myRank.scoreComponents
@@ -319,7 +334,9 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
               </button>
             </div>
             <div className="text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
-              {activeBoard === 'matchday' ? `${matchdayEntries.length} fans ranked` : `${countrySupport.length} countries ranked`}
+              {activeBoard === 'matchday'
+                ? `${matchdayActivity?.eligibleFans ?? matchdayEntries.length} eligible fans ranked`
+                : `${countrySupport.length} countries ranked`}
             </div>
           </div>
 
@@ -327,7 +344,11 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
             {activeBoard === 'matchday' ? (
               visibleMatchdayRows.length === 0 ? (
                 <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
-                  {activeRowsLoaded ? 'The first real World Cup stake starts the Matchday Cup ranking.' : 'Loading Matchday rankings...'}
+                  {activeRowsLoaded
+                    ? matchdayActivity && matchdayActivity.totalFans > 0
+                      ? `${matchdayActivity.totalFans} fan${matchdayActivity.totalFans === 1 ? '' : 's'} have match activity. Hold FVB with the same wallet to enter the ranked board.`
+                      : 'The first real World Cup stake starts the Matchday Cup ranking.'
+                    : 'Loading Matchday rankings...'}
                 </div>
               ) : visibleMatchdayRows.map(entry => {
                 const profileName = entry.displayName ?? getStoredProfileName(entry.address);

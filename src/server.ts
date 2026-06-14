@@ -465,9 +465,17 @@ app.get('/leaderboard', (req, res) => {
 app.get('/matchday-cup/leaderboard', async (req, res) => {
   const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
   if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
-  const entries = qualifiedMatchdayEntries(await matchdayEntriesWithEligibility(10_000)).slice(0, parsed.data);
+  const allEntries = await matchdayEntriesWithEligibility(10_000);
+  const qualifiedEntries = qualifiedMatchdayEntries(allEntries);
+  const entries = qualifiedEntries.slice(0, parsed.data);
   res.json({
     entries,
+    activity: {
+      totalFans: allEntries.length,
+      eligibleFans: qualifiedEntries.length,
+      pendingFvbFans: allEntries.filter(entry => entry.fvbEligible === false).length,
+      syncingFvbFans: allEntries.filter(entry => entry.fvbEligible === null || entry.fvbEligible === undefined).length,
+    },
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
       capWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
