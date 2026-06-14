@@ -291,9 +291,13 @@ export function FixtureCard({
   const homeOdds = hasPool ? Math.round(fmt.homeShare) : fixture.baseOdds.home;
   const drawOdds = hasPool ? Math.round(fmt.drawShare)  : fixture.baseOdds.draw;
   const awayOdds = hasPool ? Math.round(fmt.awayShare)  : fixture.baseOdds.away;
-  const matchShareUrl = typeof window === 'undefined'
-    ? `/?match=${encodeURIComponent(fixture.id)}`
-    : `${window.location.origin}/?match=${encodeURIComponent(fixture.id)}`;
+  const matchShareUrl = (() => {
+    const matchParam = `match=${encodeURIComponent(fixture.id)}`;
+    const refParam = connectedAddress ? `&ref=${encodeURIComponent(connectedAddress)}` : '';
+    return typeof window === 'undefined'
+      ? `/?${matchParam}${refParam}`
+      : `${window.location.origin}/?${matchParam}${refParam}`;
+  })();
   const matchShareText = `Back ${fixture.home.code} vs ${fixture.away.code} on FanVibe. Stake OKB on the match and hold FVB for Matchday Cup eligibility.`;
 
   const selectStake = useCallback((outcome: Outcome) => {
@@ -761,7 +765,7 @@ export function FixtureCard({
             <button onClick={() => setStakeHash(null)} className="ml-auto text-zinc-500 hover:text-zinc-300">x</button>
           </div>
           <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
-            Hold FVB with this wallet to qualify for Matchday Cup rewards.
+            Hold FVB with this wallet to qualify for Matchday Cup rewards. Share this match with your invite link.
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <a
