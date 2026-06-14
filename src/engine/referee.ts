@@ -217,7 +217,7 @@ export class RefereeEngine {
 
       const existing = this.fixtures.find(f => f.id === incoming.id);
       if (existing) {
-        const keepSettlement = existing.status === 'settled' && incoming.status === 'settled';
+        const keepSettlement = existing.status === 'settled';
         Object.assign(existing, incoming, {
           status: keepSettlement ? existing.status : incoming.status,
           result: keepSettlement ? existing.result : incoming.result,
@@ -242,6 +242,10 @@ export class RefereeEngine {
   async settleSyncedFixture(fixtureId: string, outcome: Outcome): Promise<SettlementResult | null> {
     const fixture = this.fixtures.find(f => f.id === fixtureId);
     if (!fixture || fixture.status === 'settled') return null;
+    if (fixture.mode !== 'realtime') {
+      this.log('ORACLE', 'warn', `Synced settlement skipped for non-realtime fixture ${fixtureId}`);
+      return null;
+    }
     return this.settleFixture(fixtureId, outcome);
   }
 
