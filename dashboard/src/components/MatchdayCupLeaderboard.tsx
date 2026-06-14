@@ -78,6 +78,17 @@ function formatScore(value: number | undefined): string {
   return Math.round(value ?? 0).toLocaleString();
 }
 
+function scoreBreakdown(entry: MatchdayEntry): string {
+  const parts = entry.scoreComponents;
+  if (!parts) return `${entry.positions} stake${entry.positions === 1 ? '' : 's'}`;
+  return [
+    `Volume ${formatScore(parts.volume)}`,
+    `Wins ${formatScore(parts.wins)}`,
+    `Live ${formatScore(parts.active)}`,
+    `Stakes ${formatScore(parts.participation)}`,
+  ].join(' / ');
+}
+
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
@@ -243,6 +254,23 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                       <div className="mt-1 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
                         {fvbStatus}
                       </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {(myRank.scoreComponents
+                          ? [
+                              ['Volume', myRank.scoreComponents.volume],
+                              ['Wins', myRank.scoreComponents.wins],
+                              ['Live', myRank.scoreComponents.active],
+                              ['Stakes', myRank.scoreComponents.participation],
+                            ]
+                          : [
+                              ['Stakes', myRank.positions],
+                            ]
+                        ).map(([label, value]) => (
+                          <span key={label} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-zinc-600 ring-1 ring-zinc-200 dark:bg-zinc-950 dark:text-zinc-400 dark:ring-zinc-800">
+                            {label} {formatScore(Number(value))}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-right sm:min-w-[260px]">
                       <div>
@@ -324,6 +352,9 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                       </div>
                       <div className="mt-0.5 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
                         {shortWallet(entry.address)} - {fvbStatus}
+                      </div>
+                      <div className="mt-1 truncate text-[10px] font-medium dark:text-zinc-500 text-zinc-500">
+                        {scoreBreakdown(entry)}
                       </div>
                     </div>
                     <div className="text-right">
