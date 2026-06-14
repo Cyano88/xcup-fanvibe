@@ -241,10 +241,20 @@ export class RefereeEngine {
 
   async settleSyncedFixture(fixtureId: string, outcome: Outcome): Promise<SettlementResult | null> {
     const fixture = this.fixtures.find(f => f.id === fixtureId);
-    if (!fixture || fixture.status === 'settled') return null;
+    if (!fixture) return null;
     if (fixture.mode !== 'realtime') {
       this.log('ORACLE', 'warn', `Synced settlement skipped for non-realtime fixture ${fixtureId}`);
       return null;
+    }
+    const existingSettlement = this.settlements.find(s => s.fixtureId === fixtureId);
+    if (fixture.status === 'settled') {
+      if (existingSettlement) return null;
+      if (fixture.result && fixture.result !== outcome) {
+        this.log('ORACLE', 'warn', `Synced settlement repair skipped for ${fixtureId}: fixture result ${fixture.result}, provider result ${outcome}`);
+        return null;
+      }
+      this.log('ORACLE', 'warn', `Repairing missing settlement ledger for ${fixtureId}`);
+      return this.settleFixture(fixtureId, outcome, { repairSettled: true });
     }
     return this.settleFixture(fixtureId, outcome);
   }
@@ -1260,10 +1270,10 @@ export class RefereeEngine {
     return this.settleFixture(fixtureId, outcome);
   }
 
-  private async settleFixture(fixtureId: string, outcome: Outcome): Promise<SettlementResult> {
+  private async settleFixture(fixtureId: string, outcome: Outcome, options: { repairSettled?: boolean } = {}): Promise<SettlementResult> {
     const fixture = this.fixtures.find((f) => f.id === fixtureId);
     if (!fixture) throw new Error(`Fixture ${fixtureId} not found`);
-    if (fixture.status === 'settled') throw new Error(`Fixture ${fixtureId} already settled`);
+    if (fixture.status === 'settled' && !options.repairSettled) throw new Error(`Fixture ${fixtureId} already settled`);
 
     fixture.status = 'locked';
 
