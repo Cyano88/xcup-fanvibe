@@ -1484,10 +1484,10 @@ export default function App() {
   }).length;
   const displayedSeasonWinners = seasonWinners;
   const worldCupSourceLabel = worldCupFeed?.mode === 'live'
-    ? 'Live match feed'
+    ? 'World Cup live center'
     : worldCupFeedReady
       ? 'Verified fixture board'
-      : 'Live match feed';
+      : 'World Cup live center';
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
       ? `updated ${worldCupFeed.freshnessSeconds}s ago`

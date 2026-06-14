@@ -789,7 +789,7 @@ function RealtimeLiveCenter({
   matchState: MatchState;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'summary' | 'stats' | 'events' | 'chat'>('summary');
+  const [tab, setTab] = useState<'summary' | 'events' | 'chat'>('summary');
   const isLive = matchState.status === 'live';
   const isFinished = matchState.status === 'finished';
   const eventList = [...matchState.events].sort((a, b) => b.minute - a.minute || b.id - a.id);
@@ -807,8 +807,7 @@ function RealtimeLiveCenter({
   const awayEvents = eventList.filter(event => event.team === 'away' && isScoreboardEvent(event));
   const tabs: { id: typeof tab; label: string }[] = [
     { id: 'summary', label: 'Summary' },
-    { id: 'stats', label: 'Stats' },
-    { id: 'events', label: 'Events' },
+    { id: 'events', label: 'Timeline' },
     { id: 'chat', label: 'Chat' },
   ];
 
@@ -838,7 +837,7 @@ function RealtimeLiveCenter({
           <div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Match timeline</div>
             <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {eventList.length > 0 ? `${eventList.length} match action${eventList.length === 1 ? '' : 's'}` : 'Waiting for match actions'}
+              {eventList.length > 0 ? `${eventList.length} confirmed event${eventList.length === 1 ? '' : 's'}` : 'No confirmed events yet'}
             </div>
           </div>
           <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
@@ -872,7 +871,7 @@ function RealtimeLiveCenter({
           ))}
           {eventList.length === 0 && (
             <div className="rounded-md border border-dashed border-zinc-200 px-3 py-6 text-center text-sm text-zinc-500 dark:border-zinc-800">
-              Live events will appear here as match actions are confirmed.
+              Confirmed match events will appear here when they are available.
             </div>
           )}
         </div>
@@ -901,122 +900,13 @@ function RealtimeLiveCenter({
     </div>
   );
 
-  const RealtimeStatsPanel = () => {
-    const goals = eventList.filter(event =>
-      providerEventKind(event.type) === 'goal' ||
-      providerEventKind(event.type) === 'penalty'
-    );
-    const cards = eventList.filter(event => ['yellow', 'red'].includes(providerEventKind(event.type)));
-    const homeGoals = goals.filter(event => event.team === 'home').length;
-    const awayGoals = goals.filter(event => event.team === 'away').length;
-    const homeCards = cards.filter(event => event.team === 'home').length;
-    const awayCards = cards.filter(event => event.team === 'away').length;
-    const lastEvent = eventList[0];
-    const statRows = [
-      { label: 'Goals', home: homeGoals, away: awayGoals, tone: 'score' },
-      { label: 'Cards', home: homeCards, away: awayCards, tone: 'cards' },
-      { label: 'Recorded events', home: eventList.filter(event => event.team === 'home').length, away: eventList.filter(event => event.team === 'away').length, tone: 'events' },
-    ];
-    const total = Math.max(1, matchState.homeScore + matchState.awayScore);
-    const homeShare = Math.round((matchState.homeScore / total) * 100);
-
-    return (
-      <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-950 text-white shadow-sm dark:border-zinc-800">
-          <div className="border-b border-white/10 bg-white/[0.03] px-4 py-3">
-            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">Match stats</div>
-            <div className="mt-1 flex items-center justify-between gap-3">
-              <span className="text-sm font-bold">{fixture.home.code}</span>
-              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black tabular-nums text-zinc-950">
-                {matchState.homeScore} - {matchState.awayScore}
-              </span>
-              <span className="text-sm font-bold">{fixture.away.code}</span>
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <div className="text-right">
-                <TeamFlag iso={fixture.home.iso} fallback={fixture.home.flag} className="ml-auto h-7 w-10" />
-                <div className="mt-2 truncate text-xs font-bold text-zinc-200">{fixture.home.name}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl font-black tabular-nums">{matchState.homeScore}:{matchState.awayScore}</div>
-                <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">{statusLabel(matchState)}</div>
-              </div>
-              <div>
-                <TeamFlag iso={fixture.away.iso} fallback={fixture.away.flag} className="h-7 w-10" />
-                <div className="mt-2 truncate text-xs font-bold text-zinc-200">{fixture.away.name}</div>
-              </div>
-            </div>
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full bg-emerald-400" style={{ width: `${matchState.homeScore + matchState.awayScore === 0 ? 50 : homeShare}%` }} />
-            </div>
-            <div className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-              <span>{fixture.home.code}</span>
-              <span>{fixture.away.code}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="space-y-3">
-            {statRows.map(row => {
-              const max = Math.max(1, row.home, row.away);
-              return (
-                <div key={row.label}>
-                  <div className="mb-1.5 grid grid-cols-[42px_1fr_42px] items-center gap-3 text-xs">
-                    <span className="text-right font-black tabular-nums text-zinc-900 dark:text-zinc-100">{row.home}</span>
-                    <span className="text-center text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">{row.label}</span>
-                    <span className="font-black tabular-nums text-zinc-900 dark:text-zinc-100">{row.away}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div className="flex justify-end">
-                      <div className="h-2 rounded-l-full bg-emerald-500" style={{ width: `${Math.max(6, (row.home / max) * 100)}%` }} />
-                    </div>
-                    <div>
-                      <div className="h-2 rounded-r-full bg-sky-500" style={{ width: `${Math.max(6, (row.away / max) * 100)}%` }} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 dark:border-zinc-800 dark:bg-zinc-900/55">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Latest action</div>
-                <div className="mt-1 max-w-sm truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  {lastEvent ? providerEventLabel(lastEvent, fixture) : 'Awaiting first match action'}
-                </div>
-              </div>
-              <div className="shrink-0 rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-black tabular-nums text-white dark:bg-white dark:text-zinc-950">
-                {lastEvent ? `${lastEvent.minute}'` : statusLabel(matchState)}
-              </div>
-            </div>
-          </div>
-
-          {goals.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {goals.slice().reverse().map(goal => (
-                <span key={goal.id} className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-                  {goal.minute}' {providerEventLabel(goal, fixture)}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
       <div className="relative z-10 max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-2xl animate-slide-in dark:border-zinc-800 dark:bg-zinc-950">
         <div className="relative border-b border-zinc-100 px-5 py-4 text-center dark:border-zinc-800">
-          <div className="text-sm font-bold text-zinc-950 dark:text-zinc-50">{isFinished ? 'Match Recap' : 'Live Center'}</div>
-          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Live match feed</div>
+          <div className="text-sm font-bold text-zinc-950 dark:text-zinc-50">{isFinished ? 'Match Result' : 'Live Center'}</div>
+          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">World Cup match center</div>
           <button onClick={onClose} className="absolute right-5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-zinc-400 transition-colors hover:text-zinc-800 dark:text-zinc-500 dark:hover:text-zinc-200">
             <X size={15} />
           </button>
@@ -1062,7 +952,6 @@ function RealtimeLiveCenter({
 
         <div className="p-4 sm:p-5">
           {tab === 'summary' && <SummaryPanel />}
-          {tab === 'stats' && <RealtimeStatsPanel />}
           {tab === 'events' && <CommentaryFeed state={matchState} />}
           {tab === 'chat' && <MatchChat fixtureId={fixture.id} />}
         </div>
@@ -1083,7 +972,7 @@ function CommentaryFeed({ state }: { state: MatchState }) {
   return (
     <div ref={ref} className="h-44 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
       {state.events.length === 0 && (
-        <p className="text-xs dark:text-zinc-500 text-zinc-400 text-center pt-10">Waiting for kick off...</p>
+        <p className="text-xs dark:text-zinc-500 text-zinc-400 text-center pt-10">No confirmed timeline events yet.</p>
       )}
       {[...state.events].reverse().map(ev => (
         <div key={ev.id} className={`flex items-start gap-2 text-xs rounded-lg px-2.5 py-1.5
