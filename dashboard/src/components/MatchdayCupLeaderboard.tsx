@@ -58,6 +58,13 @@ interface MatchdayActivityMeta {
   syncingFvbFans: number;
 }
 
+interface ScoreRules {
+  volumePointOKB?: string;
+  winBonus: number;
+  activeBonus: number;
+  positionBonus: number;
+}
+
 function compactUsd(value: string | null): string {
   return value?.replace(/^US/, '') ?? '$0.00';
 }
@@ -91,9 +98,14 @@ function scoreBreakdown(entry: MatchdayEntry): string {
   return [
     `Volume ${formatScore(parts.volume)}`,
     `Wins ${formatScore(parts.wins)}`,
-    `Active ${formatScore(parts.active)}`,
+    `Open ${formatScore(parts.active)}`,
     `Stakes ${formatScore(parts.participation)}`,
   ].join(' / ');
+}
+
+function scoreRulesLabel(rules: ScoreRules | null): string {
+  if (!rules) return 'Score updates from real World Cup stakes, wins, and open predictions.';
+  return `Scoring: 1 pt / ${rules.volumePointOKB ?? '0.001'} OKB, +${formatScore(rules.winBonus)} per win, +${formatScore(rules.activeBonus)} per open pick, +${formatScore(rules.positionBonus)} per stake.`;
 }
 
 const flagUrl = (iso: string) =>
@@ -108,6 +120,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   const [matchdayLoaded, setMatchdayLoaded] = useState(false);
   const [supportLoaded, setSupportLoaded] = useState(false);
   const [matchdayActivity, setMatchdayActivity] = useState<MatchdayActivityMeta | null>(null);
+  const [scoreRules, setScoreRules] = useState<ScoreRules | null>(null);
   const [visibleMatchday, setVisibleMatchday] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleCountries, setVisibleCountries] = useState(LEADERBOARD_BATCH_SIZE);
 
@@ -116,16 +129,18 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
     const refresh = () => {
       fetch(`${BACKEND_HTTP}/matchday-cup/leaderboard?limit=50`)
         .then(res => res.ok ? res.json() : Promise.reject(new Error('matchday leaderboard')))
-        .then((data: { entries?: MatchdayEntry[]; activity?: MatchdayActivityMeta }) => {
+        .then((data: { entries?: MatchdayEntry[]; activity?: MatchdayActivityMeta; scoreRules?: ScoreRules }) => {
           if (cancelled) return;
           setMatchdayEntries(data.entries ?? []);
           setMatchdayActivity(data.activity ?? null);
+          setScoreRules(data.scoreRules ?? null);
           setMatchdayLoaded(true);
         })
         .catch(() => {
           if (cancelled) return;
           setMatchdayEntries([]);
           setMatchdayActivity(null);
+          setScoreRules(null);
           setMatchdayLoaded(true);
         });
     };
@@ -274,7 +289,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                           ? [
                               ['Volume', myRank.scoreComponents.volume],
                               ['Wins', myRank.scoreComponents.wins],
-                              ['Active', myRank.scoreComponents.active],
+                              ['Open', myRank.scoreComponents.active],
                               ['Stakes', myRank.scoreComponents.participation],
                             ]
                           : [
@@ -294,7 +309,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                       </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{myRank.active}</div>
-                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Active</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Open</div>
                       </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{formatOkbVolume(myRank.volumeWei)}</div>
@@ -338,6 +353,11 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 ? `${matchdayActivity?.eligibleFans ?? matchdayEntries.length} eligible fans ranked`
                 : `${countrySupport.length} countries ranked`}
             </div>
+          </div>
+          <div className="mt-2 text-[11px] font-medium leading-4 dark:text-zinc-500 text-zinc-500">
+            {activeBoard === 'matchday'
+              ? scoreRulesLabel(scoreRules)
+              : 'Country backing counts eligible wallets only, using home/away World Cup stakes. Draw stakes are excluded.'}
           </div>
 
           <div className="mt-3 overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200">
@@ -383,7 +403,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         {formatScore(entry.score)} pts
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">
-                        {entry.wins}W / {entry.active} active - {formatOkbVolume(entry.volumeWei)} OKB
+                        {entry.wins}W / {entry.active} open - {formatOkbVolume(entry.volumeWei)} OKB
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{volumeUsd}</div>
                     </div>
