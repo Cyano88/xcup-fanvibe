@@ -744,6 +744,42 @@ function statusLabel(state: MatchState): string {
   return 'NS';
 }
 
+type ProviderEventKind = 'goal' | 'substitution' | 'yellow' | 'red' | 'offside' | 'penalty' | 'event';
+
+function providerEventKind(type: string): ProviderEventKind {
+  if (type === 'goal_home' || type === 'goal_away' || type === 'event-14' || type === 'event-15') return 'goal';
+  if (type.startsWith('penalty_score') || type === 'event-16') return 'penalty';
+  if (type.startsWith('sub') || type === 'event-18') return 'substitution';
+  if (type.startsWith('yellow') || type === 'event-19') return 'yellow';
+  if (type.startsWith('red') || type === 'event-20') return 'red';
+  if (type.startsWith('offside') || type === 'event-10') return 'offside';
+  return 'event';
+}
+
+function providerEventLabel(event: MatchEvent, fixture?: Fixture): string {
+  const kind = providerEventKind(event.type);
+  const team = event.team === 'home' ? fixture?.home.code : event.team === 'away' ? fixture?.away.code : null;
+  const teamPrefix = team ? `${team} ` : '';
+  const player = event.player?.trim();
+  const player2 = event.player2?.trim();
+
+  if (kind === 'goal') return `${teamPrefix}goal${player ? `: ${player}` : ''}`;
+  if (kind === 'penalty') return `${teamPrefix}penalty${player ? `: ${player}` : ''}`;
+  if (kind === 'yellow') return `${teamPrefix}yellow card${player ? `: ${player}` : ''}`;
+  if (kind === 'red') return `${teamPrefix}red card${player ? `: ${player}` : ''}`;
+  if (kind === 'substitution') {
+    if (player && player2) return `${teamPrefix}substitution: ${player} for ${player2}`;
+    if (player) return `${teamPrefix}substitution: ${player}`;
+    return `${teamPrefix}substitution`;
+  }
+  if (kind === 'offside') return `${teamPrefix}offside${player ? `: ${player}` : ''}`;
+
+  return event.commentary
+    .replace(/^event-\d+\s+/i, '')
+    .replace(/^[A-Z]{2,4}\s+vs\s+[A-Z]{2,4}\s+-\s+/i, '')
+    .trim() || 'Match event';
+}
+
 function RealtimeLiveCenter({
   fixture,
   matchState,
@@ -758,16 +794,13 @@ function RealtimeLiveCenter({
   const isFinished = matchState.status === 'finished';
   const eventList = [...matchState.events].sort((a, b) => b.minute - a.minute || b.id - a.id);
   const isScoreboardEvent = (event: MatchEvent) =>
-    event.type === 'goal_home' ||
-    event.type === 'goal_away' ||
-    event.type.startsWith('yellow') ||
-    event.type.startsWith('red') ||
-    event.type.startsWith('penalty_score');
+    ['goal', 'penalty', 'yellow', 'red'].includes(providerEventKind(event.type));
   const eventChipLabel = (event: MatchEvent) => {
-    if (event.type === 'goal_home' || event.type === 'goal_away') return 'Goal';
-    if (event.type.startsWith('penalty_score')) return 'Penalty';
-    if (event.type.startsWith('red')) return 'Red';
-    if (event.type.startsWith('yellow')) return 'Yellow';
+    const kind = providerEventKind(event.type);
+    if (kind === 'goal') return 'Goal';
+    if (kind === 'penalty') return 'Penalty';
+    if (kind === 'red') return 'Red';
+    if (kind === 'yellow') return 'Yellow';
     return 'Event';
   };
   const homeEvents = eventList.filter(event => event.team === 'home' && isScoreboardEvent(event));
@@ -790,7 +823,7 @@ function RealtimeLiveCenter({
         <div className={`mt-2 flex min-h-5 max-w-full flex-wrap gap-1 ${side === 'home' ? 'justify-end' : 'justify-start'}`}>
           {events.slice(0, 4).map(event => (
             <span key={`${side}-${event.id}`} className="max-w-[150px] truncate rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-              {eventChipLabel(event)}: {event.player ?? event.commentary} {event.minute}'
+              {eventChipLabel(event)}: {event.player ?? providerEventLabel(event, fixture)} {event.minute}'
             </span>
           ))}
         </div>
@@ -832,8 +865,8 @@ function RealtimeLiveCenter({
             <div key={event.id} className="flex items-start gap-3 rounded-md bg-zinc-50 px-3 py-2 dark:bg-zinc-900/55">
               <span className="w-8 shrink-0 text-right text-xs font-black tabular-nums text-zinc-500">{event.minute}'</span>
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{event.commentary}</div>
-                {event.player && <div className="text-[11px] text-zinc-500">{event.player}</div>}
+                <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{providerEventLabel(event, fixture)}</div>
+                {event.player2 && <div className="text-[11px] text-zinc-500">{event.player2}</div>}
               </div>
             </div>
           ))}
@@ -870,11 +903,10 @@ function RealtimeLiveCenter({
 
   const RealtimeStatsPanel = () => {
     const goals = eventList.filter(event =>
-      event.type === 'goal_home' ||
-      event.type === 'goal_away' ||
-      event.type.startsWith('penalty_score')
+      providerEventKind(event.type) === 'goal' ||
+      providerEventKind(event.type) === 'penalty'
     );
-    const cards = eventList.filter(event => event.type.startsWith('yellow') || event.type.startsWith('red'));
+    const cards = eventList.filter(event => ['yellow', 'red'].includes(providerEventKind(event.type)));
     const homeGoals = goals.filter(event => event.team === 'home').length;
     const awayGoals = goals.filter(event => event.team === 'away').length;
     const homeCards = cards.filter(event => event.team === 'home').length;
@@ -955,7 +987,7 @@ function RealtimeLiveCenter({
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Latest action</div>
                 <div className="mt-1 max-w-sm truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  {lastEvent ? lastEvent.commentary : 'Awaiting first provider event'}
+                  {lastEvent ? providerEventLabel(lastEvent, fixture) : 'Awaiting first provider event'}
                 </div>
               </div>
               <div className="shrink-0 rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-black tabular-nums text-white dark:bg-white dark:text-zinc-950">
@@ -968,7 +1000,7 @@ function RealtimeLiveCenter({
             <div className="mt-3 flex flex-wrap gap-1.5">
               {goals.slice().reverse().map(goal => (
                 <span key={goal.id} className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-                  {goal.minute}' {goal.team === 'home' ? fixture.home.code : fixture.away.code} {goal.player ?? 'Goal'}
+                  {goal.minute}' {providerEventLabel(goal, fixture)}
                 </span>
               ))}
             </div>
@@ -1045,8 +1077,8 @@ function CommentaryFeed({ state }: { state: MatchState }) {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [state.events.length]);
 
-  const isGoal = (t: string) => t === 'goal_home' || t === 'goal_away' || t === 'var' || t.startsWith('penalty_score') || t.startsWith('penalties_win');
-  const isCard = (t: string) => t.startsWith('yellow') || t.startsWith('red');
+  const isGoal = (t: string) => ['goal', 'penalty'].includes(providerEventKind(t)) || t === 'var' || t.startsWith('penalties_win');
+  const isCard = (t: string) => ['yellow', 'red'].includes(providerEventKind(t));
 
   return (
     <div ref={ref} className="h-44 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
@@ -1065,7 +1097,7 @@ function CommentaryFeed({ state }: { state: MatchState }) {
             isGoal(ev.type) ? 'dark:text-emerald-300 text-emerald-700 font-semibold' :
             isCard(ev.type) ? 'dark:text-zinc-300 text-zinc-700' :
             'dark:text-zinc-300 text-zinc-700'}`}>
-            {ev.commentary}
+            {providerEventLabel(ev)}
           </span>
         </div>
       ))}
