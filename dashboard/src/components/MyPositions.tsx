@@ -1379,7 +1379,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     onWatch?.(liveFixture.id);
                   }
                   } : undefined}
-                  className={`position-row flex items-center justify-between gap-3 border-b dark:border-zinc-900 border-zinc-100 px-1 py-3 last:border-b-0 ${canOpenMatch ? 'cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/35' : ''} ${flashGoal ? 'position-goal-flash' : ''}`}
+                  className={`position-row flex flex-col gap-2 border-b dark:border-zinc-900 border-zinc-100 px-1 py-3 last:border-b-0 sm:flex-row sm:items-start sm:justify-between sm:gap-3 ${canOpenMatch ? 'cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/35' : ''} ${flashGoal ? 'position-goal-flash' : ''}`}
                 >
                   <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
@@ -1425,13 +1425,14 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     )}
                   </div>
                 </div>
-                <div className="flex shrink-0 self-start flex-col items-end gap-2">
+                <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:self-start sm:flex-col sm:items-end">
                   {season && (
                     <span className="rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tabular-nums text-zinc-600 dark:text-zinc-300">
                       {season}
                     </span>
                   )}
-                  <div className="flex items-center gap-2">
+                  {!season && <span className="sm:hidden" />}
+                  <div className="flex shrink-0 items-center gap-2">
                     {position.type !== 'refund' || !actionHash ? (
                       <a href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="text-xs font-semibold dark:text-zinc-400 text-zinc-500 hover:text-blue-500">
                         Stake

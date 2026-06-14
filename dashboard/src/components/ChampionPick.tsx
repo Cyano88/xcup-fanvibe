@@ -20,7 +20,7 @@ interface Props {
   matchStates: Record<string, MatchState>;
   eliminatedTeams: Set<string>;
   refereeAddress: string;
-  daemonChampPool?: ChampionPool; // from live daemon when online
+  daemonChampPool?: ChampionPool;
 }
 
 const flagUrl = (iso: string) =>
@@ -274,7 +274,7 @@ export function ChampionPick({
       >
         <div className="flex items-center gap-2.5">
           <Trophy size={15} className="text-emerald-500" />
-          <span className="text-sm font-bold dark:text-zinc-100 text-zinc-800">Predict the Champion</span>
+          <span className="text-sm font-bold dark:text-zinc-100 text-zinc-800">World Cup Winner</span>
           {isSettled && settledWinner && (
             <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
               <CheckCircle size={9} /> Settled  - {settledWinner}
@@ -284,7 +284,7 @@ export function ChampionPick({
             <span className="text-[11px] dark:text-zinc-500 text-zinc-400">
               {totalWei > 0n
                 ? `${fmtWei(totalWei)} OKB${totalUsd ? ` (${totalUsd})` : ''}  - ${totalCount} pick${totalCount !== 1 ? 's' : ''}`
-                : 'Be the first to stake'}
+                : 'Open outright market'}
             </span>
           )}
         </div>
@@ -296,7 +296,7 @@ export function ChampionPick({
 
           {/* Subheading */}
           <p className="text-[11px] dark:text-zinc-500 text-zinc-400">
-            Stake OKB on the team you think will lift the trophy. Pool pays out proportionally to backers of the champion when the Final settles.
+            Back the country you think will lift the trophy. Winner backers share the outright pool after the Final settles.
             {eliminatedTeams.size > 0 && (
               <span className="dark:text-zinc-600 text-zinc-400">  - {eliminatedTeams.size} eliminated</span>
             )}
@@ -378,7 +378,7 @@ export function ChampionPick({
                     </>
                   ) : <span>{selected}</span>;
                 })()}
-                <span className="text-xs dark:text-zinc-400 text-zinc-500 font-normal">to win WC 2026</span>
+                <span className="text-xs dark:text-zinc-400 text-zinc-500 font-normal">to win the World Cup</span>
               </div>
               <div className="mt-3 grid gap-2">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
