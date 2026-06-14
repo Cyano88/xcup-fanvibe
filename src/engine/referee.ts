@@ -44,7 +44,6 @@ const PROTOCOL_FEE_BPS = 50n; // 0.5%
 const METABOLISM_INTERVAL_MS = 60_000;
 const OUTCOME_MAP: Record<number, Outcome> = { 0: 'home', 1: 'draw', 2: 'away' };
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
-const baseFixtureId = (fixtureId: string) => fixtureId.replace(/^s\d+-/, '');
 const MAX_PERSISTED_SETTLEMENTS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENTS ?? '200'));
 const MAX_PERSISTED_SETTLEMENT_JOBS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENT_JOBS ?? '200'));
 const SIMULATION_ENABLED = process.env.ENABLE_SIMULATION === 'true';
@@ -1119,6 +1118,9 @@ export class RefereeEngine {
     if (recovered.toLowerCase() !== adminAddr) {
       throw new Error(`Invalid oracle signature — recovered ${recovered}, expected ${adminAddr}`);
     }
+    if (process.env.ALLOW_CHAMPION_ORACLE_OVERRIDE !== 'true') {
+      throw new Error('Champion override disabled; settle from provider-backed World Cup final result');
+    }
     this.log('ORACLE', 'warn', `Champion override: ${teamCode} (nonce ${nonce})`);
     await this.settleChampion(teamCode);
   }
@@ -1317,14 +1319,9 @@ export class RefereeEngine {
       await this.persistMarketStateNow();
     }
 
-    if (baseFixtureId(fixtureId) === 'f-1' && !this.champSettled) {
-      const champTeam = outcome === 'away' ? fixture.away : fixture.home;
-      if (champTeam && CHAMP_TEAMS.includes(champTeam.code)) {
-        this.settleChampion(champTeam.code).catch((err: unknown) => {
-          this.log('ORACLE', 'error', `Champion auto-settle failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
-      }
-    }
+    this.settleChampionFromFinalFixture(fixture, outcome).catch((err: unknown) => {
+      this.log('ORACLE', 'error', `Champion auto-settle failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
 
     this.onUpdate?.();
     await this.refreshMetabolism();
@@ -1332,6 +1329,21 @@ export class RefereeEngine {
   }
 
   // Metabolism loop ──────────────────────────────────────────────────────────
+
+  private async settleChampionFromFinalFixture(fixture: Fixture, outcome: Outcome): Promise<void> {
+    if (this.champSettled) return;
+    if (fixture.mode !== 'realtime' || fixture.round !== 'F') return;
+    if (outcome === 'draw') {
+      this.log('ORACLE', 'warn', 'Champion auto-settle skipped - final settled as draw');
+      return;
+    }
+    const champTeam = outcome === 'away' ? fixture.away : fixture.home;
+    if (!champTeam || !CHAMP_TEAMS.includes(champTeam.code)) {
+      this.log('ORACLE', 'warn', `Champion auto-settle skipped - unresolved final winner ${champTeam?.code ?? 'unknown'}`);
+      return;
+    }
+    await this.settleChampion(champTeam.code);
+  }
 
   private advanceBracket(fixture: Fixture, outcome: Outcome): void {
     if (!SIMULATION_ENABLED) return;

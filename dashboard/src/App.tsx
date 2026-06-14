@@ -17,7 +17,7 @@ import { shortAddr } from './lib/encode';
 import { flushPendingStakeReports } from './lib/stakeReport';
 import { captureReferralFromUrl } from './lib/accountData';
 import { formatOkbUsd, formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
-import { FANVIBE_TOKEN_LOGO, FANVIBE_TOKEN_URL } from './lib/fanvibeToken';
+import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_LOGO, FANVIBE_TOKEN_URL } from './lib/fanvibeToken';
 import {
   SEASON_GROUPS,
   DEFAULT_SEASON_TIMING,
@@ -54,6 +54,43 @@ const SEASON_CACHE_KEY = 'fanvibe.seasonSnapshot.prod';
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const ACTIVE_TAB_KEY = 'fanvibe.activeTab';
 const SETTLEMENT_NOTICE_MS = 5 * 60 * 1000;
+const FVB_EULR_HOOK_ADDRESS = '0xA21240dADA683d2563034C4F43D080b488b07dDD';
+const ERC20_BALANCE_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
+const EULR_HOOK_QUOTE_SELL_ABI = [
+  {
+    type: 'function',
+    name: 'quoteSell',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokensIn', type: 'uint256' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'tokensIn', type: 'uint256' },
+          { name: 'grossOkbOut', type: 'uint256' },
+          { name: 'fee', type: 'uint256' },
+          { name: 'netOkbOut', type: 'uint256' },
+          { name: 'oldOkbCum', type: 'uint256' },
+          { name: 'newOkbCum', type: 'uint256' },
+          { name: 'oldMinted', type: 'uint256' },
+          { name: 'newMinted', type: 'uint256' },
+          { name: 'burnTaxBps', type: 'uint16' },
+          { name: 'burnTaxTokens', type: 'uint256' },
+          { name: 'effectiveTokensIn', type: 'uint256' },
+        ],
+      },
+    ],
+  },
+] as const;
 const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
@@ -203,6 +240,27 @@ function positionPortfolioWei(position: UserPosition, fixtures: Fixture[], match
       return BigInt(position.payout?.amountWei ?? position.stake.amountWei);
     }
     return 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+async function fvbPortfolioValueWei(address: string): Promise<bigint> {
+  try {
+    const balance = await rpcClient.readContract({
+      address: FANVIBE_TOKEN_ADDRESS as `0x${string}`,
+      abi: ERC20_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [address as `0x${string}`],
+    });
+    if (balance <= 0n) return 0n;
+    const quote = await rpcClient.readContract({
+      address: FVB_EULR_HOOK_ADDRESS as `0x${string}`,
+      abi: EULR_HOOK_QUOTE_SELL_ABI,
+      functionName: 'quoteSell',
+      args: [balance],
+    });
+    return quote.netOkbOut;
   } catch {
     return 0n;
   }
@@ -1129,16 +1187,17 @@ export default function App() {
       }
 
       try {
-        const [balanceWei, positionsResponse] = await Promise.all([
+        const [balanceWei, positionsResponse, fvbValueWei] = await Promise.all([
           rpcClient.getBalance({ address: address as `0x${string}` }),
           fetch(`${BACKEND_HTTP}/positions/${address}`),
+          fvbPortfolioValueWei(address),
         ]);
         if (!positionsResponse.ok) throw new Error(`positions ${positionsResponse.status}`);
         const data = await positionsResponse.json() as { positions?: UserPosition[] };
         const openExposureWei = (data.positions ?? []).reduce((sum, position) => {
           return sum + positionPortfolioWei(position, fixtures, matchStates);
         }, 0n);
-        const nextLabel = stripUsdPrefix(formatOkbUsdFromWei(balanceWei + openExposureWei, okbUsd)) ?? '$0.00';
+        const nextLabel = stripUsdPrefix(formatOkbUsdFromWei(balanceWei + openExposureWei + fvbValueWei, okbUsd)) ?? '$0.00';
         if (cancelled) return;
         setAccountValueLabel(nextLabel);
       } catch {
