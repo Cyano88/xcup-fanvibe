@@ -1493,7 +1493,7 @@ export default function App() {
       ? `updated ${worldCupFeed.freshnessSeconds}s ago`
       : worldCupFeedReady
         ? 'fixtures available'
-        : 'awaiting provider'
+        : 'preparing matches'
     : 'updating';
   const appTabs: Array<{ id: AppTab; label: string; icon: typeof Home }> = [
     { id: 'home', label: 'Home', icon: Home },
@@ -2326,7 +2326,7 @@ export default function App() {
         <div className="dark:border-zinc-900 border-zinc-200 border rounded-xl overflow-hidden">
           <div className="w-full flex items-center justify-between gap-4 px-4 py-3 text-xs dark:text-zinc-600 text-zinc-500 dark:bg-transparent bg-white">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="font-semibold dark:text-zinc-400 text-zinc-600">Season Winners</span>
+              <span className="font-semibold dark:text-zinc-400 text-zinc-600">World Cup Winners</span>
               <span className="season-winners-mask block">
                 <span className="season-winners-track text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
                 {displayedSeasonWinners.length > 0 ? (
@@ -2337,12 +2337,12 @@ export default function App() {
                       ) : (
                         <span>{winner.team.flag}</span>
                       )}
-                      <strong>S{String(winner.seasonNumber).padStart(2, '0')} winner</strong> - {winner.team.name}
+                      <strong>Champion</strong> - {winner.team.name}
                     </span>
                   ))
                 ) : (
                   <>
-                    <span><strong>Season archive</strong> - champions append automatically</span>
+                    <span><strong>Champion archive</strong> - winner appears after the final</span>
                   </>
                 )}
                 </span>
