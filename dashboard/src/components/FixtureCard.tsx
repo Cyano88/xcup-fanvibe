@@ -536,7 +536,7 @@ export function FixtureCard({
                   {homeOdds}%
                 </span>
                 <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-medium">
-                  {hasPool ? `${fmt.homeOKB}` : 'Stake ->'}
+                  {hasPool ? `${fmt.homeOKB} OKB` : 'Stake ->'}
                 </span>
                 {homePoolUsdLabel && (
                   <span className="inline-flex items-center gap-1 text-[9px] dark:text-emerald-700 text-emerald-600/70 font-medium">
@@ -560,7 +560,7 @@ export function FixtureCard({
                   {drawOdds}%
                 </span>
                 <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-medium">
-                  {hasPool ? `${fmt.drawOKB}` : 'Stake ->'}
+                  {hasPool ? `${fmt.drawOKB} OKB` : 'Stake ->'}
                 </span>
                 {drawPoolUsdLabel && (
                   <span className="inline-flex items-center gap-1 text-[9px] dark:text-zinc-600 text-zinc-500 font-medium">
@@ -585,7 +585,7 @@ export function FixtureCard({
                   {awayOdds}%
                 </span>
                 <span className="text-[10px] dark:text-blue-500 text-blue-600 font-medium">
-                  {hasPool ? `${fmt.awayOKB}` : 'Stake ->'}
+                  {hasPool ? `${fmt.awayOKB} OKB` : 'Stake ->'}
                 </span>
                 {awayPoolUsdLabel && (
                   <span className="inline-flex items-center gap-1 text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">
@@ -684,12 +684,19 @@ export function FixtureCard({
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pb-3 dark:bg-zinc-950 bg-white">
-        {!hasPool ? (
-          <div className="flex items-center gap-1.5 text-[11px] dark:text-zinc-500 text-zinc-500 font-medium">
-            <TrendingUp size={10} />
-            <span>No stakes yet</span>
-          </div>
-        ) : <div />}
+        <div className="flex items-center gap-1.5 text-[11px] dark:text-zinc-500 text-zinc-500 font-medium">
+          {!hasPool ? (
+            <>
+              <TrendingUp size={10} />
+              <span>No stakes yet</span>
+            </>
+          ) : (
+            <>
+              <TrendingUp size={10} />
+              <span>{fmt.totalOKB} OKB pool</span>
+            </>
+          )}
+        </div>
         <span className="text-[11px] dark:text-zinc-500 text-zinc-500 truncate max-w-[160px]">
           {fixture.stadium
             ? `${fixture.stadium.city.split(',')[0]}  - ${fixture.stadium.capacity.toLocaleString()}`

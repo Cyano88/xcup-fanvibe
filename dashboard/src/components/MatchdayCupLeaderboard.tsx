@@ -91,7 +91,7 @@ function scoreBreakdown(entry: MatchdayEntry): string {
   return [
     `Volume ${formatScore(parts.volume)}`,
     `Wins ${formatScore(parts.wins)}`,
-    `Live ${formatScore(parts.active)}`,
+    `Active ${formatScore(parts.active)}`,
     `Stakes ${formatScore(parts.participation)}`,
   ].join(' / ');
 }
@@ -274,7 +274,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                           ? [
                               ['Volume', myRank.scoreComponents.volume],
                               ['Wins', myRank.scoreComponents.wins],
-                              ['Live', myRank.scoreComponents.active],
+                              ['Active', myRank.scoreComponents.active],
                               ['Stakes', myRank.scoreComponents.participation],
                             ]
                           : [
@@ -294,7 +294,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                       </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{myRank.active}</div>
-                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Live</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Active</div>
                       </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{formatOkbVolume(myRank.volumeWei)}</div>
@@ -383,7 +383,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         {formatScore(entry.score)} pts
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">
-                        {entry.wins}W / {entry.active} live - {formatOkbVolume(entry.volumeWei)} OKB
+                        {entry.wins}W / {entry.active} active - {formatOkbVolume(entry.volumeWei)} OKB
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{volumeUsd}</div>
                     </div>

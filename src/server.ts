@@ -1043,7 +1043,7 @@ app.get('/stake/status/:fixtureId', async (req, res) => {
     && (fixture.mode === 'realtime' || fixture.status !== 'locked')
     && fixture.status !== 'settled';
   const reason = liveProviderRequiredButUnavailable
-    ? 'Live sports provider is not available for this fixture yet.'
+    ? 'Live match data is not available for this fixture yet.'
     : !fixture
     ? 'Fixture is not available yet.'
     : fixture.status === 'locked' && fixture.mode !== 'realtime'
