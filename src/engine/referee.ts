@@ -1029,10 +1029,10 @@ export class RefereeEngine {
         !fixture
         || UNRESOLVED_TEAM_CODES.has(fixture.home.code)
         || UNRESOLVED_TEAM_CODES.has(fixture.away.code)
-        || fixture.status === 'locked'
+        || (fixture.status === 'locked' && fixture.mode !== 'realtime')
         || fixture.status === 'settled'
       ) {
-        const reason = fixture?.status === 'locked'
+        const reason = fixture?.status === 'locked' && fixture.mode !== 'realtime'
           ? `fixture "${fixtureId}" already live`
           : fixture?.status === 'settled'
             ? `fixture "${fixtureId}" already settled`

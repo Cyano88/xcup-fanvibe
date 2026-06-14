@@ -1032,13 +1032,13 @@ app.get('/stake/status/:fixtureId', async (req, res) => {
     && !!fixture
     && !UNRESOLVED_TEAM_CODES.has(fixture.home.code)
     && !UNRESOLVED_TEAM_CODES.has(fixture.away.code)
-    && fixture.status !== 'locked'
+    && (fixture.mode === 'realtime' || fixture.status !== 'locked')
     && fixture.status !== 'settled';
   const reason = liveProviderRequiredButUnavailable
     ? 'Live sports provider is not available for this fixture yet.'
     : !fixture
     ? 'Fixture is not available yet.'
-    : fixture.status === 'locked'
+    : fixture.status === 'locked' && fixture.mode !== 'realtime'
       ? 'This match is already live. Staking is closed.'
       : fixture.status === 'settled'
         ? 'This match has already settled.'

@@ -944,12 +944,13 @@ export default function App() {
       : fixtures.find(f => f.id === fixtureId);
     const matchState = matchStates[fixtureId];
     if (!fixture) return false;
-    if (fixture.status === 'locked' || fixture.status === 'settled') {
+    const isRealtimeMarket = fixture.mode === 'realtime';
+    if (fixture.status === 'settled' || (!isRealtimeMarket && fixture.status === 'locked')) {
       showStakeClosedNotice(fixtureId, fixture.status === 'settled' ? 'This match has already settled.' : 'Stake on the next available match.');
       return false;
     }
-    if (matchState?.status === 'live' || matchState?.status === 'half_time' || matchState?.status === 'finished') {
-      showStakeClosedNotice(fixtureId, 'Stake on the next available match.');
+    if (matchState?.status === 'finished' || (!isRealtimeMarket && (matchState?.status === 'live' || matchState?.status === 'half_time'))) {
+      showStakeClosedNotice(fixtureId, matchState?.status === 'finished' ? 'This match has finished.' : 'Stake on the next available match.');
       return false;
     }
     void outcome;

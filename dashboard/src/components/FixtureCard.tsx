@@ -264,13 +264,16 @@ export function FixtureCard({
         ? 'Starting'
         : 'Awaiting'
     : countdown(fixture.kickoff);
-  const isStakeWindowOpen = !isLocked
-    && !canStream
-    && matchState?.status !== 'live'
-    && matchState?.status !== 'half_time'
-    && matchState?.status !== 'finished'
-    && (fixture.status === 'open' || fixture.status === 'upcoming')
-    && (!isSeasonPlay || !Number.isFinite(seasonFixtureStartsIn) || seasonFixtureStartsIn > 5);
+  const isStakeWindowOpen = isSeasonPlay
+    ? !isLocked
+      && matchState?.status !== 'live'
+      && matchState?.status !== 'half_time'
+      && matchState?.status !== 'finished'
+      && (fixture.status === 'open' || fixture.status === 'upcoming')
+      && (!Number.isFinite(seasonFixtureStartsIn) || seasonFixtureStartsIn > 5)
+    : !isSettled
+      && matchState?.status !== 'finished'
+      && (fixture.status === 'open' || fixture.status === 'upcoming' || fixture.status === 'locked');
   const showStakeClosedNotice = !!stakeClosedNotice;
 
   // Use live pool shares when stakes exist, otherwise baseOdds
@@ -485,12 +488,12 @@ export function FixtureCard({
 
       {/* ── Outcome buttons ──────────────────────────────────────────── */}
       <div className="p-3 dark:bg-zinc-950 bg-white">
-        {!isStakeWindowOpen || canStream ? (
+        {!isStakeWindowOpen ? (
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
               <Lock size={11} />
               <span>
-                {isLiveMatch ? 'Match already started' : isFinishedMatch ? 'Result final' : `Staking ${isSettled ? 'closed' : 'locked'}`}
+                {isFinishedMatch ? 'Result final' : `Staking ${isSettled ? 'closed' : 'locked'}`}
               </span>
               {isSettled && fixture.result && (
                 <span className="dark:text-zinc-300 text-zinc-600 font-semibold capitalize ml-1"> - {fixture.result}</span>
@@ -509,80 +512,93 @@ export function FixtureCard({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-1.5">
-            {/* Home */}
-            <button
-              onClick={() => selectStake('home')}
-              onMouseEnter={() => flipTo('home')}
-              disabled={!isStakeWindowOpen}
-              className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
-                dark:bg-emerald-500/8 bg-emerald-50 dark:border-emerald-500/20 border-emerald-200
-                dark:hover:bg-emerald-500/18 hover:bg-emerald-100 dark:hover:border-emerald-400/50 hover:border-emerald-400
-                disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <span className="text-[11px] dark:text-emerald-400 text-emerald-700 font-semibold">{fixture.home.code}</span>
-              <span className="text-lg font-black dark:text-emerald-300 text-emerald-700 tabular-nums leading-none">
-                {homeOdds}%
-              </span>
-              <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-medium">
-                {hasPool ? `${fmt.homeOKB}` : 'Stake ->'}
-              </span>
-              {homePoolUsdLabel && (
-                <span className="inline-flex items-center gap-1 text-[9px] dark:text-emerald-700 text-emerald-600/70 font-medium">
-                  <TrendingUp size={8} />
-                  {homePoolUsdLabel}
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-1.5">
+              {/* Home */}
+              <button
+                onClick={() => selectStake('home')}
+                onMouseEnter={() => flipTo('home')}
+                disabled={!isStakeWindowOpen}
+                className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
+                  dark:bg-emerald-500/8 bg-emerald-50 dark:border-emerald-500/20 border-emerald-200
+                  dark:hover:bg-emerald-500/18 hover:bg-emerald-100 dark:hover:border-emerald-400/50 hover:border-emerald-400
+                  disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="text-[11px] dark:text-emerald-400 text-emerald-700 font-semibold">{fixture.home.code}</span>
+                <span className="text-lg font-black dark:text-emerald-300 text-emerald-700 tabular-nums leading-none">
+                  {homeOdds}%
                 </span>
-              )}
-            </button>
+                <span className="text-[10px] dark:text-emerald-600 text-emerald-500 font-medium">
+                  {hasPool ? `${fmt.homeOKB}` : 'Stake ->'}
+                </span>
+                {homePoolUsdLabel && (
+                  <span className="inline-flex items-center gap-1 text-[9px] dark:text-emerald-700 text-emerald-600/70 font-medium">
+                    <TrendingUp size={8} />
+                    {homePoolUsdLabel}
+                  </span>
+                )}
+              </button>
 
-            {/* Draw */}
-            <button
-              onClick={() => selectStake('draw')}
-              disabled={!isStakeWindowOpen}
-              className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
-                dark:bg-zinc-800/50 bg-zinc-100 dark:border-zinc-700/50 border-zinc-200
-                dark:hover:bg-zinc-700/60 hover:bg-zinc-200 dark:hover:border-zinc-500 hover:border-zinc-400
-                disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <span className="text-[11px] dark:text-zinc-400 text-zinc-600 font-semibold">Draw</span>
-              <span className="text-lg font-black dark:text-zinc-100 text-zinc-800 tabular-nums leading-none">
-                {drawOdds}%
-              </span>
-              <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-medium">
-                {hasPool ? `${fmt.drawOKB}` : 'Stake ->'}
-              </span>
-              {drawPoolUsdLabel && (
-                <span className="inline-flex items-center gap-1 text-[9px] dark:text-zinc-600 text-zinc-500 font-medium">
-                  <TrendingUp size={8} />
-                  {drawPoolUsdLabel}
+              {/* Draw */}
+              <button
+                onClick={() => selectStake('draw')}
+                disabled={!isStakeWindowOpen}
+                className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
+                  dark:bg-zinc-800/50 bg-zinc-100 dark:border-zinc-700/50 border-zinc-200
+                  dark:hover:bg-zinc-700/60 hover:bg-zinc-200 dark:hover:border-zinc-500 hover:border-zinc-400
+                  disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="text-[11px] dark:text-zinc-400 text-zinc-600 font-semibold">Draw</span>
+                <span className="text-lg font-black dark:text-zinc-100 text-zinc-800 tabular-nums leading-none">
+                  {drawOdds}%
                 </span>
-              )}
-            </button>
+                <span className="text-[10px] dark:text-zinc-500 text-zinc-500 font-medium">
+                  {hasPool ? `${fmt.drawOKB}` : 'Stake ->'}
+                </span>
+                {drawPoolUsdLabel && (
+                  <span className="inline-flex items-center gap-1 text-[9px] dark:text-zinc-600 text-zinc-500 font-medium">
+                    <TrendingUp size={8} />
+                    {drawPoolUsdLabel}
+                  </span>
+                )}
+              </button>
 
-            {/* Away */}
-            <button
-              onClick={() => selectStake('away')}
-              onMouseEnter={() => flipTo('away')}
-              disabled={!isStakeWindowOpen}
-              className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
-                dark:bg-blue-500/8 bg-blue-50 dark:border-blue-500/20 border-blue-200
-                dark:hover:bg-blue-500/14 hover:bg-blue-100 dark:hover:border-blue-400/45 hover:border-blue-300
-                disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <span className="text-[11px] dark:text-blue-300 text-blue-700 font-semibold">{fixture.away.code}</span>
-              <span className="text-lg font-black dark:text-blue-200 text-blue-700 tabular-nums leading-none">
-                {awayOdds}%
-              </span>
-              <span className="text-[10px] dark:text-blue-500 text-blue-600 font-medium">
-                {hasPool ? `${fmt.awayOKB}` : 'Stake ->'}
-              </span>
-              {awayPoolUsdLabel && (
-                <span className="inline-flex items-center gap-1 text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">
-                  <TrendingUp size={8} />
-                  {awayPoolUsdLabel}
+              {/* Away */}
+              <button
+                onClick={() => selectStake('away')}
+                onMouseEnter={() => flipTo('away')}
+                disabled={!isStakeWindowOpen}
+                className="group/btn flex flex-col items-center gap-1 py-3 px-1 rounded-xl border transition-all duration-150 active:scale-95
+                  dark:bg-blue-500/8 bg-blue-50 dark:border-blue-500/20 border-blue-200
+                  dark:hover:bg-blue-500/14 hover:bg-blue-100 dark:hover:border-blue-400/45 hover:border-blue-300
+                  disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="text-[11px] dark:text-blue-300 text-blue-700 font-semibold">{fixture.away.code}</span>
+                <span className="text-lg font-black dark:text-blue-200 text-blue-700 tabular-nums leading-none">
+                  {awayOdds}%
                 </span>
-              )}
-            </button>
+                <span className="text-[10px] dark:text-blue-500 text-blue-600 font-medium">
+                  {hasPool ? `${fmt.awayOKB}` : 'Stake ->'}
+                </span>
+                {awayPoolUsdLabel && (
+                  <span className="inline-flex items-center gap-1 text-[9px] dark:text-blue-600 text-blue-600/70 font-medium">
+                    <TrendingUp size={8} />
+                    {awayPoolUsdLabel}
+                  </span>
+                )}
+              </button>
+            </div>
+            {canStream && (
+              <button
+                onClick={() => onWatch(fixture.id)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all
+                  dark:bg-zinc-100 dark:text-zinc-950 bg-zinc-900 text-white
+                  dark:hover:bg-white hover:bg-zinc-800 active:scale-95"
+              >
+                <MonitorPlay size={12} />
+                Live Center
+              </button>
+            )}
           </div>
         )}
         {stakeOutcome && isStakeWindowOpen && (
