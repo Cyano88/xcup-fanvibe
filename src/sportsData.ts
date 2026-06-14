@@ -581,7 +581,7 @@ function overlayUnsupportedProvider(_matches: Wc2026Match[]): WorldCupFeed {
     updatedAt: Date.now(),
     freshnessSeconds: 0,
     providerConfigured: false,
-    error: 'World Cup realtime data is configured for Sportmonks only',
+    error: 'World Cup live data is not configured',
   };
 }
 

@@ -1141,7 +1141,7 @@ export class RefereeEngine {
       throw new Error(`Invalid oracle signature — recovered ${recovered}, expected ${adminAddr}`);
     }
     if (process.env.ALLOW_CHAMPION_ORACLE_OVERRIDE !== 'true') {
-      throw new Error('Champion override disabled; settle from provider-backed World Cup final result');
+      throw new Error('Champion override disabled; settle from the official World Cup final result');
     }
     this.log('ORACLE', 'warn', `Champion override: ${teamCode} (nonce ${nonce})`);
     await this.settleChampion(teamCode);

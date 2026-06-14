@@ -135,7 +135,7 @@ function stripUsdPrefix(value: string | null): string | null {
 function friendlyFixtureId(fixtureId: string): string {
   const normalized = baseFixtureId(fixtureId).replace(/^season-/, '');
   const seasonGroup = normalized.match(/^wc-([a-l])-/i)?.[1];
-  if (seasonGroup) return `Season Group ${seasonGroup.toUpperCase()} match`;
+  if (seasonGroup) return `World Cup Group ${seasonGroup.toUpperCase()} match`;
   return 'Updating match';
 }
 
@@ -230,7 +230,7 @@ function statusLabel(position: UserPosition, effectiveStatus = position.status):
     return 'Refund queued';
   }
   if (position.type === 'champion') {
-    if (effectiveStatus === 'settled_winner') return position.payout ? 'Payout sent' : 'Won';
+    if (effectiveStatus === 'settled_winner') return position.payout ? 'Payout sent' : 'Won - payout pending';
     if (effectiveStatus === 'settled_lost') return 'Lost';
     return 'Active';
   }
@@ -244,6 +244,32 @@ function pickLabel(position: UserPosition): string {
   if (position.type === 'refund') return position.refund.outcome.toUpperCase();
   if (position.type === 'champion') return 'Outright';
   return position.stake.outcome.toUpperCase();
+}
+
+function selectedOutcomeLabel(position: UserPosition, fixture?: Fixture): string {
+  if (position.type === 'champion') return `${position.stake.teamCode} champion`;
+  const outcome = position.type === 'refund' ? position.refund.outcome : position.stake.outcome;
+  if (outcome === 'draw') return 'Draw';
+  if (fixture && outcome === 'home') return fixture.home.name || fixture.home.code;
+  if (fixture && outcome === 'away') return fixture.away.name || fixture.away.code;
+  return outcome.toUpperCase();
+}
+
+function statusHint(position: UserPosition, effectiveStatus: string): string {
+  if (position.type === 'refund') {
+    if (effectiveStatus === 'refunded') return 'Returned to wallet';
+    if (effectiveStatus === 'failed') return 'Refund needs review';
+    return 'Refund queued automatically';
+  }
+  if (position.type === 'champion') {
+    if (effectiveStatus === 'settled_winner') return position.payout ? 'Outright paid' : 'Outright payout queued';
+    if (effectiveStatus === 'settled_lost') return 'Outright settled';
+    return 'Outright market open';
+  }
+  if (effectiveStatus === 'paid') return 'Payout sent to wallet';
+  if (effectiveStatus === 'won_pending_payout') return 'Automatic payout queued';
+  if (effectiveStatus === 'lost') return 'Market settled';
+  return 'Staking position open';
 }
 
 function pickTone(pick: string): string {
@@ -1274,6 +1300,14 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
             const liveFixture = positionFixture(position, fixtures);
             const liveState = liveFixture ? matchStates[liveFixture.id] : undefined;
             const effectiveStatus = effectiveMatchStatus(position, liveFixture, liveState);
+            const selectedLabel = selectedOutcomeLabel(position, liveFixture);
+            const statusCopy = statusHint(position, effectiveStatus);
+            const returnedAmount = position.type === 'refund'
+              ? position.refund.status === 'refunded' ? position.refund.amountWei : undefined
+              : position.type === 'match'
+                ? position.payout?.amountWei
+                : position.payout?.amountWei;
+            const returnedUsd = returnedAmount ? stripUsdPrefix(formatOkbUsdFromWei(returnedAmount, okbUsd)) : null;
             const canOpenMatch = position.type === 'match'
               && !!liveFixture
               && !!liveState
@@ -1372,10 +1406,23 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
                     </div>
                   </div>
                   <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
+                    <span className="font-semibold dark:text-zinc-300 text-zinc-700">Stake</span>{' '}
                     {formatOKB(amount)}{amountUsd ? ` (${amountUsd})` : ' ($...)'}
+                    <span className="mx-1 text-zinc-300 dark:text-zinc-700">/</span>
+                    <span>{selectedLabel}</span>
                   </div>
-                  <div className="mt-0.5 text-[10px] dark:text-zinc-600 text-zinc-400">
-                    {meta}
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] dark:text-zinc-600 text-zinc-400">
+                    <span>{meta}</span>
+                    <span className="hidden text-zinc-300 dark:text-zinc-800 sm:inline">/</span>
+                    <span>{statusCopy}</span>
+                    {returnedAmount && (
+                      <>
+                        <span className="hidden text-zinc-300 dark:text-zinc-800 sm:inline">/</span>
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-300">
+                          Returned {formatOKB(returnedAmount)}{returnedUsd ? ` (${returnedUsd})` : ''}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 self-start flex-col items-end gap-2">
