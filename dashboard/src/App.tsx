@@ -739,7 +739,7 @@ export default function App() {
           setWorldCupFeed({
             fixtures: [],
             matchStates: {},
-            source: 'sportmonks',
+            source: 'static',
             mode: 'fallback',
             updatedAt: Date.now(),
             freshnessSeconds: 0,
@@ -1422,12 +1422,10 @@ export default function App() {
   }).length;
   const displayedSeasonWinners = seasonWinners;
   const worldCupSourceLabel = worldCupFeed?.mode === 'live'
-    ? worldCupFeed.source === 'sportmonks'
-      ? 'Sportmonks fixture feed'
-      : 'Live fixture feed'
+    ? 'Live match feed'
     : worldCupFeedReady
-      ? 'Provider-backed fixture board'
-      : 'Sportmonks fixture feed';
+      ? 'Verified fixture board'
+      : 'Live match feed';
   const worldCupFreshness = worldCupFeed
     ? worldCupFeed.mode === 'live'
       ? `updated ${worldCupFeed.freshnessSeconds}s ago`
@@ -2206,7 +2204,7 @@ export default function App() {
             {orderedVisibleFixtures.length === 0 && (
               <div className="rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950 bg-white px-4 py-8 text-center text-sm dark:text-zinc-500 text-zinc-500">
                 {viewMode === 'realtime' && !worldCupFeedReady
-                  ? 'Real World Cup markets open after the live sports data provider is active.'
+                  ? 'Real World Cup markets open after the live match feed is active.'
                   : 'No matches found. Try a team name, code, group, or venue.'}
               </div>
             )}

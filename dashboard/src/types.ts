@@ -205,6 +205,6 @@ export interface DaemonState {
 
 export const STATIC_FIXTURES: Fixture[] = [];
 
-// Realtime World Cup fixtures are provider-owned. Sportmonks supplies them at runtime.
+// Realtime World Cup fixtures are supplied at runtime.
 
 export const REALTIME_FIXTURES: Fixture[] = [];

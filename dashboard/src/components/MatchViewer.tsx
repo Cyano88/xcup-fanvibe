@@ -838,7 +838,7 @@ function RealtimeLiveCenter({
           <div>
             <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Match timeline</div>
             <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {eventList.length > 0 ? `${eventList.length} provider event${eventList.length === 1 ? '' : 's'}` : 'Waiting for provider events'}
+              {eventList.length > 0 ? `${eventList.length} match action${eventList.length === 1 ? '' : 's'}` : 'Waiting for match actions'}
             </div>
           </div>
           <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
@@ -872,7 +872,7 @@ function RealtimeLiveCenter({
           ))}
           {eventList.length === 0 && (
             <div className="rounded-md border border-dashed border-zinc-200 px-3 py-6 text-center text-sm text-zinc-500 dark:border-zinc-800">
-              Live events will appear here when Sportmonks publishes match actions.
+              Live events will appear here as match actions are confirmed.
             </div>
           )}
         </div>
@@ -987,7 +987,7 @@ function RealtimeLiveCenter({
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Latest action</div>
                 <div className="mt-1 max-w-sm truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  {lastEvent ? providerEventLabel(lastEvent, fixture) : 'Awaiting first provider event'}
+                  {lastEvent ? providerEventLabel(lastEvent, fixture) : 'Awaiting first match action'}
                 </div>
               </div>
               <div className="shrink-0 rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-black tabular-nums text-white dark:bg-white dark:text-zinc-950">
@@ -1016,7 +1016,7 @@ function RealtimeLiveCenter({
       <div className="relative z-10 max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-2xl animate-slide-in dark:border-zinc-800 dark:bg-zinc-950">
         <div className="relative border-b border-zinc-100 px-5 py-4 text-center dark:border-zinc-800">
           <div className="text-sm font-bold text-zinc-950 dark:text-zinc-50">{isFinished ? 'Match Recap' : 'Live Center'}</div>
-          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Sportmonks provider feed</div>
+          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Live match feed</div>
           <button onClick={onClose} className="absolute right-5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-zinc-400 transition-colors hover:text-zinc-800 dark:text-zinc-500 dark:hover:text-zinc-200">
             <X size={15} />
           </button>
