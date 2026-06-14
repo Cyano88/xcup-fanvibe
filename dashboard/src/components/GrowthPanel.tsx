@@ -71,6 +71,16 @@ export function GrowthPanel({ address, okbUsd }: Props) {
   }, [address, claimingRewards]);
 
   const rule = referralSummary?.rewards.rule;
+  const effectiveReferralSource = referralSummary?.joinedBy?.referrer
+    ?? (referralSource && (!address || referralSource.toLowerCase() !== address.toLowerCase()) ? referralSource : null);
+  const hasInviteActivity = Boolean(
+    referralSummary
+    && (referralSummary.count > 0
+      || referralSummary.qualified > 0
+      || BigInt(referralSummary.rewards.pendingWei) > 0n
+      || BigInt(referralSummary.rewards.claimableWei) > 0n
+      || BigInt(referralSummary.rewards.paidWei) > 0n)
+  );
   const rewardLine = referralSummary
     ? `${referralSummary.qualified}/${referralSummary.count} qualified - ${formatOkbUsdFromWei(referralSummary.rewards.claimableWei, okbUsd)?.replace(/^US/, '') ?? '$0.00'} claimable`
     : rule
@@ -105,54 +115,66 @@ export function GrowthPanel({ address, okbUsd }: Props) {
           <div className="truncate">{referralLink}</div>
         </div>
         <div className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-600">
-          {referralSource ? `Joined through ${shortWallet(referralSource)}.` : 'Invite rewards qualify after a first valid stake.'}
+          {effectiveReferralSource
+            ? `Invite linked from ${shortWallet(effectiveReferralSource)}.`
+            : 'Invite rewards qualify after a referred wallet places a valid stake.'}
         </div>
-        <div className="mt-3 grid grid-cols-3 divide-x divide-zinc-100 border-y border-zinc-100 py-2 dark:divide-zinc-900 dark:border-zinc-900">
-          <div className="px-2">
-            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Invites</div>
-            <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.count ?? 0}</div>
-          </div>
-          <div className="px-2">
-            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Qualified</div>
-            <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.qualified ?? 0}</div>
-          </div>
-          <div className="px-2">
-            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Pending</div>
-            <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
-              {referralSummary?.rewards.pendingOKB ? Number(referralSummary.rewards.pendingOKB).toFixed(4) : '0.0000'} OKB
+        {hasInviteActivity ? (
+          <>
+            <div className="mt-3 grid grid-cols-3 divide-x divide-zinc-100 border-y border-zinc-100 py-2 dark:divide-zinc-900 dark:border-zinc-900">
+              <div className="px-2">
+                <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Invites</div>
+                <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.count ?? 0}</div>
+              </div>
+              <div className="px-2">
+                <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Qualified</div>
+                <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{referralSummary?.qualified ?? 0}</div>
+              </div>
+              <div className="px-2">
+                <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Pending</div>
+                <div className="mt-1 text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
+                  {referralSummary?.rewards.pendingOKB ? Number(referralSummary.rewards.pendingOKB).toFixed(4) : '0.0000'} OKB
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-600">
-          {rewardLine}
-        </div>
-        <div className="mt-3 flex min-w-0 items-center justify-between gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
-          <div className="min-w-0">
-            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Reward cycle</div>
-            <div className="mt-1 truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-              {claimableWei > 0n ? `${claimableUsd} ready` : `${pendingUsd} pending`}
+            <div className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-600">
+              {rewardLine}
             </div>
+          </>
+        ) : (
+          <div className="mt-3 border-y border-zinc-100 py-2 text-[11px] font-medium text-zinc-400 dark:border-zinc-900 dark:text-zinc-600">
+            Share your link after staking. Qualified invites appear here.
           </div>
-          {claimableWei > 0n ? (
-            <button
-              type="button"
-              onClick={claimRewards}
-              disabled={claimingRewards}
-              className="inline-flex h-8 shrink-0 items-center rounded-md bg-zinc-950 px-3 text-xs font-bold text-white transition-colors hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-50 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-            >
-              {claimingRewards ? 'Claiming' : 'Claim'}
-            </button>
-          ) : referralSummary?.rewards.latestPayoutUrl ? (
-            <a
-              href={referralSummary.rewards.latestPayoutUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 px-2.5 text-xs font-bold text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-100"
-            >
-              Paid <ExternalLink size={11} />
-            </a>
-          ) : null}
-        </div>
+        )}
+        {(hasInviteActivity || claimableWei > 0n || referralSummary?.rewards.latestPayoutUrl) && (
+          <div className="mt-3 flex min-w-0 items-center justify-between gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+            <div className="min-w-0">
+              <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Reward cycle</div>
+              <div className="mt-1 truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                {claimableWei > 0n ? `${claimableUsd} ready` : `${pendingUsd} pending`}
+              </div>
+            </div>
+            {claimableWei > 0n ? (
+              <button
+                type="button"
+                onClick={claimRewards}
+                disabled={claimingRewards}
+                className="inline-flex h-8 shrink-0 items-center rounded-md bg-zinc-950 px-3 text-xs font-bold text-white transition-colors hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-50 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                {claimingRewards ? 'Claiming' : 'Claim'}
+              </button>
+            ) : referralSummary?.rewards.latestPayoutUrl ? (
+              <a
+                href={referralSummary.rewards.latestPayoutUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 px-2.5 text-xs font-bold text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-100"
+              >
+                Paid <ExternalLink size={11} />
+              </a>
+            ) : null}
+          </div>
+        )}
         {claimError && (
           <div className="mt-2 text-[11px] font-medium text-zinc-500 dark:text-zinc-500">
             {claimError === 'reward wallet needs funding'

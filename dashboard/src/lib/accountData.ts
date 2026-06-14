@@ -20,6 +20,10 @@ export interface ReferralRewards {
 }
 
 export interface ReferralSummary {
+  joinedBy?: {
+    referrer: string;
+    status: string;
+  } | null;
   count: number;
   qualified: number;
   rewards: ReferralRewards;

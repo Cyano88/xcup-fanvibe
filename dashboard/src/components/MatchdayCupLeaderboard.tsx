@@ -98,14 +98,18 @@ function scoreBreakdown(entry: MatchdayEntry): string {
   return [
     `Volume ${formatScore(parts.volume)}`,
     `Wins ${formatScore(parts.wins)}`,
-    `Open ${formatScore(parts.active)}`,
+    `Active ${formatScore(parts.active)}`,
     `Stakes ${formatScore(parts.participation)}`,
   ].join(' / ');
 }
 
 function scoreRulesLabel(rules: ScoreRules | null): string {
-  if (!rules) return 'Score updates from real World Cup stakes, wins, and open predictions.';
-  return `Scoring: 1 pt / ${rules.volumePointOKB ?? '0.001'} OKB, +${formatScore(rules.winBonus)} per win, +${formatScore(rules.activeBonus)} per open pick, +${formatScore(rules.positionBonus)} per stake.`;
+  if (!rules) return 'Score updates from real World Cup stakes, wins, active predictions, and participation.';
+  return `Scoring: 1 pt / ${rules.volumePointOKB ?? '0.001'} OKB, +${formatScore(rules.winBonus)} per win, +${formatScore(rules.activeBonus)} per active pick, +${formatScore(rules.positionBonus)} per stake.`;
+}
+
+function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralLabel}`;
 }
 
 const flagUrl = (iso: string) =>
@@ -289,7 +293,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                           ? [
                               ['Volume', myRank.scoreComponents.volume],
                               ['Wins', myRank.scoreComponents.wins],
-                              ['Open', myRank.scoreComponents.active],
+                              ['Active', myRank.scoreComponents.active],
                               ['Stakes', myRank.scoreComponents.participation],
                             ]
                           : [
@@ -309,7 +313,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                       </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{myRank.active}</div>
-                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Open</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Active</div>
                       </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{formatOkbVolume(myRank.volumeWei)}</div>
@@ -350,8 +354,8 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
             </div>
             <div className="text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
               {activeBoard === 'matchday'
-                ? `${matchdayActivity?.eligibleFans ?? matchdayEntries.length} eligible fans ranked`
-                : `${countrySupport.length} countries ranked`}
+                ? `${plural(matchdayActivity?.eligibleFans ?? matchdayEntries.length, 'eligible fan')} ranked`
+                : `${plural(countrySupport.length, 'country', 'countries')} ranked`}
             </div>
           </div>
           <div className="mt-2 text-[11px] font-medium leading-4 dark:text-zinc-500 text-zinc-500">
@@ -366,7 +370,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
                   {activeRowsLoaded
                     ? matchdayActivity && matchdayActivity.totalFans > 0
-                      ? `${matchdayActivity.totalFans} fan${matchdayActivity.totalFans === 1 ? '' : 's'} have match activity. Hold FVB with the same wallet to enter the ranked board.`
+                      ? `${plural(matchdayActivity.totalFans, 'fan')} have match activity. Hold FVB with the same wallet to enter the ranked board.`
                       : 'The first real World Cup stake starts the Matchday Cup ranking.'
                     : 'Loading Matchday rankings...'}
                 </div>
@@ -403,7 +407,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         {formatScore(entry.score)} pts
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">
-                        {entry.wins}W / {entry.active} open - {formatOkbVolume(entry.volumeWei)} OKB
+                        {entry.wins}W / {entry.active} active - {formatOkbVolume(entry.volumeWei)} OKB
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{volumeUsd}</div>
                     </div>
@@ -430,7 +434,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold dark:text-white text-zinc-950">{entry.name}</div>
                     <div className="mt-0.5 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
-                      {entry.supporters} fans - {entry.positions} stakes
+                      {plural(entry.supporters, 'fan')} - {plural(entry.positions, 'stake')}
                     </div>
                   </div>
                   <div className="shrink-0 text-right text-xs font-bold tabular-nums dark:text-white text-zinc-950">
