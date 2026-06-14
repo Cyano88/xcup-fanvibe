@@ -154,14 +154,14 @@ function positionFixture(position: UserPosition, fixtures: Fixture[]): Fixture |
 }
 
 function seasonBadge(position: UserPosition): string | null {
-  const seasonNumber = position.type === 'champion' ? position.seasonNumber : undefined;
+  if (position.type === 'champion') return 'WC 2026';
   const fixtureId = position.type === 'match'
     ? position.stake.fixtureId
     : position.type === 'refund'
       ? position.refund.fixtureId
       : '';
   const match = fixtureId.match(/^s(\d+)-/i);
-  const parsedSeason = seasonNumber ?? (match ? Number(match[1]) : undefined);
+  const parsedSeason = match ? Number(match[1]) : undefined;
   return parsedSeason && Number.isFinite(parsedSeason)
     ? `S${String(parsedSeason).padStart(2, '0')}`
     : null;
