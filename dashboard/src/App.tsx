@@ -2313,9 +2313,9 @@ export default function App() {
             <span className="flex min-w-0 items-center gap-2">
               <span className="font-semibold dark:text-zinc-400 text-zinc-600">Platform Steps</span>
               <span className="how-it-works-rotate hidden sm:inline-flex text-[11px] font-semibold dark:text-zinc-500 text-zinc-400">
-                <span><strong>Step 1</strong> Choose a fixture or champion market</span>
-                <span><strong>Step 2</strong> Stake OKB from your connected wallet</span>
-                <span><strong>Step 3</strong> Winners split payouts after settlement</span>
+                <span><strong>Step 1</strong> Pick a live World Cup market</span>
+                <span><strong>Step 2</strong> Stake OKB and hold FVB with the same wallet</span>
+                <span><strong>Step 3</strong> Results settle live and move the leaderboard</span>
               </span>
             </span>
           </div>
