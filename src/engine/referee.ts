@@ -247,8 +247,18 @@ export class RefereeEngine {
       return null;
     }
     const existingSettlement = this.settlements.find(s => s.fixtureId === fixtureId);
+    const existingJob = this.settlementJobs.get(`match:${fixtureId}`);
     if (fixture.status === 'settled') {
-      if (existingSettlement) return null;
+      if (existingSettlement) {
+        if (existingJob?.status === 'paying') {
+          await this.processSettlementJob(existingJob, 'Payout');
+          return this.upsertMatchSettlementResult(existingJob);
+        }
+        if (existingJob?.status === 'complete') {
+          return this.upsertMatchSettlementResult(existingJob);
+        }
+        return null;
+      }
       if (fixture.result && fixture.result !== outcome) {
         this.log('ORACLE', 'warn', `Synced settlement repair skipped for ${fixtureId}: fixture result ${fixture.result}, provider result ${outcome}`);
         return null;
@@ -768,9 +778,7 @@ export class RefereeEngine {
           fixture.status = 'settled';
           fixture.result = job.outcome;
         }
-        if (!this.settlements.some(s => s.fixtureId === job.fixtureId)) {
-          this.settlements.push(this.resultFromSettlementJob(job));
-        }
+        await this.upsertMatchSettlementResult(job);
       }
     }
 
@@ -1192,6 +1200,19 @@ export class RefereeEngine {
     };
   }
 
+  private async upsertMatchSettlementResult(job: PersistedSettlementJob): Promise<SettlementResult | null> {
+    if (job.type !== 'match' || !job.fixtureId || !job.outcome) return null;
+    const result = this.resultFromSettlementJob(job);
+    const index = this.settlements.findIndex(settlement => settlement.fixtureId === job.fixtureId);
+    if (index >= 0) {
+      this.settlements[index] = result;
+    } else {
+      this.settlements.push(result);
+    }
+    await this.persistMarketStateNow();
+    return result;
+  }
+
   private async settleChampion(winner: string): Promise<void> {
     if (!CHAMP_TEAMS.includes(winner)) throw new Error(`Unknown team: ${winner}`);
 
@@ -1327,11 +1348,7 @@ export class RefereeEngine {
     fixture.result = outcome;
     this.advanceBracket(fixture, outcome);
 
-    const resumedResult = this.resultFromSettlementJob(job);
-    if (!this.settlements.some(s => s.fixtureId === fixtureId)) {
-      this.settlements.push(resumedResult);
-      await this.persistMarketStateNow();
-    }
+    const resumedResult = await this.upsertMatchSettlementResult(job) ?? this.resultFromSettlementJob(job);
 
     this.settleChampionFromFinalFixture(fixture, outcome).catch((err: unknown) => {
       this.log('ORACLE', 'error', `Champion auto-settle failed: ${err instanceof Error ? err.message : String(err)}`);
