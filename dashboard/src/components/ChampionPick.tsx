@@ -95,7 +95,7 @@ function PrimaryChampionStakeAction({
   const { authenticated } = usePrivy();
   const { wallets } = useWallets();
   const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
-  const buttonClass = 'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+  const buttonClass = 'inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
   const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB ->` : 'Sign in to stake';
 
   if (!authenticated && externalWallet) {
@@ -380,9 +380,9 @@ export function ChampionPick({
                 })()}
                 <span className="text-xs dark:text-zinc-400 text-zinc-500 font-normal">to win WC 2026</span>
               </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(150px,1fr)_auto_auto] sm:items-center">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="flex h-9 min-w-[120px] items-center gap-1 dark:bg-zinc-900 bg-white border dark:border-zinc-700 border-zinc-200 rounded-lg px-2">
+              <div className="mt-3 grid gap-2">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                  <div className="flex h-9 min-w-0 items-center gap-1 dark:bg-zinc-900 bg-white border dark:border-zinc-700 border-zinc-200 rounded-lg px-2">
                     <input
                       type="number"
                       step="0.001"
@@ -400,14 +400,14 @@ export function ChampionPick({
                     <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
                   </div>
                   {stakeUsd && (
-                    <span className="shrink-0 text-[11px] font-medium dark:text-zinc-600 text-zinc-400">
+                    <span className="shrink-0 whitespace-nowrap text-right text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">
                       {stakeUsd}
                     </span>
                   )}
                 </div>
                 <button
                   onClick={() => setSelected(null)}
-                  className="h-9 rounded-md px-2.5 text-xs font-semibold dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
+                  className="h-9 rounded-md border border-zinc-200 px-2.5 text-xs font-semibold dark:border-zinc-700 dark:text-zinc-500 text-zinc-400 dark:hover:text-zinc-300 hover:text-zinc-600 transition-colors"
                 >
                   Cancel
                 </button>
@@ -436,7 +436,7 @@ export function ChampionPick({
                   <button
                     onClick={handleStake}
                     disabled={txPending || !refereeAddress || !amountValid}
-                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {txPending ? (
                       <><Zap size={10} className="animate-pulse" />Confirm in wallet...</>

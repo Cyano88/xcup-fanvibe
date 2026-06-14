@@ -8,7 +8,7 @@ import { MyPositions } from './components/MyPositions';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
 import { MatchdayCupLeaderboard } from './components/MatchdayCupLeaderboard';
-import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team, UserPosition } from './types';
+import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team, UserPosition, ChampionPool } from './types';
 import { BracketView } from './components/BracketView';
 import { ChampionPick } from './components/ChampionPick';
 import { simulateMatch } from './lib/clientSim';
@@ -381,6 +381,7 @@ export default function App() {
   const [realtimeFixtures, setRealtimeFixtures] = useState<Fixture[]>([]);
   const [worldCupFeed, setWorldCupFeed]         = useState<WorldCupFeed | null>(null);
   const [pools, setPools]                       = useState<Record<string, Pool>>({});
+  const [championPool, setChampionPool]         = useState<ChampionPool | undefined>(undefined);
   const [logs, setLogs]                         = useState<DaemonLog[]>([]);
   const [lastBlock, setLastBlock]               = useState(0);
   const [wsConnected, setWsConnected]           = useState(false);
@@ -638,6 +639,7 @@ export default function App() {
             setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
           }
           setPools(s.pools);
+          setChampionPool(s.championPool);
           setLogs(s.recentLogs);
           setLastBlock(s.lastBlock);
           setWsConnected(s.wsConnected);
@@ -682,6 +684,7 @@ export default function App() {
           setFixtures(prev => prev.length ? prev : seasonFixturesFromState(s.fixtures));
         }
         setPools(s.pools);
+        setChampionPool(s.championPool);
         setLogs(s.recentLogs);
         setLastBlock(s.lastBlock);
         setWsConnected(s.wsConnected);
@@ -1751,6 +1754,17 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'home' && homeCupView === 'matches' && viewMode === 'realtime' && worldCupFeedReady && (
+          <ChampionPick
+            key="realtime-world-cup-champion"
+            fixtures={realtimeFixtures}
+            matchStates={displayMatchStates}
+            eliminatedTeams={new Set()}
+            refereeAddress={refereeAddress}
+            daemonChampPool={championPool}
+          />
+        )}
+
         {activeTab === 'home' && homeCupView === 'leaderboard' && (
           <MatchdayCupLeaderboard
             okbUsd={okbUsd}
@@ -2040,6 +2054,7 @@ export default function App() {
             matchStates={matchStates}
             eliminatedTeams={eliminatedTeams}
             refereeAddress={refereeAddress}
+            daemonChampPool={championPool}
           />
         )}
 

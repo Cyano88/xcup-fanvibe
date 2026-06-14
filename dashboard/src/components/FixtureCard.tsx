@@ -138,7 +138,7 @@ function PrimaryMatchStakeAction({
   const { authenticated } = usePrivy();
   const { wallets } = useWallets();
   const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
-  const className = 'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+  const className = 'inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
   const label = authenticated || externalWallet ? 'Stake ->' : 'Sign in to stake';
 
   if (!authenticated && externalWallet) {
@@ -624,9 +624,9 @@ export function FixtureCard({
                 Cancel
               </button>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(150px,1fr)_auto] sm:items-center">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="flex h-9 min-w-[120px] items-center gap-1 dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg px-2">
+            <div className="mt-3 grid gap-2">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                <div className="flex h-9 min-w-0 items-center gap-1 dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg px-2">
                   <input
                     type="number"
                     step="0.001"
@@ -643,7 +643,7 @@ export function FixtureCard({
                   />
                   <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
                 </div>
-                {stakeUsd && <span className="shrink-0 text-[11px] font-medium dark:text-zinc-600 text-zinc-400">{stakeUsd}</span>}
+                {stakeUsd && <span className="shrink-0 whitespace-nowrap text-right text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{stakeUsd}</span>}
               </div>
               {PRIVY_ENABLED && (
                 <PrimaryMatchStakeAction
