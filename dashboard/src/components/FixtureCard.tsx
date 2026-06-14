@@ -274,6 +274,13 @@ export function FixtureCard({
     : !isSettled
       && matchState?.status !== 'finished'
       && (fixture.status === 'open' || fixture.status === 'upcoming' || fixture.status === 'locked');
+  const stakeStateLabel = isFinishedMatch || isSettled
+    ? 'Result final'
+    : isLiveMatch
+      ? 'Staking live'
+      : isStakeWindowOpen
+        ? 'Staking open'
+        : 'Staking locked';
   const showStakeClosedNotice = !!stakeClosedNotice;
 
   // Use live pool shares when stakes exist, otherwise baseOdds
@@ -494,9 +501,7 @@ export function FixtureCard({
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl dark:bg-zinc-900 bg-zinc-100 border dark:border-zinc-800 border-zinc-200 text-xs dark:text-zinc-500 text-zinc-400">
               <Lock size={11} />
-              <span>
-                {isFinishedMatch ? 'Result final' : `Staking ${isSettled ? 'closed' : 'locked'}`}
-              </span>
+              <span>{stakeStateLabel}</span>
               {isSettled && fixture.result && (
                 <span className="dark:text-zinc-300 text-zinc-600 font-semibold capitalize ml-1"> - {fixture.result}</span>
               )}
@@ -625,7 +630,7 @@ export function FixtureCard({
               </button>
             </div>
             <div className="mt-3 grid gap-2">
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <div className="grid min-w-0 gap-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-2">
                 <div className="flex h-9 min-w-0 items-center gap-1 dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg px-2">
                   <input
                     type="number"
@@ -643,7 +648,7 @@ export function FixtureCard({
                   />
                   <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
                 </div>
-                {stakeUsd && <span className="shrink-0 whitespace-nowrap text-right text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400">{stakeUsd}</span>}
+                {stakeUsd && <span className="shrink-0 whitespace-nowrap text-left text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400 sm:text-right">{stakeUsd}</span>}
               </div>
               {PRIVY_ENABLED && (
                 <PrimaryMatchStakeAction

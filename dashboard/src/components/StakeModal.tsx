@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { X, Wallet, ExternalLink, AlertCircle } from 'lucide-react';
+import { X, Wallet, ExternalLink, AlertCircle, Check } from 'lucide-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Outcome } from '../types';
 import { encodeStakeCalldata } from '../lib/encode';
@@ -88,6 +88,7 @@ function PrimaryStakeAction({
         calldata={calldata}
         refereeAddress={refereeAddress}
         disabled={disabled}
+        pendingLabel="Confirm in wallet..."
         onBeforeStake={onBeforeStake}
         onSuccess={(hash) => onSuccess(hash)}
         onError={onError}
@@ -104,6 +105,7 @@ function PrimaryStakeAction({
       calldata={calldata}
       refereeAddress={refereeAddress}
       disabled={disabled}
+      pendingLabel="Confirm stake..."
       onBeforeStake={onBeforeStake}
       onSuccess={(hash) => onSuccess(hash)}
       onError={onError}
@@ -293,7 +295,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                         outcome === o ? OUTCOME_COLOR[o] : 'border-white/10 bg-zinc-950/72 text-zinc-300 hover:border-white/20 hover:bg-zinc-900/84'
                       }`}
                     >
-                      <div>{o === 'home' ? fixture.home.flag : o === 'away' ? fixture.away.flag : '—'}</div>
+                      <div>{o === 'home' ? fixture.home.flag : o === 'away' ? fixture.away.flag : '-'}</div>
                       <div className="mt-0.5">{OUTCOME_LABEL[o]}</div>
                     </button>
                   ))}
@@ -342,7 +344,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
               </div>
 
               {/* Protocol fee note */}
-              <p className="text-xs font-medium text-zinc-300">0.5% protocol fee - Payouts sent autonomously on settlement</p>
+              <p className="text-xs font-medium text-zinc-300">0.5% protocol fee. Payouts are sent automatically after settlement.</p>
 
               {PRIVY_ENABLED ? (
                 <PrimaryStakeAction
@@ -369,16 +371,18 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
           {step === 'pending' && (
             <div className="flex flex-col items-center gap-3 py-4">
               <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-              <div className="text-sm text-zinc-400 text-center">Confirm in wallet…</div>
-              <div className="text-xs text-zinc-600">Sending {amount} OKB{stakeUsd ? ` (${stakeUsd})` : ''} on X Layer Mainnet</div>
+              <div className="text-center text-sm font-semibold text-zinc-300">Confirm in wallet...</div>
+              <div className="text-center text-xs text-zinc-500">Sending {amount} OKB{stakeUsd ? ` (${stakeUsd})` : ''} on X Layer Mainnet</div>
             </div>
           )}
 
           {step === 'confirmed' && txHash && (
             <div className="space-y-3 py-2">
               <div className="flex items-center gap-2 text-emerald-400">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">✓</div>
-                <span className="text-sm font-medium">Stake confirmed!</span>
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20">
+                  <Check size={12} />
+                </div>
+                <span className="text-sm font-medium">Stake confirmed</span>
               </div>
               <div className="text-xs text-zinc-500">
                 Your stake of <span className="text-zinc-300">{amount} OKB{stakeUsd ? ` (${stakeUsd})` : ''}</span> on{' '}
@@ -391,7 +395,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                 className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
               >
                 <ExternalLink size={12} />
-                <span>{txHash.slice(0, 16)}…</span>
+                <span>{txHash.slice(0, 16)}...</span>
                 View on OKX Explorer
               </a>
               <button onClick={onClose} className="btn-primary w-full mt-1">Done</button>
