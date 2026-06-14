@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AlarmClock, Lock, MonitorPlay, TrendingUp, Zap } from 'lucide-react';
+import { AlarmClock, Check, Lock, MonitorPlay, Share2, TrendingUp, Zap } from 'lucide-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Pool, Outcome, MatchState } from '../types';
 import { encodeStakeCalldata, formatPool, countdown } from '../lib/encode';
@@ -8,6 +8,7 @@ import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
 import { reportStakeTx } from '../lib/stakeReport';
+import { FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
 
 interface Props {
   fixture: Fixture;
@@ -22,6 +23,7 @@ interface Props {
   refereeAddress: string;
   onStake: (fixtureId: string, outcome: Outcome) => boolean;
   onWatch: (fixtureId: string) => void;
+  onOpenLeaderboard?: () => void;
 }
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
@@ -189,6 +191,7 @@ export function FixtureCard({
   refereeAddress,
   onStake,
   onWatch,
+  onOpenLeaderboard,
 }: Props) {
   if (UNRESOLVED_TEAM_CODES.has(fixture.home.code) || UNRESOLVED_TEAM_CODES.has(fixture.away.code)) {
     return <TBDCard fixture={fixture} />;
@@ -204,6 +207,7 @@ export function FixtureCard({
   const [stakeAmount, setStakeAmount] = useState('0.01');
   const [stakeError, setStakeError] = useState<string | null>(null);
   const [stakeHash, setStakeHash] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const okbUsd = useOkbUsdPrice();
   const stakeUsd = formatStakeUsd(stakeAmount, okbUsd);
   const stakeAmountNumber = Number(stakeAmount);
@@ -287,12 +291,31 @@ export function FixtureCard({
   const homeOdds = hasPool ? Math.round(fmt.homeShare) : fixture.baseOdds.home;
   const drawOdds = hasPool ? Math.round(fmt.drawShare)  : fixture.baseOdds.draw;
   const awayOdds = hasPool ? Math.round(fmt.awayShare)  : fixture.baseOdds.away;
+  const matchShareUrl = typeof window === 'undefined'
+    ? `/?match=${encodeURIComponent(fixture.id)}`
+    : `${window.location.origin}/?match=${encodeURIComponent(fixture.id)}`;
+  const matchShareText = `Back ${fixture.home.code} vs ${fixture.away.code} on FanVibe. Stake OKB on the match and hold FVB for Matchday Cup eligibility.`;
 
   const selectStake = useCallback((outcome: Outcome) => {
     if (!onStake(fixture.id, outcome)) return;
     setStakeError(null);
     setStakeOutcome(current => current === outcome ? null : outcome);
   }, [fixture.id, onStake]);
+
+  const shareMatch = useCallback(async () => {
+    const payload = { title: 'FanVibe World Cup match', text: matchShareText, url: matchShareUrl };
+    try {
+      if (navigator.share) {
+        await navigator.share(payload);
+      } else {
+        await navigator.clipboard.writeText(`${matchShareText} ${matchShareUrl}`);
+      }
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      setShareCopied(false);
+    }
+  }, [matchShareText, matchShareUrl]);
 
   const checkStakeOpen = useCallback(async () => {
     if (!stakeAmountValid) {
@@ -509,7 +532,7 @@ export function FixtureCard({
             {canStream && (
               <button
                 onClick={() => onWatch(fixture.id)}
-                className="flex items-center gap-1.5 px-3 py-3 rounded-lg text-xs font-semibold transition-all
+                className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-lg text-xs font-semibold transition-all
                   dark:bg-zinc-100 dark:text-zinc-950 bg-zinc-900 text-white
                   dark:hover:bg-white hover:bg-zinc-800 active:scale-95"
               >
@@ -517,6 +540,15 @@ export function FixtureCard({
                 Live Center
               </button>
             )}
+            <button
+              onClick={shareMatch}
+              className="flex items-center justify-center gap-1.5 rounded-lg border px-3 py-3 text-xs font-semibold transition-all
+                dark:border-zinc-800 dark:text-zinc-400 text-zinc-500 border-zinc-200
+                dark:hover:border-zinc-700 dark:hover:text-zinc-200 hover:border-zinc-300 hover:text-zinc-800 active:scale-95"
+            >
+              {shareCopied ? <Check size={12} /> : <Share2 size={12} />}
+              {shareCopied ? 'Copied' : 'Share'}
+            </button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -595,17 +627,28 @@ export function FixtureCard({
                 )}
               </button>
             </div>
-            {canStream && (
+            <div className={`grid gap-1.5 ${canStream ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {canStream && (
+                <button
+                  onClick={() => onWatch(fixture.id)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all
+                    dark:bg-zinc-100 dark:text-zinc-950 bg-zinc-900 text-white
+                    dark:hover:bg-white hover:bg-zinc-800 active:scale-95"
+                >
+                  <MonitorPlay size={12} />
+                  Live Center
+                </button>
+              )}
               <button
-                onClick={() => onWatch(fixture.id)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all
-                  dark:bg-zinc-100 dark:text-zinc-950 bg-zinc-900 text-white
-                  dark:hover:bg-white hover:bg-zinc-800 active:scale-95"
+                onClick={shareMatch}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-all
+                  dark:border-zinc-800 dark:text-zinc-400 text-zinc-500 border-zinc-200
+                  dark:hover:border-zinc-700 dark:hover:text-zinc-200 hover:border-zinc-300 hover:text-zinc-800 active:scale-95"
               >
-                <MonitorPlay size={12} />
-                Live Center
+                {shareCopied ? <Check size={12} /> : <Share2 size={12} />}
+                {shareCopied ? 'Copied' : 'Share'}
               </button>
-            )}
+            </div>
           </div>
         )}
         {stakeOutcome && isStakeWindowOpen && (
@@ -704,17 +747,45 @@ export function FixtureCard({
         </span>
       </div>
       {stakeHash && (
-        <div className="flex items-center gap-2 px-4 pb-3 text-[11px] dark:text-blue-300 text-blue-700">
-          <span>Stake sent</span>
-          <a
-            href={`https://www.okx.com/web3/explorer/xlayer/tx/${stakeHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="truncate underline"
-          >
-            {stakeHash.slice(0, 16)}...
-          </a>
-          <button onClick={() => setStakeHash(null)} className="ml-auto text-zinc-500 hover:text-zinc-300">x</button>
+        <div className="mx-4 mb-3 rounded-lg border dark:border-blue-500/15 border-blue-200/70 dark:bg-blue-500/8 bg-blue-50 px-3 py-2">
+          <div className="flex items-center gap-2 text-[11px] font-semibold dark:text-blue-300 text-blue-700">
+            <span>You are on the board</span>
+            <a
+              href={`https://www.okx.com/web3/explorer/xlayer/tx/${stakeHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate underline"
+            >
+              {stakeHash.slice(0, 16)}...
+            </a>
+            <button onClick={() => setStakeHash(null)} className="ml-auto text-zinc-500 hover:text-zinc-300">x</button>
+          </div>
+          <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
+            Hold FVB with this wallet to qualify for Matchday Cup rewards.
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <a
+              href={FANVIBE_TOKEN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+            >
+              Buy FVB
+            </a>
+            <button
+              onClick={onOpenLeaderboard}
+              disabled={!onOpenLeaderboard}
+              className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] font-bold text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-200"
+            >
+              View leaderboard
+            </button>
+            <button
+              onClick={shareMatch}
+              className="rounded-md border border-zinc-200 px-2.5 py-1 text-[11px] font-bold text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-200"
+            >
+              Share match
+            </button>
+          </div>
         </div>
       )}
     </div>

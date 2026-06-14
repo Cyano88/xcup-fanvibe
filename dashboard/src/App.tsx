@@ -1026,6 +1026,12 @@ export default function App() {
   }, []);
   const handleWatch    = useCallback((fixtureId: string) => {
     setWatchingId(fixtureId);
+    setViewMode('realtime');
+    setActiveTab('home');
+    setHomeCupView('matches');
+    const url = new URL(window.location.href);
+    url.searchParams.set('match', fixtureId);
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     const endpoint = viewMode === 'realtime'
       ? `${BACKEND_HTTP}/worldcup/match/${encodeURIComponent(fixtureId)}`
       : `${BACKEND_HTTP}/season/match/${encodeURIComponent(fixtureId)}?mode=${seasonMode}`;
@@ -1050,6 +1056,25 @@ export default function App() {
       })
       .catch(() => {});
   }, [seasonMode, viewMode]);
+
+  const openMatchdayLeaderboard = useCallback(() => {
+    setActiveTab('home');
+    setViewMode('realtime');
+    setHomeCupView('leaderboard');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('match');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
+  useEffect(() => {
+    const matchId = new URLSearchParams(window.location.search).get('match');
+    if (!matchId || watchingFixtureId === matchId) return;
+    const knownFixture = realtimeFixtures.some(fixture => fixture.id === matchId)
+      || fixtures.some(fixture => fixture.id === matchId)
+      || !!watchedFixtureRef.current[matchId];
+    if (!knownFixture && realtimeFixtures.length === 0) return;
+    handleWatch(matchId);
+  }, [fixtures, handleWatch, realtimeFixtures, watchingFixtureId]);
   const resetTestSeason = useCallback(() => {
     if (seasonMode !== 'test') return;
     const fresh = freshSeasonState(1, Date.now(), TEST_SEASON_TIMING, 'test');
@@ -2272,6 +2297,7 @@ export default function App() {
                   refereeAddress={refereeAddress}
                   onStake={handleStake}
                   onWatch={handleWatch}
+                  onOpenLeaderboard={openMatchdayLeaderboard}
                 />
               ))}
             </div>
