@@ -831,12 +831,17 @@ async function refreshWorldCupFixture(fixtureId: string): Promise<{ mode: string
 
 async function syncSeasonSnapshotWithReferee(state: PersistedSeasonState): Promise<void> {
   if (!Array.isArray(state.fixtures)) return;
+  const realtimeFixtures = state.fixtures.filter(fixture => fixture.mode === 'realtime');
+  if (realtimeFixtures.length === 0) return;
 
   engine.syncChampionSeason(state.seasonNumber);
-  engine.syncFixtures(state.fixtures);
+  engine.syncFixtures(realtimeFixtures);
 
   const finished = Object.values(state.matchStates ?? {})
-    .filter((matchState): matchState is MatchState => matchState?.status === 'finished');
+    .filter((matchState): matchState is MatchState =>
+      matchState?.status === 'finished'
+      && realtimeFixtures.some(fixture => fixture.id === matchState.fixtureId),
+    );
 
   for (const matchState of finished) {
     const result = await engine.settleSyncedFixture(matchState.fixtureId, outcomeFromMatchState(matchState));

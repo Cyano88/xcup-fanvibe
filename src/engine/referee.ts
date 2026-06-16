@@ -269,12 +269,28 @@ export class RefereeEngine {
     return this.settleFixture(fixtureId, outcome);
   }
 
+  private realtimeFixtureFor(fixtureId?: string, fixture?: Fixture): Fixture | undefined {
+    if (fixture?.mode === 'realtime') return fixture;
+    const current = fixtureId ? this.fixtures.find(f => f.id === fixtureId) : undefined;
+    return current?.mode === 'realtime' ? current : undefined;
+  }
+
+  private hasRealtimeFixtureEvidence(fixtureId?: string, fixture?: Fixture): boolean {
+    if (this.realtimeFixtureFor(fixtureId, fixture)) return true;
+    if (!fixtureId) return false;
+    return Array.from(this.stakes.values()).some(stake => stake.fixtureId === fixtureId && this.realtimeFixtureFor(stake.fixtureId, stake.fixture))
+      || Array.from(this.rejectedStakeRefunds.values()).some(refund => refund.fixtureId === fixtureId && this.realtimeFixtureFor(refund.fixtureId, refund.fixture))
+      || this.settlements.some(settlement => settlement.fixtureId === fixtureId && this.realtimeFixtureFor(settlement.fixtureId, settlement.fixture))
+      || Array.from(this.settlementJobs.values()).some(job => job.fixtureId === fixtureId && this.realtimeFixtureFor(job.fixtureId, job.fixture));
+  }
+
   getPositions(address: string) {
     const wallet = address.toLowerCase();
     const stakePositions = Array.from(this.stakes.values())
       .filter(stake => stake.staker.toLowerCase() === wallet)
       .map(stake => {
-        const fixture = stake.fixture ?? this.fixtures.find(f => f.id === stake.fixtureId);
+        const fixture = this.realtimeFixtureFor(stake.fixtureId, stake.fixture);
+        if (!fixture) return null;
         const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
         const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stakeMs);
         const settledOutcome = settlement?.outcome ?? (fixture?.status === 'settled' ? fixture.result : undefined);
@@ -288,7 +304,8 @@ export class RefereeEngine {
           settlement,
           payout,
         };
-      });
+      })
+      .filter((position): position is NonNullable<typeof position> => Boolean(position));
 
     const archivedChampionTxs = new Set(this.champHistory.map(position => position.stake.txHash));
     const championPositions = this.champStakes
@@ -325,6 +342,7 @@ export class RefereeEngine {
 
     const refunds = Array.from(this.rejectedStakeRefunds.values())
       .filter(refund => refund.staker.toLowerCase() === wallet)
+      .filter(refund => this.hasRealtimeFixtureEvidence(refund.fixtureId, refund.fixture))
       .map(refund => ({ type: 'refund' as const, status: refund.status, refund }));
 
     return [...stakePositions, ...championPositions, ...championHistoryPositions, ...refunds]
@@ -727,6 +745,8 @@ export class RefereeEngine {
     this.championSeasonNumber = stored.championSeasonNumber;
     this.lastBlock = stored.lastBlock;
 
+    const sanitized = this.removeNonRealtimeMatchHistory();
+
     for (const fixture of this.fixtures) {
       if (!this.pools.has(fixture.id)) {
         this.pools.set(fixture.id, { fixtureId: fixture.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 });
@@ -742,6 +762,11 @@ export class RefereeEngine {
     const jobDropCount = Math.max(0, (stored.settlementJobs?.length ?? 0) - this.settlementJobs.size);
     if (settlementDropCount || jobDropCount) {
       this.log('SYSTEM', 'warn', `Compacted referee market history - dropped ${settlementDropCount} old settlements and ${jobDropCount} old settlement jobs.`);
+    }
+    const sanitizedCount = sanitized.stakes + sanitized.refunds + sanitized.pools + sanitized.settlements + sanitized.jobs;
+    if (sanitizedCount > 0) {
+      this.log('SYSTEM', 'warn', `Sanitized retired simulated match history - removed ${sanitized.stakes} stakes, ${sanitized.refunds} refunds, ${sanitized.pools} pools, ${sanitized.settlements} settlements, ${sanitized.jobs} jobs.`);
+      await this.persistMarketStateNow();
     }
     this.log('SYSTEM', 'success', `Loaded referee market history - ${this.stakes.size} stakes, ${this.settlements.length} settlements.`);
   }
@@ -841,6 +866,51 @@ export class RefereeEngine {
 
     return [...new Map([...paying, ...complete].map(job => [job.id, job])).values()]
       .sort((a, b) => a.settledAt - b.settledAt);
+  }
+
+  private removeNonRealtimeMatchHistory(): { stakes: number; refunds: number; pools: number; settlements: number; jobs: number } {
+    const before = {
+      stakes: this.stakes.size,
+      refunds: this.rejectedStakeRefunds.size,
+      pools: this.pools.size,
+      settlements: this.settlements.length,
+      jobs: this.settlementJobs.size,
+    };
+
+    this.stakes = new Map(
+      Array.from(this.stakes.entries())
+        .filter(([, stake]) => this.realtimeFixtureFor(stake.fixtureId, stake.fixture)),
+    );
+    this.rejectedStakeRefunds = new Map(
+      Array.from(this.rejectedStakeRefunds.entries())
+        .filter(([, refund]) => this.hasRealtimeFixtureEvidence(refund.fixtureId, refund.fixture)),
+    );
+    this.settlements = this.settlements
+      .filter(settlement => this.hasRealtimeFixtureEvidence(settlement.fixtureId, settlement.fixture));
+    this.settlementJobs = new Map(
+      Array.from(this.settlementJobs.entries())
+        .filter(([, job]) => job.type !== 'match' || this.hasRealtimeFixtureEvidence(job.fixtureId, job.fixture)),
+    );
+
+    const keepPoolIds = new Set<string>([
+      ...this.fixtures.filter(fixture => fixture.mode === 'realtime').map(fixture => fixture.id),
+      ...Array.from(this.stakes.values()).map(stake => stake.fixtureId),
+      ...Array.from(this.rejectedStakeRefunds.values()).map(refund => refund.fixtureId),
+      ...this.settlements.map(settlement => settlement.fixtureId),
+      ...Array.from(this.settlementJobs.values()).map(job => job.fixtureId).filter((fixtureId): fixtureId is string => Boolean(fixtureId)),
+    ]);
+    this.pools = new Map(
+      Array.from(this.pools.entries())
+        .filter(([fixtureId]) => keepPoolIds.has(fixtureId)),
+    );
+
+    return {
+      stakes: before.stakes - this.stakes.size,
+      refunds: before.refunds - this.rejectedStakeRefunds.size,
+      pools: before.pools - this.pools.size,
+      settlements: before.settlements - this.settlements.length,
+      jobs: before.jobs - this.settlementJobs.size,
+    };
   }
 
   async resetMarketState(fixtures = this.fixtures): Promise<void> {
