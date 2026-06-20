@@ -840,7 +840,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <div>
               <div className="text-xs font-semibold dark:text-zinc-200 text-zinc-800">Trade FVB with OKX Wallet</div>
               <div className="mt-0.5 max-w-xl text-[11px] leading-4 dark:text-zinc-500 text-zinc-500">
-                $FVB has graduated. Trade with OKX Wallet on X Layer, then return here and refresh. Verified $FVB trading volume drives Matchday Cup entry and rank.
+                $FVB has graduated. Trade with OKX Wallet on X Layer, then place one FanVibe stake to enter the Matchday Cup prize board.
               </div>
             </div>
             <button
@@ -860,7 +860,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <div className="grid gap-2 text-[11px] sm:grid-cols-3">
               <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
                 <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Trading entry</div>
-                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">$10+ verified volume</div>
+                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">$250+ volume + 1 stake</div>
               </div>
               <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
                 <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Holding status</div>
@@ -958,9 +958,9 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
 
           <div className="mt-2 min-h-[18px] text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
             {hasFvbEntryMinimum ? (
-              <span className="text-emerald-600 dark:text-emerald-300">This wallet holds FVB. Trade volume is still what enters and ranks the Matchday Cup.</span>
+              <span className="text-emerald-600 dark:text-emerald-300">This wallet holds FVB. Trade volume plus FanVibe activity enters and ranks the Matchday Cup.</span>
             ) : (
-              <span>Generate at least $10 verified $FVB trading volume on OKX to enter. Use the same wallet for trades and match stakes.</span>
+              <span>Use the same wallet for OKX trades and FanVibe stakes. Prize ranking needs $250+ verified $FVB volume and one FanVibe stake.</span>
             )}
           </div>
         </div>

@@ -1764,7 +1764,7 @@ export default function App() {
                 </div>
                 <div className="mt-2 max-w-2xl">
                   <p className="text-sm leading-5 text-zinc-200/90">
-                    Trade $FVB with OKX Wallet to enter the Matchday Cup. Match stakes, wins, country backing, and holding boost your rank as World Cup fixtures unfold.
+                    Trade $FVB with OKX Wallet, stake once on FanVibe, then climb the Matchday Cup as World Cup fixtures unfold.
                   </p>
                 </div>
                 <FvbTradeSafety compact showTradeLink className="mt-2 max-w-2xl" />
@@ -1775,9 +1775,9 @@ export default function App() {
 
                 <div className="mt-3 space-y-1.5">
                   {[
-                    ['1', 'Trade $10+ $FVB to enter'],
-                    ['2', '$250+ clean volume unlocks prize tier'],
-                    ['3', 'Stake, win, back countries for boosts'],
+                    ['1', 'Trade $250+ $FVB on OKX'],
+                    ['2', 'Stake once on a World Cup market'],
+                    ['3', 'Keep trading, winning, backing countries'],
                   ].map(([step, title]) => (
                     <div key={step} className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
                       <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-blue-500 text-[10px] font-black text-white">{step}</span>

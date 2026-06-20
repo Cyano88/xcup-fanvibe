@@ -697,12 +697,13 @@ function scoreRulesWithTrading() {
     fvbTradeVolumePointOKB: formatEther(FVB_TRADE_VOLUME_POINT_WEI),
     fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
     fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
+    matchdayRequiresFanVibeStake: true,
     fvbTradeSource: 'verified_onchain_fvb_transfer_logs',
     fvbTradeScope: fvbTradeSourceScope(),
   };
 }
 
-async function attachFvbTrading<T extends { address: string; score?: number; scoreComponents?: Record<string, number>; lastActiveAt?: number }>(entries: T[]) {
+async function attachFvbTrading<T extends { address: string; positions?: number; score?: number; scoreComponents?: Record<string, number>; lastActiveAt?: number }>(entries: T[]) {
   const entryMinWei = await fvbTradeEntryMinOkbWei();
   const prizeMinWei = await fvbTradePrizeMinOkbWei();
   return entries
@@ -719,6 +720,8 @@ async function attachFvbTrading<T extends { address: string; score?: number; sco
         fvbTradePrizeMinimumOkbWei: prizeMinWei.toString(),
         fvbTradeEligible: tradeOkbWei >= entryMinWei,
         fvbPrizeEligible: tradeOkbWei >= prizeMinWei,
+        fanvibeActive: (entry.positions ?? 0) > 0,
+        matchdayQualified: tradeOkbWei >= prizeMinWei && (entry.positions ?? 0) > 0,
         score: (entry.score ?? 0) + tradingPoints,
         scoreComponents: {
           ...(entry.scoreComponents ?? {}),
@@ -883,9 +886,22 @@ async function fvbHolderLeaderboard(limit: number) {
     .map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
-function qualifiedMatchdayEntries<T extends { rank: number | null; fvbTradeEligible?: boolean | null }>(entries: T[]): T[] {
+async function fvbTraderLeaderboard(limit: number) {
+  const entries = await matchdayEntriesWithEligibility(10_000);
   return entries
-    .filter(entry => entry.fvbTradeEligible === true)
+    .filter(entry => BigInt(entry.fvbTradeVolumeOkbWei ?? '0') > 0n)
+    .sort((a, b) => {
+      const tradeDiff = BigInt(b.fvbTradeVolumeOkbWei ?? '0') - BigInt(a.fvbTradeVolumeOkbWei ?? '0');
+      if (tradeDiff !== 0n) return tradeDiff > 0n ? 1 : -1;
+      return (b.fvbLastTradeAt ?? 0) - (a.fvbLastTradeAt ?? 0);
+    })
+    .slice(0, limit)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
+function qualifiedMatchdayEntries<T extends { rank: number | null; matchdayQualified?: boolean | null }>(entries: T[]): T[] {
+  return entries
+    .filter(entry => entry.matchdayQualified === true)
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 
@@ -1226,6 +1242,8 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       pendingFvbFans: allEntries.filter(entry => entry.fvbTradeEligible === false).length,
       syncingFvbFans: allEntries.filter(entry => entry.fvbEligible === null || entry.fvbEligible === undefined).length,
       prizeEligibleFans: allEntries.filter(entry => entry.fvbPrizeEligible === true).length,
+      activeFanVibeFans: allEntries.filter(entry => entry.fanvibeActive === true).length,
+      pendingFanVibeActionFans: allEntries.filter(entry => entry.fvbPrizeEligible === true && entry.fanvibeActive !== true).length,
     },
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
@@ -1240,7 +1258,8 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity. Final winners are reviewed before payout.',
+      fanvibeAction: 'Prize leaderboard requires at least one FanVibe World Cup market stake from the same wallet.',
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity plus FanVibe activity. Final winners are reviewed before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,
@@ -1331,6 +1350,8 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
     fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
     fvbTradeEligible: false,
     fvbPrizeEligible: false,
+    fanvibeActive: false,
+    matchdayQualified: false,
     scoreRules: scoreRulesWithTrading(),
   };
   const entry = ranked ?? (unqualifiedStats ? { ...unqualifiedStats, rank: null } : emptyEntry);
@@ -1354,7 +1375,8 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity. Final winners are reviewed before payout.',
+      fanvibeAction: 'Prize leaderboard requires at least one FanVibe World Cup market stake from the same wallet.',
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity plus FanVibe activity. Final winners are reviewed before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,
@@ -1390,6 +1412,26 @@ app.get('/matchday-cup/fvb-holders', async (req, res) => {
       minimumOkbWei: entryMinimumOkbWei.toString(),
     },
     source: 'indexed_fvb_wallets',
+  });
+});
+
+app.get('/matchday-cup/fvb-traders', async (req, res) => {
+  const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
+  const entries = await fvbTraderLeaderboard(parsed.data);
+  const tradeEntryMinimumOkbWei = await fvbTradeEntryMinOkbWei();
+  const tradePrizeMinimumOkbWei = await fvbTradePrizeMinOkbWei();
+  res.json({
+    entries,
+    tradeEligibility: {
+      tokenAddress: FANVIBE_TOKEN_ADDRESS,
+      entryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
+      entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
+      prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
+      prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
+      fanvibeAction: 'Trade board tracks verified FVB volume. Matchday prize ranking additionally requires one FanVibe market stake.',
+    },
+    source: 'indexed_fvb_trade_wallets',
   });
 });
 
