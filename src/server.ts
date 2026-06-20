@@ -129,6 +129,7 @@ const FVB_TRADE_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_T
 const FVB_TRADE_SCAN_LOOKBACK_BLOCKS = BigInt(Math.max(1000, Number(process.env.FVB_TRADE_SCAN_LOOKBACK_BLOCKS ?? '10000')));
 const FVB_TRADE_MAX_CHUNKS_PER_SCAN = Math.max(1, Number(process.env.FVB_TRADE_MAX_CHUNKS_PER_SCAN ?? '20'));
 const FVB_TRADE_BACKFILL_MAX_CHUNKS = Math.max(1, Number(process.env.FVB_TRADE_BACKFILL_MAX_CHUNKS ?? '1000'));
+const FVB_TRADE_AUTO_BACKFILL_ON_BOOT = process.env.FVB_TRADE_AUTO_BACKFILL_ON_BOOT !== '0';
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN ?? process.env.FANVIBE_ADMIN_TOKEN ?? '';
 const FVB_HOLDER_START_BLOCK = BigInt(Math.max(0, Number(process.env.FVB_HOLDER_START_BLOCK ?? '62489676')));
 const FVB_HOLDER_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_HOLDER_SCAN_CHUNK_BLOCKS ?? '1000')));
@@ -1909,7 +1910,14 @@ httpServer.listen(PORT, async () => {
       console.log('[FanVibe] Simulation retired - season controller disabled');
     }
     await retryPendingStakeReports();
-    await scanFvbTradeVolume();
+    const tradeIndex = ensureFvbTradeIndex();
+    if (FVB_TRADE_AUTO_BACKFILL_ON_BOOT && tradeIndex.backfill?.status !== 'complete') {
+      rebuildFvbTradeIndex().catch(err => {
+        console.error(`[FanVibe] FVB trade auto-backfill failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    } else {
+      await scanFvbTradeVolume();
+    }
     await scanFvbHolderCandidates();
     setInterval(() => {
       retryPendingStakeReports().catch(err => {
