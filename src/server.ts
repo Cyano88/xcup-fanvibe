@@ -128,6 +128,8 @@ const FVB_TRADE_SCAN_INTERVAL_MS = Number(process.env.FVB_TRADE_SCAN_INTERVAL_MS
 const FVB_TRADE_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_TRADE_SCAN_CHUNK_BLOCKS ?? '100')));
 const FVB_TRADE_SCAN_LOOKBACK_BLOCKS = BigInt(Math.max(1000, Number(process.env.FVB_TRADE_SCAN_LOOKBACK_BLOCKS ?? '10000')));
 const FVB_TRADE_MAX_CHUNKS_PER_SCAN = Math.max(1, Number(process.env.FVB_TRADE_MAX_CHUNKS_PER_SCAN ?? '20'));
+const FVB_TRADE_BACKFILL_MAX_CHUNKS = Math.max(1, Number(process.env.FVB_TRADE_BACKFILL_MAX_CHUNKS ?? '1000'));
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN ?? process.env.FANVIBE_ADMIN_TOKEN ?? '';
 const FVB_HOLDER_START_BLOCK = BigInt(Math.max(0, Number(process.env.FVB_HOLDER_START_BLOCK ?? '62489676')));
 const FVB_HOLDER_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_HOLDER_SCAN_CHUNK_BLOCKS ?? '1000')));
 const FVB_HOLDER_MAX_CHUNKS_PER_SCAN = Math.max(1, Number(process.env.FVB_HOLDER_MAX_CHUNKS_PER_SCAN ?? '20'));
@@ -142,9 +144,20 @@ const FVB_TRADE_COUNTERPARTIES = new Set(
 let cachedFvbPrice: { priceOkbWei: string; source: 'eulr' | 'okx' | 'env'; updatedAt: number } | null = null;
 let cachedOkbUsd: { price: number; updatedAt: number; source: 'coingecko' | 'env' } | null = null;
 let fvbTradeScanRunning = false;
+let fvbTradeBackfillRunning = false;
 let fvbHolderScanRunning = false;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const FVB_TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
+type FvbTransferLog = {
+  transactionHash?: string | null;
+  logIndex?: number | null;
+  blockNumber?: bigint | null;
+  args: {
+    from?: string;
+    to?: string;
+    value?: bigint;
+  };
+};
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -305,12 +318,16 @@ function ensureFvbTradeIndex() {
     holderCandidates: {},
     wallets: {},
     daily: {},
+    processedLogs: {},
+    backfill: { status: 'idle' },
   };
   appData.fvbTradeIndex.tokenAddress = FANVIBE_TOKEN_ADDRESS;
   appData.fvbTradeIndex.source = 'transfer_logs';
   appData.fvbTradeIndex.scopedCounterparties = Array.from(FVB_TRADE_COUNTERPARTIES);
   appData.fvbTradeIndex.holderCandidates ??= {};
   appData.fvbTradeIndex.daily ??= {};
+  appData.fvbTradeIndex.processedLogs ??= {};
+  appData.fvbTradeIndex.backfill ??= { status: 'idle' };
   return appData.fvbTradeIndex;
 }
 
@@ -401,6 +418,67 @@ function creditFvbTradeVolume(address: string, fvbAmountWei: bigint, estimatedOk
   daily.updatedAt = Date.now();
 }
 
+function fvbTradeLogKey(log: { transactionHash?: string | null; logIndex?: number | null }): string | null {
+  if (!log.transactionHash || log.logIndex === null || log.logIndex === undefined) return null;
+  return `${log.transactionHash.toLowerCase()}:${log.logIndex}`;
+}
+
+function markFvbTradeLogProcessed(key: string, timestamp: number): boolean {
+  const index = ensureFvbTradeIndex();
+  index.processedLogs ??= {};
+  if (index.processedLogs[key]) return false;
+  index.processedLogs[key] = String(timestamp);
+  return true;
+}
+
+async function processFvbTradeLogs(
+  client: typeof fvbPublicClients[number],
+  logs: readonly FvbTransferLog[],
+  priceWei: bigint,
+): Promise<number> {
+  const blockTimestampCache = new Map<bigint, number>();
+  const logTimestamp = async (blockNumber: bigint | null | undefined): Promise<number> => {
+    if (!blockNumber) return Date.now();
+    const cached = blockTimestampCache.get(blockNumber);
+    if (cached) return cached;
+    const block = await client.getBlock({ blockNumber });
+    const timestamp = Number(block.timestamp) * 1000;
+    blockTimestampCache.set(blockNumber, timestamp);
+    return timestamp;
+  };
+
+  let indexed = 0;
+  for (const log of logs) {
+    const key = fvbTradeLogKey(log);
+    if (!key) continue;
+
+    const from = String(log.args.from ?? '').toLowerCase();
+    const to = String(log.args.to ?? '').toLowerCase();
+    const value = BigInt(log.args.value ?? 0n);
+    if (value <= 0n || from === ZERO_ADDRESS || to === ZERO_ADDRESS) continue;
+    trackFvbHolderCandidate(from);
+    trackFvbHolderCandidate(to);
+
+    const fromIsCounterparty = FVB_TRADE_COUNTERPARTIES.has(from);
+    const toIsCounterparty = FVB_TRADE_COUNTERPARTIES.has(to);
+    if (FVB_TRADE_COUNTERPARTIES.size > 0 && !fromIsCounterparty && !toIsCounterparty) continue;
+
+    const timestamp = await logTimestamp(log.blockNumber);
+    if (!markFvbTradeLogProcessed(key, timestamp)) continue;
+
+    const estimatedOkbWei = priceWei > 0n ? (value * priceWei) / 10n ** 18n : 0n;
+    if (FVB_TRADE_COUNTERPARTIES.size > 0) {
+      if (!fromIsCounterparty) creditFvbTradeVolume(from, value, estimatedOkbWei, timestamp);
+      if (!toIsCounterparty) creditFvbTradeVolume(to, value, estimatedOkbWei, timestamp);
+    } else {
+      creditFvbTradeVolume(from, value, estimatedOkbWei, timestamp);
+      creditFvbTradeVolume(to, value, estimatedOkbWei, timestamp);
+    }
+    indexed += 1;
+  }
+  return indexed;
+}
+
 async function fvbTradeStartBlock(client = fvbPublicClients[0]): Promise<bigint> {
   const envBlock = process.env.FVB_TRADE_START_BLOCK;
   if (envBlock && /^\d+$/.test(envBlock)) return BigInt(envBlock);
@@ -414,8 +492,92 @@ async function fvbTradeStartBlock(client = fvbPublicClients[0]): Promise<bigint>
   }
 }
 
+async function rebuildFvbTradeIndex(): Promise<void> {
+  if (!FVB_TRADE_INDEX_ENABLED || fvbTradeBackfillRunning) return;
+  const client = fvbPublicClients[0];
+  if (!client) throw new Error('FVB RPC unavailable');
+  fvbTradeBackfillRunning = true;
+  const index = ensureFvbTradeIndex();
+  const startedAt = Date.now();
+  try {
+    const fromStart = await fvbTradeStartBlock(client);
+    const latest = await client.getBlockNumber();
+    index.wallets = {};
+    index.daily = {};
+    index.holderCandidates = {};
+    index.processedLogs = {};
+    index.lastScannedBlock = 0;
+    index.backfill = {
+      status: 'running',
+      startedAt,
+      fromBlock: Number(fromStart),
+      toBlock: Number(latest),
+      lastScannedBlock: Number(fromStart),
+      logsIndexed: 0,
+    };
+    await persistAppData();
+
+    const price = await getFvbMarketPrice();
+    const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : 0n;
+    let fromBlock = fromStart;
+    let scannedTo = fromStart;
+    let chunks = 0;
+    let logsIndexed = 0;
+
+    while (fromBlock <= latest && chunks < FVB_TRADE_BACKFILL_MAX_CHUNKS) {
+      const toBlock = fromBlock + FVB_TRADE_SCAN_CHUNK_BLOCKS > latest
+        ? latest
+        : fromBlock + FVB_TRADE_SCAN_CHUNK_BLOCKS;
+      const logs = await client.getLogs({
+        address: FANVIBE_TOKEN_ADDRESS,
+        event: FVB_TRANSFER_EVENT,
+        fromBlock,
+        toBlock,
+      });
+
+      logsIndexed += await processFvbTradeLogs(client, logs, priceWei);
+      scannedTo = toBlock;
+      fromBlock = toBlock + 1n;
+      chunks += 1;
+
+      index.lastScannedBlock = Number(scannedTo);
+      index.updatedAt = Date.now();
+      index.backfill = {
+        ...index.backfill,
+        status: 'running',
+        lastScannedBlock: Number(scannedTo),
+        logsIndexed,
+      };
+      if (chunks % 25 === 0) await persistAppData();
+    }
+
+    index.lastScannedBlock = Number(scannedTo);
+    index.updatedAt = Date.now();
+    index.backfill = {
+      ...index.backfill,
+      status: scannedTo >= latest ? 'complete' : 'failed',
+      completedAt: Date.now(),
+      lastScannedBlock: Number(scannedTo),
+      logsIndexed,
+      error: scannedTo >= latest ? undefined : `Backfill chunk limit reached at block ${scannedTo.toString()}`,
+    };
+    await persistAppData();
+  } catch (err) {
+    index.backfill = {
+      ...index.backfill,
+      status: 'failed',
+      completedAt: Date.now(),
+      error: err instanceof Error ? err.message : String(err),
+    };
+    await persistAppData();
+    throw err;
+  } finally {
+    fvbTradeBackfillRunning = false;
+  }
+}
+
 async function scanFvbTradeVolume(): Promise<void> {
-  if (!FVB_TRADE_INDEX_ENABLED || fvbTradeScanRunning) return;
+  if (!FVB_TRADE_INDEX_ENABLED || fvbTradeScanRunning || fvbTradeBackfillRunning) return;
   const client = fvbPublicClients[0];
   if (!client) return;
   fvbTradeScanRunning = true;
@@ -429,16 +591,6 @@ async function scanFvbTradeVolume(): Promise<void> {
     const price = await getFvbMarketPrice();
     const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : 0n;
     let scannedTo = BigInt(index.lastScannedBlock);
-    const blockTimestampCache = new Map<bigint, number>();
-    const logTimestamp = async (blockNumber: bigint | null | undefined): Promise<number> => {
-      if (!blockNumber) return Date.now();
-      const cached = blockTimestampCache.get(blockNumber);
-      if (cached) return cached;
-      const block = await client.getBlock({ blockNumber });
-      const timestamp = Number(block.timestamp) * 1000;
-      blockTimestampCache.set(blockNumber, timestamp);
-      return timestamp;
-    };
 
     let chunks = 0;
     while (fromBlock <= latest && chunks < FVB_TRADE_MAX_CHUNKS_PER_SCAN) {
@@ -452,28 +604,7 @@ async function scanFvbTradeVolume(): Promise<void> {
         toBlock,
       });
 
-      for (const log of logs) {
-        const from = String(log.args.from ?? '').toLowerCase();
-        const to = String(log.args.to ?? '').toLowerCase();
-        const value = BigInt(log.args.value ?? 0n);
-        if (value <= 0n || from === ZERO_ADDRESS || to === ZERO_ADDRESS) continue;
-        trackFvbHolderCandidate(from);
-        trackFvbHolderCandidate(to);
-
-        const fromIsCounterparty = FVB_TRADE_COUNTERPARTIES.has(from);
-        const toIsCounterparty = FVB_TRADE_COUNTERPARTIES.has(to);
-        if (FVB_TRADE_COUNTERPARTIES.size > 0 && !fromIsCounterparty && !toIsCounterparty) continue;
-
-        const estimatedOkbWei = priceWei > 0n ? (value * priceWei) / 10n ** 18n : 0n;
-        const timestamp = await logTimestamp(log.blockNumber);
-        if (FVB_TRADE_COUNTERPARTIES.size > 0) {
-          if (!fromIsCounterparty) creditFvbTradeVolume(from, value, estimatedOkbWei, timestamp);
-          if (!toIsCounterparty) creditFvbTradeVolume(to, value, estimatedOkbWei, timestamp);
-        } else {
-          creditFvbTradeVolume(from, value, estimatedOkbWei, timestamp);
-          creditFvbTradeVolume(to, value, estimatedOkbWei, timestamp);
-        }
-      }
+      await processFvbTradeLogs(client, logs, priceWei);
 
       scannedTo = toBlock;
       fromBlock = toBlock + 1n;
@@ -1178,13 +1309,30 @@ app.get('/matchday-cup/trade-index', (_req, res) => {
       holderLastScannedBlock: index.holderLastScannedBlock ?? 0,
       updatedAt: index.updatedAt,
       walletsIndexed: Object.keys(index.wallets).length,
+      dailyBucketsIndexed: Object.keys(index.daily ?? {}).length,
+      processedLogsIndexed: Object.keys(index.processedLogs ?? {}).length,
       holderCandidatesIndexed: Object.keys(index.holderCandidates ?? {}).length,
       scopedCounterparties: index.scopedCounterparties,
+      backfill: index.backfill ?? { status: 'idle' },
     scoring: {
       fvbTradeVolumePointWei: FVB_TRADE_VOLUME_POINT_WEI.toString(),
       fvbTradeVolumePointOKB: formatEther(FVB_TRADE_VOLUME_POINT_WEI),
     },
   });
+});
+
+app.post('/admin/fvb-trades/backfill', async (req, res) => {
+  if (!ADMIN_API_TOKEN) return res.status(404).json({ error: 'not found' });
+  const token = String(req.header('x-admin-token') ?? req.query.token ?? '');
+  if (token !== ADMIN_API_TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  if (fvbTradeBackfillRunning) {
+    return res.status(409).json({ error: 'backfill already running', backfill: ensureFvbTradeIndex().backfill });
+  }
+
+  rebuildFvbTradeIndex().catch(err => {
+    console.error(`[FanVibe] FVB trade backfill failed: ${err instanceof Error ? err.message : String(err)}`);
+  });
+  res.json({ ok: true, backfill: ensureFvbTradeIndex().backfill });
 });
 
 app.get('/profiles/:address', (req, res) => {

@@ -160,6 +160,17 @@ export interface PersistedFvbTradeIndex {
   holderCandidates?: Record<string, string>;
   wallets: Record<string, PersistedFvbTradeWallet>;
   daily?: Record<string, PersistedFvbTradeDaily>;
+  processedLogs?: Record<string, string>;
+  backfill?: {
+    status: 'idle' | 'running' | 'complete' | 'failed';
+    startedAt?: number;
+    completedAt?: number;
+    fromBlock?: number;
+    toBlock?: number;
+    lastScannedBlock?: number;
+    logsIndexed?: number;
+    error?: string;
+  };
 }
 
 export interface PersistedAppData {
