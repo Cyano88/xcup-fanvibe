@@ -8,7 +8,7 @@ import { createPublicClient, createWalletClient, formatEther, http, parseAbiItem
 import { privateKeyToAccount } from 'viem/accounts';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
-import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
+import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedFvbTradeDaily, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
 import { getWorldCupFeed, getWorldCupMatchDetail } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
@@ -304,12 +304,63 @@ function ensureFvbTradeIndex() {
     scopedCounterparties: Array.from(FVB_TRADE_COUNTERPARTIES),
     holderCandidates: {},
     wallets: {},
+    daily: {},
   };
   appData.fvbTradeIndex.tokenAddress = FANVIBE_TOKEN_ADDRESS;
   appData.fvbTradeIndex.source = 'transfer_logs';
   appData.fvbTradeIndex.scopedCounterparties = Array.from(FVB_TRADE_COUNTERPARTIES);
   appData.fvbTradeIndex.holderCandidates ??= {};
+  appData.fvbTradeIndex.daily ??= {};
   return appData.fvbTradeIndex;
+}
+
+function fvbTradeDay(timestampMs: number): string {
+  return new Date(timestampMs).toISOString().slice(0, 10);
+}
+
+function fvbTradeDailyBucket(timestampMs: number): PersistedFvbTradeDaily {
+  const index = ensureFvbTradeIndex();
+  const date = fvbTradeDay(timestampMs);
+  index.daily ??= {};
+  index.daily[date] ??= {
+    date,
+    fvbVolumeWei: '0',
+    estimatedOkbVolumeWei: '0',
+    transfers: 0,
+    updatedAt: Date.now(),
+  };
+  return index.daily[date];
+}
+
+function fvbTradeVolumeForRange(startTimestamp: number, endTimestamp: number): {
+  dailyFvbTradeVolumeWei: string;
+  dailyFvbTradeVolumeOkbWei: string;
+  dailyFvbTradeCount: number;
+  fvbTradeSource: 'verified_onchain_fvb_transfer_logs';
+  fvbTradeScope: 'counterparty_scoped' | 'all_transfers';
+} {
+  const startMs = startTimestamp * 1000;
+  const endMs = endTimestamp * 1000;
+  let fvbVolumeWei = 0n;
+  let estimatedOkbVolumeWei = 0n;
+  let transfers = 0;
+
+  for (const bucket of Object.values(appData.fvbTradeIndex?.daily ?? {})) {
+    const bucketStart = Date.parse(`${bucket.date}T00:00:00.000Z`);
+    const bucketEnd = bucketStart + 24 * 60 * 60 * 1000;
+    if (bucketEnd <= startMs || bucketStart >= endMs) continue;
+    fvbVolumeWei += BigInt(bucket.fvbVolumeWei);
+    estimatedOkbVolumeWei += BigInt(bucket.estimatedOkbVolumeWei);
+    transfers += bucket.transfers;
+  }
+
+  return {
+    dailyFvbTradeVolumeWei: fvbVolumeWei.toString(),
+    dailyFvbTradeVolumeOkbWei: estimatedOkbVolumeWei.toString(),
+    dailyFvbTradeCount: transfers,
+    fvbTradeSource: 'verified_onchain_fvb_transfer_logs',
+    fvbTradeScope: fvbTradeSourceScope(),
+  };
 }
 
 function trackFvbHolderCandidate(address: string): void {
@@ -342,6 +393,12 @@ function creditFvbTradeVolume(address: string, fvbAmountWei: bigint, estimatedOk
   wallet.estimatedOkbVolumeWei = (BigInt(wallet.estimatedOkbVolumeWei) + estimatedOkbWei).toString();
   wallet.transfers += 1;
   wallet.lastTradeAt = Math.max(wallet.lastTradeAt, timestamp);
+
+  const daily = fvbTradeDailyBucket(timestamp);
+  daily.fvbVolumeWei = (BigInt(daily.fvbVolumeWei) + fvbAmountWei).toString();
+  daily.estimatedOkbVolumeWei = (BigInt(daily.estimatedOkbVolumeWei) + estimatedOkbWei).toString();
+  daily.transfers += 1;
+  daily.updatedAt = Date.now();
 }
 
 async function fvbTradeStartBlock(client = fvbPublicClients[0]): Promise<bigint> {
@@ -372,6 +429,16 @@ async function scanFvbTradeVolume(): Promise<void> {
     const price = await getFvbMarketPrice();
     const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : 0n;
     let scannedTo = BigInt(index.lastScannedBlock);
+    const blockTimestampCache = new Map<bigint, number>();
+    const logTimestamp = async (blockNumber: bigint | null | undefined): Promise<number> => {
+      if (!blockNumber) return Date.now();
+      const cached = blockTimestampCache.get(blockNumber);
+      if (cached) return cached;
+      const block = await client.getBlock({ blockNumber });
+      const timestamp = Number(block.timestamp) * 1000;
+      blockTimestampCache.set(blockNumber, timestamp);
+      return timestamp;
+    };
 
     let chunks = 0;
     while (fromBlock <= latest && chunks < FVB_TRADE_MAX_CHUNKS_PER_SCAN) {
@@ -398,12 +465,13 @@ async function scanFvbTradeVolume(): Promise<void> {
         if (FVB_TRADE_COUNTERPARTIES.size > 0 && !fromIsCounterparty && !toIsCounterparty) continue;
 
         const estimatedOkbWei = priceWei > 0n ? (value * priceWei) / 10n ** 18n : 0n;
+        const timestamp = await logTimestamp(log.blockNumber);
         if (FVB_TRADE_COUNTERPARTIES.size > 0) {
-          if (!fromIsCounterparty) creditFvbTradeVolume(from, value, estimatedOkbWei);
-          if (!toIsCounterparty) creditFvbTradeVolume(to, value, estimatedOkbWei);
+          if (!fromIsCounterparty) creditFvbTradeVolume(from, value, estimatedOkbWei, timestamp);
+          if (!toIsCounterparty) creditFvbTradeVolume(to, value, estimatedOkbWei, timestamp);
         } else {
-          creditFvbTradeVolume(from, value, estimatedOkbWei);
-          creditFvbTradeVolume(to, value, estimatedOkbWei);
+          creditFvbTradeVolume(from, value, estimatedOkbWei, timestamp);
+          creditFvbTradeVolume(to, value, estimatedOkbWei, timestamp);
         }
       }
 
@@ -883,27 +951,40 @@ app.get('/defillama/overview', async (req, res) => {
   if (startTimestamp >= endTimestamp) return res.status(400).json({ error: 'invalid range' });
 
   const metrics = engine.getDefiLlamaMetrics(startTimestamp, endTimestamp);
+  const fvbTradeMetrics = fvbTradeVolumeForRange(startTimestamp, endTimestamp);
   const okbUsd = await getOkbUsdPrice();
-  const volumeOkb = Number(formatEther(BigInt(metrics.dailyVolumeWei)));
+  const predictionVolumeOkb = Number(formatEther(BigInt(metrics.dailyVolumeWei)));
   const feesOkb = Number(formatEther(BigInt(metrics.dailyFeesWei)));
   const revenueOkb = Number(formatEther(BigInt(metrics.dailyRevenueWei)));
+  const fvbTradeVolumeOkb = Number(formatEther(BigInt(fvbTradeMetrics.dailyFvbTradeVolumeOkbWei)));
+  const platformVolumeOkb = predictionVolumeOkb + fvbTradeVolumeOkb;
 
   res.json({
     protocol: 'FanVibe',
     chain: 'xlayer',
     timestamp: now,
     ...metrics,
-    dailyVolumeOkb: volumeOkb,
+    ...fvbTradeMetrics,
+    dailyVolumeOkb: predictionVolumeOkb,
     dailyFeesOkb: feesOkb,
     dailyRevenueOkb: revenueOkb,
-    dailyVolumeUsd: volumeOkb * okbUsd.price,
+    dailyVolumeUsd: predictionVolumeOkb * okbUsd.price,
     dailyFeesUsd: feesOkb * okbUsd.price,
     dailyRevenueUsd: revenueOkb * okbUsd.price,
+    dailyPredictionVolumeWei: metrics.dailyVolumeWei,
+    dailyPredictionVolumeOkb: predictionVolumeOkb,
+    dailyPredictionVolumeUsd: predictionVolumeOkb * okbUsd.price,
+    dailyFvbTradeVolumeOkb: fvbTradeVolumeOkb,
+    dailyFvbTradeVolumeUsd: fvbTradeVolumeOkb * okbUsd.price,
+    dailyPlatformVolumeOkb: platformVolumeOkb,
+    dailyPlatformVolumeUsd: platformVolumeOkb * okbUsd.price,
     okbUsd,
     methodology: {
-      volume: 'Gross accepted OKB stakes on FanVibe real World Cup match and champion markets during the requested time range. Rejected/refunded stake attempts are excluded.',
+      volume: 'DefiLlama dailyVolume is the conservative FanVibe protocol volume: gross accepted OKB stakes on real World Cup match and champion markets during the requested time range. Rejected/refunded stake attempts are excluded.',
       fees: 'FanVibe applies a 0.5% protocol fee to accepted stakes.',
       revenue: 'Protocol revenue equals the 0.5% accepted-stake fee retained by FanVibe.',
+      fvbTradeVolume: 'FVB trade volume is exposed separately from protocol volume. It is estimated from verified on-chain FVB Transfer logs against configured post-graduation pool/counterparty addresses and bucketed by block timestamp.',
+      platformVolume: 'FanVibe campaign/platform volume is prediction volume plus the separately indexed FVB trade volume. It is not used for protocol fees or revenue.',
     },
   });
 });

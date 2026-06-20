@@ -134,11 +134,40 @@ export interface PersistedReferral {
   status: 'captured' | 'qualified';
 }
 
+export interface PersistedFvbTradeWallet {
+  address: string;
+  fvbVolumeWei: string;
+  estimatedOkbVolumeWei: string;
+  transfers: number;
+  lastTradeAt: number;
+}
+
+export interface PersistedFvbTradeDaily {
+  date: string;
+  fvbVolumeWei: string;
+  estimatedOkbVolumeWei: string;
+  transfers: number;
+  updatedAt: number;
+}
+
+export interface PersistedFvbTradeIndex {
+  tokenAddress: string;
+  lastScannedBlock: number;
+  holderLastScannedBlock?: number;
+  updatedAt: number;
+  source: 'transfer_logs';
+  scopedCounterparties: string[];
+  holderCandidates?: Record<string, string>;
+  wallets: Record<string, PersistedFvbTradeWallet>;
+  daily?: Record<string, PersistedFvbTradeDaily>;
+}
+
 export interface PersistedAppData {
   version: 1;
   profiles: Record<string, PersistedFanProfile>;
   referrals: PersistedReferral[];
   pendingStakeReports: string[];
+  fvbTradeIndex?: PersistedFvbTradeIndex;
   updatedAt: number;
 }
 
