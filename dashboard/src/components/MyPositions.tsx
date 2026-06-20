@@ -518,6 +518,7 @@ function PrivyPositionsConnect({
 
 function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUsd: number | null; onError: (message: string | null) => void }) {
   const { wallets } = useWallets();
+  const { logout } = usePrivy();
   const { sendTransaction } = useSendTransaction();
   const { exportWallet } = useExportWallet();
   const [mode, setMode] = useState<'balance' | 'withdraw' | 'buy'>('balance');
@@ -529,6 +530,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
   const [amount, setAmount] = useState('');
   const [migrationOpen, setMigrationOpen] = useState(false);
   const [migrationAcknowledged, setMigrationAcknowledged] = useState(false);
+  const [expectedWallet, setExpectedWallet] = useState('');
   const [exportPending, setExportPending] = useState(false);
   const [pending, setPending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -537,6 +539,12 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
 
   const wallet = wallets.find(item => item.address.toLowerCase() === address.toLowerCase()) ?? wallets[0];
   const isEmbeddedWallet = wallet ? isPrivyWallet(wallet) : false;
+  const expectedWalletInput = expectedWallet.trim();
+  const expectedWalletValid = expectedWalletInput ? isAddress(expectedWalletInput) : false;
+  const expectedWalletMatch = expectedWalletValid
+    ? wallets.some(item => item.address.toLowerCase() === expectedWalletInput.toLowerCase())
+    : false;
+  const expectedWalletIsCurrent = expectedWalletValid && address.toLowerCase() === expectedWalletInput.toLowerCase();
   const balanceUsd = formatOkbUsdFromWei(balanceWei, okbUsd);
   const transferUsd = withdrawAsset === 'OKB'
     ? formatStakeUsd(amount, okbUsd)
@@ -765,17 +773,74 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
       </div>
 
       {mode === 'balance' ? (
-        <div className="mt-3 flex items-center justify-between border-t dark:border-zinc-900 border-zinc-100 pt-3">
-          <span className="text-xs dark:text-zinc-500 text-zinc-500">Available for stakes and transfers</span>
-          <button
-            type="button"
-            onClick={manualRefreshBalance}
-            className="rounded p-1.5 dark:text-zinc-500 text-zinc-500 transition-colors hover:text-blue-500"
-            title="Refresh balance"
-            aria-label="Refresh balance"
-          >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-          </button>
+        <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs dark:text-zinc-500 text-zinc-500">Available for stakes and transfers</span>
+            <button
+              type="button"
+              onClick={manualRefreshBalance}
+              className="rounded p-1.5 dark:text-zinc-500 text-zinc-500 transition-colors hover:text-blue-500"
+              title="Refresh balance"
+              aria-label="Refresh balance"
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          <div className="mt-3 grid gap-2 text-[11px] sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)] sm:items-start">
+            <div className="min-w-0">
+              <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Current wallet</div>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                <span className="max-w-full truncate font-semibold dark:text-zinc-200 text-zinc-800">{address}</span>
+                <span className="rounded border dark:border-zinc-800 border-zinc-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest dark:text-zinc-500 text-zinc-500">
+                  {isEmbeddedWallet ? 'Email wallet' : 'Connected wallet'}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="expected-wallet" className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">
+                Funded another wallet?
+              </label>
+              <div className="mt-1 flex gap-2">
+                <input
+                  id="expected-wallet"
+                  value={expectedWallet}
+                  onChange={event => setExpectedWallet(event.target.value)}
+                  placeholder="Paste wallet address"
+                  className="min-w-0 flex-1 rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-2.5 py-2 text-xs dark:text-zinc-100 text-zinc-900 outline-none placeholder:text-zinc-500"
+                />
+                {expectedWalletInput && !expectedWalletIsCurrent && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try { await wallet?.disconnect(); } catch {}
+                      try { await logout(); } catch {}
+                    }}
+                    className="rounded-md border dark:border-zinc-800 border-zinc-200 px-2.5 py-2 text-xs font-semibold dark:text-zinc-400 text-zinc-600 transition-colors hover:border-rose-500 hover:text-rose-600"
+                  >
+                    Sign out
+                  </button>
+                )}
+              </div>
+              {expectedWalletInput && (
+                <div className={`mt-1.5 text-[11px] leading-4 ${
+                  !expectedWalletValid
+                    ? 'text-amber-600 dark:text-amber-300'
+                    : expectedWalletMatch
+                      ? 'text-emerald-600 dark:text-emerald-300'
+                      : 'text-rose-600 dark:text-rose-300'
+                }`}>
+                  {!expectedWalletValid
+                    ? 'Enter a full EVM wallet address.'
+                    : expectedWalletIsCurrent
+                      ? 'This is the active FanVibe wallet.'
+                      : expectedWalletMatch
+                        ? 'This login controls that wallet. Switch to it from Privy if balances do not show.'
+                        : 'This login does not control that wallet. Sign out and use the original email, social login, or wallet.'}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       ) : mode === 'withdraw' ? (
         <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
