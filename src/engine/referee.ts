@@ -161,6 +161,7 @@ export class RefereeEngine {
   private champSettled = false;
   private champWinner?: string;
   private championSeasonNumber?: number;
+  private providerMatchStates = new Map<string, MatchState>();
   private simulator: MatchSimulator;
 
   private logs: DaemonLog[] = [];
@@ -237,6 +238,25 @@ export class RefereeEngine {
       this.log('SYSTEM', 'info', `Season fixtures synced - watching ${this.fixtures.length} fixtures.`);
       this.onUpdate?.();
     }
+  }
+
+  syncMatchStates(matchStates: Record<string, MatchState>): void {
+    let changed = false;
+
+    for (const [fixtureId, matchState] of Object.entries(matchStates)) {
+      if (!fixtureId || !matchState) continue;
+      const fixture = this.fixtures.find(f => f.id === fixtureId);
+      if (!fixture || fixture.mode !== 'realtime') continue;
+
+      const next = { ...matchState, fixtureId };
+      const prev = this.providerMatchStates.get(fixtureId);
+      if (JSON.stringify(prev) === JSON.stringify(next)) continue;
+
+      this.providerMatchStates.set(fixtureId, next);
+      changed = true;
+    }
+
+    if (changed) this.onUpdate?.();
   }
 
   async settleSyncedFixture(fixtureId: string, outcome: Outcome): Promise<SettlementResult | null> {
@@ -1540,6 +1560,62 @@ export class RefereeEngine {
 
   // ── State snapshot ───────────────────────────────────────────────────────────
 
+  getDefiLlamaMetrics(startTimestamp: number, endTimestamp: number): {
+    startTimestamp: number;
+    endTimestamp: number;
+    acceptedStakeCount: number;
+    matchStakeCount: number;
+    championStakeCount: number;
+    dailyVolumeWei: string;
+    dailyFeesWei: string;
+    dailyRevenueWei: string;
+    protocolFeeBps: number;
+  } {
+    const startMs = startTimestamp * 1000;
+    const endMs = endTimestamp * 1000;
+    const seen = new Set<string>();
+    let acceptedStakeCount = 0;
+    let matchStakeCount = 0;
+    let championStakeCount = 0;
+    let dailyVolumeWei = 0n;
+
+    const includeStake = (stake: { txHash: string; amountWei: string; timestamp: number }, kind: 'match' | 'champion') => {
+      const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
+      if (stakeMs < startMs || stakeMs >= endMs) return;
+      const txHash = stake.txHash.toLowerCase();
+      if (seen.has(txHash)) return;
+      seen.add(txHash);
+
+      acceptedStakeCount += 1;
+      if (kind === 'match') matchStakeCount += 1;
+      else championStakeCount += 1;
+      dailyVolumeWei += BigInt(stake.amountWei);
+    };
+
+    for (const stake of this.stakes.values()) {
+      includeStake(stake, 'match');
+    }
+    for (const stake of this.champStakes) {
+      includeStake(stake, 'champion');
+    }
+    for (const position of this.champHistory) {
+      includeStake(position.stake, 'champion');
+    }
+
+    const dailyFeesWei = (dailyVolumeWei * PROTOCOL_FEE_BPS) / 10_000n;
+    return {
+      startTimestamp,
+      endTimestamp,
+      acceptedStakeCount,
+      matchStakeCount,
+      championStakeCount,
+      dailyVolumeWei: dailyVolumeWei.toString(),
+      dailyFeesWei: dailyFeesWei.toString(),
+      dailyRevenueWei: dailyFeesWei.toString(),
+      protocolFeeBps: Number(PROTOCOL_FEE_BPS),
+    };
+  }
+
   getState(): DaemonState {
     const byTeam: Record<string, string> = {};
     this.champPool.forEach((v, k) => { byTeam[k] = v.toString(); });
@@ -1563,7 +1639,7 @@ export class RefereeEngine {
       wsConnected:     this.wsConnected,
       settlements:     this.settlements.slice(-20),
       rejectedStakeRefunds: Array.from(this.rejectedStakeRefunds.values()).slice(-50),
-      matchStates:     this.simulator.getStates(),
+      matchStates:     { ...Object.fromEntries(this.providerMatchStates), ...this.simulator.getStates() },
       simulationMode:  this.fixtures.some(f => f.mode === 'simulated'),
       championPool,
     };

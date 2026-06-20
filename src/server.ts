@@ -4,11 +4,11 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
-import { createPublicClient, createWalletClient, formatEther, http, parseEther, type Address } from 'viem';
+import { createPublicClient, createWalletClient, formatEther, http, parseAbiItem, parseEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
-import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
+import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
 import { getWorldCupFeed, getWorldCupMatchDetail } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
@@ -102,7 +102,11 @@ const REWARD_RPC_URL = process.env.REWARD_RPC_URL
   ?? process.env.X_LAYER_RPC_URL
   ?? xLayerMainnet.rpcUrls.default.http[0];
 const FANVIBE_TOKEN_ADDRESS = (process.env.FANVIBE_TOKEN_ADDRESS ?? '0x35a676Ca9347499f97819813a38ED14e6a7C5e3F') as Address;
-const FVB_ELIGIBILITY_CAP_WEI = 450_000n * 10n ** 18n;
+const FANVIBE_TOKEN_API_URL = process.env.FANVIBE_TOKEN_API_URL
+  ?? 'https://api-prod.eulr.fun/api/tokens/0x35a676ca9347499f97819813a38ed14e6a7c5e3f?network=xlayer';
+const FVB_ENTRY_MIN_USD = Number(process.env.FVB_ENTRY_MIN_USD ?? '10');
+const OKB_USD_FALLBACK = Number(process.env.OKB_USD_PRICE ?? '88');
+const OKB_USD_CACHE_TTL_MS = Number(process.env.OKB_USD_CACHE_TTL_MS ?? '1800000');
 const PRIVATE_X_LAYER_RPC_URL = process.env.FVB_RPC_URL
   ?? process.env.X_LAYER_HTTP_RPC
   ?? process.env.X_LAYER_RPC_URL
@@ -115,6 +119,32 @@ const FVB_RPC_URLS = [
   xLayerMainnet.rpcUrls.default.http[0],
 ].filter((url, index, urls): url is string => Boolean(url) && urls.indexOf(url) === index);
 const fvbPublicClients = FVB_RPC_URLS.map(url => createPublicClient({ chain: xLayerMainnet, transport: http(url) }));
+const FVB_PRICE_QUOTE_AMOUNT_WEI = 10n ** 18n;
+const FVB_PRICE_CACHE_TTL_MS = Number(process.env.FVB_PRICE_CACHE_TTL_MS ?? '30000');
+const FVB_OKX_QUOTE_ENABLED = process.env.FVB_OKX_QUOTE_ENABLED !== '0';
+const FVB_V4_MIGRATION_TX = (process.env.FVB_V4_MIGRATION_TX ?? '0x446fa4a18c6e84b8959db1b15892720348ed98c1f72983f487ee79b8c08e9e08') as `0x${string}`;
+const FVB_TRADE_INDEX_ENABLED = process.env.FVB_TRADE_INDEX_ENABLED !== '0';
+const FVB_TRADE_SCAN_INTERVAL_MS = Number(process.env.FVB_TRADE_SCAN_INTERVAL_MS ?? '60000');
+const FVB_TRADE_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_TRADE_SCAN_CHUNK_BLOCKS ?? '100')));
+const FVB_TRADE_SCAN_LOOKBACK_BLOCKS = BigInt(Math.max(1000, Number(process.env.FVB_TRADE_SCAN_LOOKBACK_BLOCKS ?? '10000')));
+const FVB_TRADE_MAX_CHUNKS_PER_SCAN = Math.max(1, Number(process.env.FVB_TRADE_MAX_CHUNKS_PER_SCAN ?? '20'));
+const FVB_HOLDER_START_BLOCK = BigInt(Math.max(0, Number(process.env.FVB_HOLDER_START_BLOCK ?? '62489676')));
+const FVB_HOLDER_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_HOLDER_SCAN_CHUNK_BLOCKS ?? '1000')));
+const FVB_HOLDER_MAX_CHUNKS_PER_SCAN = Math.max(1, Number(process.env.FVB_HOLDER_MAX_CHUNKS_PER_SCAN ?? '20'));
+const FVB_V4_POOL_MANAGER_ADDRESS = (process.env.FVB_V4_POOL_MANAGER_ADDRESS ?? '0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32').toLowerCase();
+const FVB_TRADE_COUNTERPARTIES = new Set(
+  [FVB_V4_POOL_MANAGER_ADDRESS, ...(process.env.FVB_TRADE_COUNTERPARTY_ADDRESSES ?? '').split(',')]
+    .join(',')
+    .split(',')
+    .map(address => address.trim().toLowerCase())
+    .filter(address => /^0x[0-9a-f]{40}$/.test(address)),
+);
+let cachedFvbPrice: { priceOkbWei: string; source: 'eulr' | 'okx' | 'env'; updatedAt: number } | null = null;
+let cachedOkbUsd: { price: number; updatedAt: number; source: 'coingecko' | 'env' } | null = null;
+let fvbTradeScanRunning = false;
+let fvbHolderScanRunning = false;
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const FVB_TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -141,12 +171,360 @@ async function readFvbBalance(address: string): Promise<bigint | null> {
   return null;
 }
 
+function parsePositiveWei(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  try {
+    return BigInt(value) > 0n ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchFvbPriceFromEulr(): Promise<string | null> {
+  const response = await fetch(FANVIBE_TOKEN_API_URL, { signal: AbortSignal.timeout(6000) });
+  if (!response.ok) throw new Error(`eulr HTTP ${response.status}`);
+  const data = await response.json() as {
+    token?: { isGraduated?: boolean; isMigrated?: boolean };
+    satoData?: { marketPriceOkb?: string };
+  };
+  if (!data.token?.isGraduated || !data.token?.isMigrated) return null;
+  return parsePositiveWei(data.satoData?.marketPriceOkb);
+}
+
+async function fetchFvbPriceFromOkxQuote(): Promise<string | null> {
+  if (!FVB_OKX_QUOTE_ENABLED) return null;
+  const apiKey = process.env.OKX_API_KEY;
+  if (!apiKey) return null;
+
+  const params = new URLSearchParams({
+    chainId: String(xLayerMainnet.id),
+    fromTokenAddress: FANVIBE_TOKEN_ADDRESS,
+    toTokenAddress: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+    amount: FVB_PRICE_QUOTE_AMOUNT_WEI.toString(),
+  });
+
+  const headers: Record<string, string> = { 'Ok-Access-Key': apiKey };
+  if (process.env.OKX_PROJECT_ID) headers['Ok-Access-Project'] = process.env.OKX_PROJECT_ID;
+
+  const response = await fetch(`https://web3.okx.com/api/v5/dex/aggregator/quote?${params}`, {
+    headers,
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!response.ok) throw new Error(`OKX quote HTTP ${response.status}`);
+
+  const data = await response.json() as {
+    code?: string;
+    msg?: string;
+    data?: Array<{ routerResult?: { toTokenAmount?: string }; toTokenAmount?: string }>;
+  };
+  if (data.code && data.code !== '0') throw new Error(`OKX quote ${data.code}: ${data.msg ?? 'unknown'}`);
+  const quote = data.data?.[0];
+  return parsePositiveWei(quote?.routerResult?.toTokenAmount ?? quote?.toTokenAmount);
+}
+
+async function getFvbMarketPrice(): Promise<{ priceOkbWei: string | null; source: string; updatedAt: number | null; cached: boolean }> {
+  if (cachedFvbPrice && Date.now() - cachedFvbPrice.updatedAt < FVB_PRICE_CACHE_TTL_MS) {
+    return { ...cachedFvbPrice, cached: true };
+  }
+
+  try {
+    const priceOkbWei = await fetchFvbPriceFromEulr();
+    if (priceOkbWei) {
+      cachedFvbPrice = { priceOkbWei, source: 'eulr', updatedAt: Date.now() };
+      return { ...cachedFvbPrice, cached: false };
+    }
+  } catch (err) {
+    console.warn(`[FanVibe] FVB eulr price failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    const priceOkbWei = await fetchFvbPriceFromOkxQuote();
+    if (priceOkbWei) {
+      cachedFvbPrice = { priceOkbWei, source: 'okx', updatedAt: Date.now() };
+      return { ...cachedFvbPrice, cached: false };
+    }
+  } catch (err) {
+    console.warn(`[FanVibe] FVB OKX quote failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const envFallback = parsePositiveWei(process.env.FVB_MARKET_PRICE_OKB_WEI);
+  if (envFallback) {
+    cachedFvbPrice ??= { priceOkbWei: envFallback, source: 'env', updatedAt: Date.now() };
+    return { ...cachedFvbPrice, cached: true };
+  }
+
+  return cachedFvbPrice
+    ? { ...cachedFvbPrice, cached: true }
+    : { priceOkbWei: null, source: 'unavailable', updatedAt: null, cached: false };
+}
+
+async function getOkbUsdPrice(): Promise<{ price: number; source: string; updatedAt: number | null; cached: boolean }> {
+  if (cachedOkbUsd && Date.now() - cachedOkbUsd.updatedAt < OKB_USD_CACHE_TTL_MS) {
+    return { ...cachedOkbUsd, cached: true };
+  }
+
+  try {
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=okb&vs_currencies=usd', {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (response.ok) {
+      const data = await response.json() as { okb?: { usd?: number } };
+      const price = data.okb?.usd;
+      if (typeof price === 'number' && Number.isFinite(price) && price > 0) {
+        cachedOkbUsd = { price, source: 'coingecko', updatedAt: Date.now() };
+        return { ...cachedOkbUsd, cached: false };
+      }
+    }
+  } catch (err) {
+    console.warn(`[FanVibe] OKB/USD price failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const fallback = Number.isFinite(OKB_USD_FALLBACK) && OKB_USD_FALLBACK > 0 ? OKB_USD_FALLBACK : 88;
+  cachedOkbUsd ??= { price: fallback, source: 'env', updatedAt: Date.now() };
+  return { ...cachedOkbUsd, cached: true };
+}
+
+async function fvbEntryMinOkbWei(): Promise<bigint> {
+  const okbUsd = await getOkbUsdPrice();
+  return parseEther((FVB_ENTRY_MIN_USD / okbUsd.price).toFixed(8));
+}
+
+const FVB_TRADE_VOLUME_POINT_WEI = parseEther(process.env.FVB_TRADE_VOLUME_POINT_OKB ?? '0.00001');
+
+function fvbTradeSourceScope(): 'counterparty_scoped' | 'all_transfers' {
+  return FVB_TRADE_COUNTERPARTIES.size > 0 ? 'counterparty_scoped' : 'all_transfers';
+}
+
+function ensureFvbTradeIndex() {
+  appData.fvbTradeIndex ??= {
+    tokenAddress: FANVIBE_TOKEN_ADDRESS,
+    lastScannedBlock: 0,
+    updatedAt: Date.now(),
+    source: 'transfer_logs',
+    scopedCounterparties: Array.from(FVB_TRADE_COUNTERPARTIES),
+    holderCandidates: {},
+    wallets: {},
+  };
+  appData.fvbTradeIndex.tokenAddress = FANVIBE_TOKEN_ADDRESS;
+  appData.fvbTradeIndex.source = 'transfer_logs';
+  appData.fvbTradeIndex.scopedCounterparties = Array.from(FVB_TRADE_COUNTERPARTIES);
+  appData.fvbTradeIndex.holderCandidates ??= {};
+  return appData.fvbTradeIndex;
+}
+
+function trackFvbHolderCandidate(address: string): void {
+  const key = address.toLowerCase();
+  if (key === ZERO_ADDRESS || !/^0x[0-9a-f]{40}$/.test(key)) return;
+  if (FVB_TRADE_COUNTERPARTIES.has(key)) return;
+  const index = ensureFvbTradeIndex();
+  index.holderCandidates ??= {};
+  index.holderCandidates[key] = key;
+}
+
+function fvbTradeWallet(address: string): PersistedFvbTradeWallet {
+  const index = ensureFvbTradeIndex();
+  const key = address.toLowerCase();
+  trackFvbHolderCandidate(key);
+  index.wallets[key] ??= {
+    address,
+    fvbVolumeWei: '0',
+    estimatedOkbVolumeWei: '0',
+    transfers: 0,
+    lastTradeAt: 0,
+  };
+  return index.wallets[key];
+}
+
+function creditFvbTradeVolume(address: string, fvbAmountWei: bigint, estimatedOkbWei: bigint, timestamp = Date.now()): void {
+  if (address.toLowerCase() === ZERO_ADDRESS) return;
+  const wallet = fvbTradeWallet(address);
+  wallet.fvbVolumeWei = (BigInt(wallet.fvbVolumeWei) + fvbAmountWei).toString();
+  wallet.estimatedOkbVolumeWei = (BigInt(wallet.estimatedOkbVolumeWei) + estimatedOkbWei).toString();
+  wallet.transfers += 1;
+  wallet.lastTradeAt = Math.max(wallet.lastTradeAt, timestamp);
+}
+
+async function fvbTradeStartBlock(client = fvbPublicClients[0]): Promise<bigint> {
+  const envBlock = process.env.FVB_TRADE_START_BLOCK;
+  if (envBlock && /^\d+$/.test(envBlock)) return BigInt(envBlock);
+
+  try {
+    const receipt = await client.getTransactionReceipt({ hash: FVB_V4_MIGRATION_TX });
+    return receipt.blockNumber;
+  } catch {
+    const latest = await client.getBlockNumber();
+    return latest > FVB_TRADE_SCAN_LOOKBACK_BLOCKS ? latest - FVB_TRADE_SCAN_LOOKBACK_BLOCKS : 0n;
+  }
+}
+
+async function scanFvbTradeVolume(): Promise<void> {
+  if (!FVB_TRADE_INDEX_ENABLED || fvbTradeScanRunning) return;
+  const client = fvbPublicClients[0];
+  if (!client) return;
+  fvbTradeScanRunning = true;
+  try {
+    const index = ensureFvbTradeIndex();
+    const latest = await client.getBlockNumber();
+    const initialStart = await fvbTradeStartBlock(client);
+    let fromBlock = index.lastScannedBlock > 0 ? BigInt(index.lastScannedBlock) + 1n : initialStart;
+    if (fromBlock > latest) return;
+
+    const price = await getFvbMarketPrice();
+    const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : 0n;
+    let scannedTo = BigInt(index.lastScannedBlock);
+
+    let chunks = 0;
+    while (fromBlock <= latest && chunks < FVB_TRADE_MAX_CHUNKS_PER_SCAN) {
+      const toBlock = fromBlock + FVB_TRADE_SCAN_CHUNK_BLOCKS > latest
+        ? latest
+        : fromBlock + FVB_TRADE_SCAN_CHUNK_BLOCKS;
+      const logs = await client.getLogs({
+        address: FANVIBE_TOKEN_ADDRESS,
+        event: FVB_TRANSFER_EVENT,
+        fromBlock,
+        toBlock,
+      });
+
+      for (const log of logs) {
+        const from = String(log.args.from ?? '').toLowerCase();
+        const to = String(log.args.to ?? '').toLowerCase();
+        const value = BigInt(log.args.value ?? 0n);
+        if (value <= 0n || from === ZERO_ADDRESS || to === ZERO_ADDRESS) continue;
+        trackFvbHolderCandidate(from);
+        trackFvbHolderCandidate(to);
+
+        const fromIsCounterparty = FVB_TRADE_COUNTERPARTIES.has(from);
+        const toIsCounterparty = FVB_TRADE_COUNTERPARTIES.has(to);
+        if (FVB_TRADE_COUNTERPARTIES.size > 0 && !fromIsCounterparty && !toIsCounterparty) continue;
+
+        const estimatedOkbWei = priceWei > 0n ? (value * priceWei) / 10n ** 18n : 0n;
+        if (FVB_TRADE_COUNTERPARTIES.size > 0) {
+          if (!fromIsCounterparty) creditFvbTradeVolume(from, value, estimatedOkbWei);
+          if (!toIsCounterparty) creditFvbTradeVolume(to, value, estimatedOkbWei);
+        } else {
+          creditFvbTradeVolume(from, value, estimatedOkbWei);
+          creditFvbTradeVolume(to, value, estimatedOkbWei);
+        }
+      }
+
+      scannedTo = toBlock;
+      fromBlock = toBlock + 1n;
+      chunks += 1;
+    }
+
+    index.lastScannedBlock = Number(scannedTo);
+    index.updatedAt = Date.now();
+    await persistAppData();
+  } catch (err) {
+    console.warn(`[FanVibe] FVB trade index scan failed: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    fvbTradeScanRunning = false;
+  }
+}
+
+async function scanFvbHolderCandidates(): Promise<void> {
+  if (!FVB_TRADE_INDEX_ENABLED || fvbHolderScanRunning) return;
+  const client = fvbPublicClients[0];
+  if (!client) return;
+  fvbHolderScanRunning = true;
+  try {
+    const index = ensureFvbTradeIndex();
+    const latest = await client.getBlockNumber();
+    let fromBlock = index.holderLastScannedBlock && index.holderLastScannedBlock > 0
+      ? BigInt(index.holderLastScannedBlock) + 1n
+      : FVB_HOLDER_START_BLOCK;
+    if (fromBlock > latest) return;
+
+    let scannedTo = BigInt(index.holderLastScannedBlock ?? 0);
+    let chunks = 0;
+    while (fromBlock <= latest && chunks < FVB_HOLDER_MAX_CHUNKS_PER_SCAN) {
+      const toBlock = fromBlock + FVB_HOLDER_SCAN_CHUNK_BLOCKS > latest
+        ? latest
+        : fromBlock + FVB_HOLDER_SCAN_CHUNK_BLOCKS;
+      const logs = await client.getLogs({
+        address: FANVIBE_TOKEN_ADDRESS,
+        event: FVB_TRANSFER_EVENT,
+        fromBlock,
+        toBlock,
+      });
+
+      for (const log of logs) {
+        trackFvbHolderCandidate(String(log.args.from ?? ''));
+        trackFvbHolderCandidate(String(log.args.to ?? ''));
+      }
+
+      scannedTo = toBlock;
+      fromBlock = toBlock + 1n;
+      chunks += 1;
+    }
+
+    index.holderLastScannedBlock = Number(scannedTo);
+    index.updatedAt = Date.now();
+    await persistAppData();
+  } catch (err) {
+    console.warn(`[FanVibe] FVB holder candidate scan failed: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    fvbHolderScanRunning = false;
+  }
+}
+
+function fvbTradeStats(address: string) {
+  const wallet = appData.fvbTradeIndex?.wallets[address.toLowerCase()];
+  return {
+    fvbTradeVolumeWei: wallet?.fvbVolumeWei ?? '0',
+    fvbTradeVolumeOkbWei: wallet?.estimatedOkbVolumeWei ?? '0',
+    fvbTradeTransfers: wallet?.transfers ?? 0,
+    fvbLastTradeAt: wallet?.lastTradeAt ?? 0,
+  };
+}
+
+function scoreRulesWithTrading() {
+  return {
+    ...engine.getMatchdayCupScoreRules(),
+    fvbTradeVolumePointWei: FVB_TRADE_VOLUME_POINT_WEI.toString(),
+    fvbTradeVolumePointOKB: formatEther(FVB_TRADE_VOLUME_POINT_WEI),
+    fvbTradeSource: 'verified_onchain_fvb_transfer_logs',
+    fvbTradeScope: fvbTradeSourceScope(),
+  };
+}
+
+function attachFvbTrading<T extends { address: string; score?: number; scoreComponents?: Record<string, number>; lastActiveAt?: number }>(entries: T[]) {
+  return entries
+    .map(entry => {
+      const stats = fvbTradeStats(entry.address);
+      const tradeOkbWei = BigInt(stats.fvbTradeVolumeOkbWei);
+      const tradingPoints = Number(tradeOkbWei / FVB_TRADE_VOLUME_POINT_WEI);
+      return {
+        ...entry,
+        ...stats,
+        score: (entry.score ?? 0) + tradingPoints,
+        scoreComponents: {
+          ...(entry.scoreComponents ?? {}),
+          trading: tradingPoints,
+        },
+        lastActiveAt: Math.max(entry.lastActiveAt ?? 0, stats.fvbLastTradeAt),
+      };
+    })
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0))
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
 async function attachFvbEligibility<T extends { address: string }>(entries: T[]) {
+  const price = await getFvbMarketPrice();
+  const minValueWei = await fvbEntryMinOkbWei();
+  const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : null;
+  const meetsEntryMinimum = (balance: bigint) => {
+    if (balance <= 0n) return false;
+    if (!priceWei) return true;
+    return (balance * priceWei) / 10n ** 18n >= minValueWei;
+  };
+
   if (!entries.length) return entries.map(entry => ({
     ...entry,
     fvbBalanceWei: '0',
     fvbEligibleWei: '0',
-    fvbEligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+    fvbEligibilityCapWei: null,
+    fvbEntryMinimumUsd: FVB_ENTRY_MIN_USD,
     fvbEligible: false,
   }));
 
@@ -155,15 +533,13 @@ async function attachFvbEligibility<T extends { address: string }>(entries: T[])
 
     return entries.map((entry, index) => {
       const balance = balanceValues[index];
-      const eligibleWei = balance === null
-        ? null
-        : balance > FVB_ELIGIBILITY_CAP_WEI ? FVB_ELIGIBILITY_CAP_WEI : balance;
       return {
         ...entry,
         fvbBalanceWei: balance?.toString() ?? null,
-        fvbEligibleWei: eligibleWei?.toString() ?? null,
-        fvbEligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
-        fvbEligible: balance === null ? null : balance > 0n,
+        fvbEligibleWei: balance?.toString() ?? null,
+        fvbEligibilityCapWei: null,
+        fvbEntryMinimumUsd: FVB_ENTRY_MIN_USD,
+        fvbEligible: balance === null ? null : meetsEntryMinimum(balance),
       };
     });
   } catch (err) {
@@ -173,18 +549,70 @@ async function attachFvbEligibility<T extends { address: string }>(entries: T[])
       ...entry,
       fvbBalanceWei: null,
       fvbEligibleWei: null,
-      fvbEligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
+      fvbEligibilityCapWei: null,
+      fvbEntryMinimumUsd: FVB_ENTRY_MIN_USD,
       fvbEligible: null,
     }));
   }
 }
 
 async function matchdayEntriesWithEligibility(limit: number) {
-  const entries = engine.getMatchdayCupLeaderboard(limit).map(entry => ({
+  const entries = attachFvbTrading(engine.getMatchdayCupLeaderboard(limit).map(entry => ({
     ...entry,
     displayName: profileNameFor(entry.address),
-  }));
+  })));
   return attachFvbEligibility(entries);
+}
+
+async function fvbHolderLeaderboard(limit: number) {
+  const index = ensureFvbTradeIndex();
+  const candidateAddresses = new Set<string>();
+
+  for (const address of Object.keys(index.wallets)) {
+    if (address !== ZERO_ADDRESS && !FVB_TRADE_COUNTERPARTIES.has(address)) candidateAddresses.add(address);
+  }
+  for (const address of Object.keys(index.holderCandidates ?? {})) {
+    if (address !== ZERO_ADDRESS && !FVB_TRADE_COUNTERPARTIES.has(address)) candidateAddresses.add(address);
+  }
+  for (const entry of engine.getMatchdayCupLeaderboard(10_000)) {
+    candidateAddresses.add(entry.address.toLowerCase());
+  }
+
+  const price = await getFvbMarketPrice();
+  const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : null;
+  const minimumValueWei = await fvbEntryMinOkbWei();
+  const rows = await Promise.all(Array.from(candidateAddresses).map(async address => {
+    const balance = await readFvbBalance(address);
+    if (balance === null || balance <= 0n) return null;
+    const valueOkbWei = priceWei ? (balance * priceWei) / 10n ** 18n : null;
+    const eligible = valueOkbWei === null ? balance > 0n : valueOkbWei >= minimumValueWei;
+    if (!eligible) return null;
+    const stats = fvbTradeStats(address);
+    return {
+      rank: 0,
+      address,
+      displayName: profileNameFor(address),
+      fvbBalanceWei: balance.toString(),
+      fvbValueOkbWei: valueOkbWei?.toString() ?? null,
+      fvbTradeVolumeWei: stats.fvbTradeVolumeWei,
+      fvbTradeVolumeOkbWei: stats.fvbTradeVolumeOkbWei,
+      fvbTradeTransfers: stats.fvbTradeTransfers,
+      fvbLastTradeAt: stats.fvbLastTradeAt,
+      fvbEntryMinimumUsd: FVB_ENTRY_MIN_USD,
+    };
+  }));
+
+  return rows
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .sort((a, b) => {
+      const balanceDiff = BigInt(b.fvbBalanceWei) - BigInt(a.fvbBalanceWei);
+      if (balanceDiff !== 0n) return balanceDiff > 0n ? 1 : -1;
+      const tradeDiff = BigInt(b.fvbTradeVolumeOkbWei) - BigInt(a.fvbTradeVolumeOkbWei);
+      if (tradeDiff !== 0n) return tradeDiff > 0n ? 1 : -1;
+      return b.fvbLastTradeAt - a.fvbLastTradeAt;
+    })
+    .slice(0, limit)
+    .map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
 function qualifiedMatchdayEntries<T extends { rank: number | null; fvbEligible?: boolean | null }>(entries: T[]): T[] {
@@ -442,6 +870,44 @@ app.get('/health', (_req, res) => {
   });
 });
 
+app.get('/defillama/overview', async (req, res) => {
+  const now = Math.floor(Date.now() / 1000);
+  const parsed = z.object({
+    start: z.coerce.number().int().positive().optional(),
+    end: z.coerce.number().int().positive().optional(),
+  }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid range' });
+
+  const endTimestamp = parsed.data.end ?? now;
+  const startTimestamp = parsed.data.start ?? endTimestamp - 24 * 60 * 60;
+  if (startTimestamp >= endTimestamp) return res.status(400).json({ error: 'invalid range' });
+
+  const metrics = engine.getDefiLlamaMetrics(startTimestamp, endTimestamp);
+  const okbUsd = await getOkbUsdPrice();
+  const volumeOkb = Number(formatEther(BigInt(metrics.dailyVolumeWei)));
+  const feesOkb = Number(formatEther(BigInt(metrics.dailyFeesWei)));
+  const revenueOkb = Number(formatEther(BigInt(metrics.dailyRevenueWei)));
+
+  res.json({
+    protocol: 'FanVibe',
+    chain: 'xlayer',
+    timestamp: now,
+    ...metrics,
+    dailyVolumeOkb: volumeOkb,
+    dailyFeesOkb: feesOkb,
+    dailyRevenueOkb: revenueOkb,
+    dailyVolumeUsd: volumeOkb * okbUsd.price,
+    dailyFeesUsd: feesOkb * okbUsd.price,
+    dailyRevenueUsd: revenueOkb * okbUsd.price,
+    okbUsd,
+    methodology: {
+      volume: 'Gross accepted OKB stakes on FanVibe real World Cup match and champion markets during the requested time range. Rejected/refunded stake attempts are excluded.',
+      fees: 'FanVibe applies a 0.5% protocol fee to accepted stakes.',
+      revenue: 'Protocol revenue equals the 0.5% accepted-stake fee retained by FanVibe.',
+    },
+  });
+});
+
 app.get('/state', (_req, res) => {
   res.json(engine.getState());
 });
@@ -468,6 +934,7 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
   const allEntries = await matchdayEntriesWithEligibility(10_000);
   const qualifiedEntries = qualifiedMatchdayEntries(allEntries);
   const entries = qualifiedEntries.slice(0, parsed.data);
+  const entryMinimumOkbWei = await fvbEntryMinOkbWei();
   res.json({
     entries,
     activity: {
@@ -478,10 +945,19 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
     },
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
-      capWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
-      capTokens: '450000',
+      capWei: null,
+      capTokens: null,
+      minimumUsd: FVB_ENTRY_MIN_USD,
+      minimumOkbWei: entryMinimumOkbWei.toString(),
     },
-    scoreRules: engine.getMatchdayCupScoreRules(),
+    tradeIndex: {
+      enabled: FVB_TRADE_INDEX_ENABLED,
+      source: appData.fvbTradeIndex?.source ?? 'transfer_logs',
+      scope: fvbTradeSourceScope(),
+      lastScannedBlock: appData.fvbTradeIndex?.lastScannedBlock ?? 0,
+      updatedAt: appData.fvbTradeIndex?.updatedAt ?? null,
+    },
+    scoreRules: scoreRulesWithTrading(),
   });
 });
 
@@ -489,18 +965,39 @@ app.get('/matchday-cup/fvb-balance/:address', async (req, res) => {
   const parsed = addressSchema.safeParse(req.params.address);
   if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
   const balance = await readFvbBalance(parsed.data);
-  const eligibleWei = balance === null
+  const price = await getFvbMarketPrice();
+  const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : null;
+  const minimumValueWei = await fvbEntryMinOkbWei();
+  const balanceValueWei = balance !== null && priceWei ? (balance * priceWei) / 10n ** 18n : null;
+  const eligible = balance === null
     ? null
-    : balance > FVB_ELIGIBILITY_CAP_WEI ? FVB_ELIGIBILITY_CAP_WEI : balance;
+    : priceWei
+      ? (balanceValueWei ?? 0n) >= minimumValueWei
+      : balance > 0n;
   res.json({
     address: parsed.data,
     tokenAddress: FANVIBE_TOKEN_ADDRESS,
     balanceWei: balance?.toString() ?? null,
-    eligibleWei: eligibleWei?.toString() ?? null,
-    eligibilityCapWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
-    eligible: balance === null ? null : balance > 0n,
+    eligibleWei: balance?.toString() ?? null,
+    eligibilityCapWei: null,
+    entryMinimumUsd: FVB_ENTRY_MIN_USD,
+    entryMinimumOkbWei: minimumValueWei.toString(),
+    balanceValueWei: balanceValueWei?.toString() ?? null,
+    eligible,
     privateRpcConfigured: Boolean(PRIVATE_X_LAYER_RPC_URL),
     rpcFallbacks: FVB_RPC_URLS.length,
+  });
+});
+
+app.get('/fvb/price', async (_req, res) => {
+  const price = await getFvbMarketPrice();
+  res.json({
+    tokenAddress: FANVIBE_TOKEN_ADDRESS,
+    quoteToken: 'OKB',
+    priceOkbWei: price.priceOkbWei,
+    source: price.source,
+    updatedAt: price.updatedAt,
+    cached: price.cached,
   });
 });
 
@@ -533,19 +1030,33 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
       active: 0,
       participation: 0,
     },
-    scoreRules: engine.getMatchdayCupScoreRules(),
+    fvbTradeVolumeWei: '0',
+    fvbTradeVolumeOkbWei: '0',
+    fvbTradeTransfers: 0,
+    fvbLastTradeAt: 0,
+    scoreRules: scoreRulesWithTrading(),
   };
   const entry = ranked ?? (unqualifiedStats ? { ...unqualifiedStats, rank: null } : emptyEntry);
   const entryWithEligibility = ranked || unqualifiedStats ? entry : (await attachFvbEligibility([entry]))[0];
+  const entryMinimumOkbWei = await fvbEntryMinOkbWei();
   res.json({
     entry: ranked ? entryWithEligibility : { ...entryWithEligibility, rank: null },
     ranked: !!ranked,
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
-      capWei: FVB_ELIGIBILITY_CAP_WEI.toString(),
-      capTokens: '450000',
+      capWei: null,
+      capTokens: null,
+      minimumUsd: FVB_ENTRY_MIN_USD,
+      minimumOkbWei: entryMinimumOkbWei.toString(),
     },
-    scoreRules: engine.getMatchdayCupScoreRules(),
+    tradeIndex: {
+      enabled: FVB_TRADE_INDEX_ENABLED,
+      source: appData.fvbTradeIndex?.source ?? 'transfer_logs',
+      scope: fvbTradeSourceScope(),
+      lastScannedBlock: appData.fvbTradeIndex?.lastScannedBlock ?? 0,
+      updatedAt: appData.fvbTradeIndex?.updatedAt ?? null,
+    },
+    scoreRules: scoreRulesWithTrading(),
   });
 });
 
@@ -555,6 +1066,44 @@ app.get('/matchday-cup/country-support', async (req, res) => {
   const eligibleEntries = qualifiedMatchdayEntries(await matchdayEntriesWithEligibility(10_000));
   const eligibleAddresses = new Set(eligibleEntries.map(entry => entry.address.toLowerCase()));
   res.json({ entries: engine.getMatchdayCountrySupport(parsed.data, eligibleAddresses) });
+});
+
+app.get('/matchday-cup/fvb-holders', async (req, res) => {
+  const parsed = z.coerce.number().int().min(1).max(50).default(20).safeParse(req.query.limit);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid limit' });
+  const entries = await fvbHolderLeaderboard(parsed.data);
+  const entryMinimumOkbWei = await fvbEntryMinOkbWei();
+  res.json({
+    entries,
+    fvbEligibility: {
+      tokenAddress: FANVIBE_TOKEN_ADDRESS,
+      capWei: null,
+      capTokens: null,
+      minimumUsd: FVB_ENTRY_MIN_USD,
+      minimumOkbWei: entryMinimumOkbWei.toString(),
+    },
+    source: 'indexed_fvb_wallets',
+  });
+});
+
+app.get('/matchday-cup/trade-index', (_req, res) => {
+  const index = ensureFvbTradeIndex();
+  res.json({
+    enabled: FVB_TRADE_INDEX_ENABLED,
+    tokenAddress: FANVIBE_TOKEN_ADDRESS,
+    source: index.source,
+      scope: fvbTradeSourceScope(),
+      lastScannedBlock: index.lastScannedBlock,
+      holderLastScannedBlock: index.holderLastScannedBlock ?? 0,
+      updatedAt: index.updatedAt,
+      walletsIndexed: Object.keys(index.wallets).length,
+      holderCandidatesIndexed: Object.keys(index.holderCandidates ?? {}).length,
+      scopedCounterparties: index.scopedCounterparties,
+    scoring: {
+      fvbTradeVolumePointWei: FVB_TRADE_VOLUME_POINT_WEI.toString(),
+      fvbTradeVolumePointOKB: formatEther(FVB_TRADE_VOLUME_POINT_WEI),
+    },
+  });
 });
 
 app.get('/profiles/:address', (req, res) => {
@@ -694,6 +1243,7 @@ app.get('/worldcup/feed', async (req, res) => {
     return res.status(503).json(feed);
   }
   engine.syncFixtures(feed.fixtures);
+  engine.syncMatchStates(feed.matchStates);
   for (const matchState of Object.values(feed.matchStates)) {
     if (matchState.status !== 'finished') continue;
     const result = await engine.settleSyncedFixture(matchState.fixtureId, outcomeFromMatchState(matchState));
@@ -706,6 +1256,7 @@ app.get('/worldcup/match/:fixtureId', async (req, res) => {
   try {
     const detail = await getWorldCupMatchDetail(req.params.fixtureId);
     engine.syncFixtures([detail.fixture]);
+    engine.syncMatchStates({ [detail.fixture.id]: detail.matchState });
     if (detail.matchState.status === 'finished') {
       const result = await engine.settleSyncedFixture(detail.matchState.fixtureId, outcomeFromMatchState(detail.matchState));
       if (result) broadcast('settlement', result);
@@ -818,6 +1369,7 @@ async function refreshWorldCupFixture(fixtureId: string): Promise<{ mode: string
     }
 
     engine.syncFixtures([detail.fixture]);
+    engine.syncMatchStates({ [detail.fixture.id]: detail.matchState });
     if (detail.matchState.status === 'finished') {
       const result = await engine.settleSyncedFixture(detail.matchState.fixtureId, outcomeFromMatchState(detail.matchState));
       if (result) broadcast('settlement', result);
@@ -836,6 +1388,7 @@ async function syncSeasonSnapshotWithReferee(state: PersistedSeasonState): Promi
 
   engine.syncChampionSeason(state.seasonNumber);
   engine.syncFixtures(realtimeFixtures);
+  engine.syncMatchStates(state.matchStates ?? {});
 
   const finished = Object.values(state.matchStates ?? {})
     .filter((matchState): matchState is MatchState =>
@@ -1118,6 +1671,7 @@ httpServer.listen(PORT, async () => {
 
   try {
     appData = await readAppData();
+    ensureFvbTradeIndex();
     await engine.start();
     if (SIMULATION_ENABLED) {
       await seasonController.start();
@@ -1126,11 +1680,23 @@ httpServer.listen(PORT, async () => {
       console.log('[FanVibe] Simulation retired - season controller disabled');
     }
     await retryPendingStakeReports();
+    await scanFvbTradeVolume();
+    await scanFvbHolderCandidates();
     setInterval(() => {
       retryPendingStakeReports().catch(err => {
         console.error(`[FanVibe] Pending stake retry failed: ${err instanceof Error ? err.message : String(err)}`);
       });
     }, 15_000);
+    setInterval(() => {
+      scanFvbTradeVolume().catch(err => {
+        console.error(`[FanVibe] FVB trade scan failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }, FVB_TRADE_SCAN_INTERVAL_MS);
+    setInterval(() => {
+      scanFvbHolderCandidates().catch(err => {
+        console.error(`[FanVibe] FVB holder scan failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }, FVB_TRADE_SCAN_INTERVAL_MS);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[FanVibe] Engine start failed: ${msg}`);
