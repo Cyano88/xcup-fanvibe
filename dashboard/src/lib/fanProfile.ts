@@ -10,9 +10,11 @@ export function shortWallet(address?: string | null): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function getStoredProfileName(address?: string | null): string {
+export function getStoredProfileName(address?: string | null, options: { includeLegacy?: boolean } = {}): string {
+  const includeLegacy = options.includeLegacy ?? true;
   const scoped = localStorage.getItem(profileKey(address))?.trim();
   if (scoped) return scoped;
+  if (!includeLegacy) return '';
 
   const legacy = localStorage.getItem(FAN_PROFILE_NAME_KEY)?.trim() ?? '';
   if (legacy && address) {

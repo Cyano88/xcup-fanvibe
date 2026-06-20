@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy, ExternalLink, Pencil, RefreshCw, Send, Wallet } from 'lucide-react';
-import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
-import { encodeFunctionData, formatEther, formatUnits, isAddress, parseEther } from 'viem';
+import { ArrowRight, Check, Copy, ExternalLink, KeyRound, Pencil, RefreshCw, Send, ShieldCheck, Wallet } from 'lucide-react';
+import { useCreateWallet, useExportWallet, usePrivy, useSendTransaction, useWallets } from '@privy-io/react-auth';
+import { encodeFunctionData, formatEther, formatUnits, isAddress, parseEther, parseUnits } from 'viem';
 import type { Fixture, MatchState, UserPosition } from '../types';
 import { explorerTx, xLayerMainnet } from '../lib/chain';
-import { FANVIBE_TOKEN_ADDRESS } from '../lib/fanvibeToken';
+import { FANVIBE_OKX_WALLET_URL, FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
+import { fetchFvbMarketPriceWei } from '../lib/fvbPrice';
+import { isEmbeddedPrivyWallet, preferredFanVibeWallet } from '../lib/privyWallets';
 import { baseFixtureId, seasonFixtureStartAtMs } from '../lib/seasonTournament';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
@@ -12,16 +14,13 @@ import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useO
 import { xLayerPublicClient } from '../lib/publicClient';
 import { GrowthPanel } from './GrowthPanel';
 import { claimReferral, fetchProfileName, saveProfileName } from '../lib/accountData';
+import { FvbTradeSafety } from './FvbTradeSafety';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const BALANCE_CACHE_PREFIX = 'fanvibe.okbBalance.';
 const POSITION_BATCH_SIZE = 10;
-const FVB_EULR_HOOK_ADDRESS = '0xA21240dADA683d2563034C4F43D080b488b07dDD';
-const FVB_EULR_ROUTER_ADDRESS = '0xAcc0354D3F7a92aDF00B9364b91A59Ed7b48b01A';
-const FVB_ELIGIBILITY_CAP_WEI = 450_000n * 10n ** 18n;
-const BUY_SLIPPAGE_BPS = 100n;
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -31,74 +30,21 @@ const ERC20_BALANCE_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
   },
 ] as const;
-const EULR_HOOK_ABI = [
+const ERC20_TRANSFER_ABI = [
   {
     type: 'function',
-    name: 'quoteBuy',
-    stateMutability: 'view',
-    inputs: [{ name: 'okbIn', type: 'uint256' }],
-    outputs: [
-      {
-        name: '',
-        type: 'tuple',
-        components: [
-          { name: 'grossOkbIn', type: 'uint256' },
-          { name: 'fee', type: 'uint256' },
-          { name: 'effectiveOkbIn', type: 'uint256' },
-          { name: 'oldOkbCum', type: 'uint256' },
-          { name: 'newOkbCum', type: 'uint256' },
-          { name: 'oldMinted', type: 'uint256' },
-          { name: 'newMinted', type: 'uint256' },
-          { name: 'tokensOut', type: 'uint256' },
-          { name: 'burnTaxBps', type: 'uint16' },
-          { name: 'grossTokensOut', type: 'uint256' },
-          { name: 'burnTaxTokens', type: 'uint256' },
-        ],
-      },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'quoteSell',
-    stateMutability: 'view',
-    inputs: [{ name: 'tokensIn', type: 'uint256' }],
-    outputs: [
-      {
-        name: '',
-        type: 'tuple',
-        components: [
-          { name: 'tokensIn', type: 'uint256' },
-          { name: 'grossOkbOut', type: 'uint256' },
-          { name: 'fee', type: 'uint256' },
-          { name: 'netOkbOut', type: 'uint256' },
-          { name: 'oldOkbCum', type: 'uint256' },
-          { name: 'newOkbCum', type: 'uint256' },
-          { name: 'oldMinted', type: 'uint256' },
-          { name: 'newMinted', type: 'uint256' },
-          { name: 'burnTaxBps', type: 'uint16' },
-          { name: 'burnTaxTokens', type: 'uint256' },
-          { name: 'effectiveTokensIn', type: 'uint256' },
-        ],
-      },
-    ],
-  },
-] as const;
-const EULR_ROUTER_ABI = [
-  {
-    type: 'function',
-    name: 'buy',
-    stateMutability: 'payable',
+    name: 'transfer',
+    stateMutability: 'nonpayable',
     inputs: [
-      { name: 'token_', type: 'address' },
-      { name: 'minTokensOut', type: 'uint256' },
-      { name: 'recipient', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
     ],
-    outputs: [{ name: 'tokensOut', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bool' }],
   },
 ] as const;
 
 function isPrivyWallet(wallet: { walletClientType?: string | null }): boolean {
-  return wallet.walletClientType === 'privy' || wallet.walletClientType === 'privy-v2';
+  return isEmbeddedPrivyWallet(wallet.walletClientType);
 }
 
 function formatOKB(wei: string): string {
@@ -331,15 +277,21 @@ function formatFvbBalance(balanceWei: bigint | null): string {
   return value > 0 ? '< 1' : '0';
 }
 
-function minWithSlippage(value: bigint): bigint {
-  return value - ((value * BUY_SLIPPAGE_BPS) / 10_000n);
-}
-
 function usdFromWei(valueWei: bigint | null, okbUsd: number | null): string | null {
   if (valueWei === null || !okbUsd) return null;
   const value = Number(formatEther(valueWei)) * okbUsd;
   if (!Number.isFinite(value)) return null;
   return `US$${value.toFixed(value >= 100 ? 0 : 2)}`;
+}
+
+function fvbAmountValueWei(amount: string, marketValueWei: bigint | null, balanceWei: bigint | null): bigint | null {
+  if (!amount.trim() || marketValueWei === null || balanceWei === null || balanceWei <= 0n) return null;
+  try {
+    const amountWei = parseUnits(amount, 18);
+    return (amountWei * marketValueWei) / balanceWei;
+  } catch {
+    return null;
+  }
 }
 
 interface Props {
@@ -361,7 +313,7 @@ function PrivyPositionsConnect({
   const { ready, authenticated, login, logout } = usePrivy();
   const { createWallet } = useCreateWallet();
   const { wallets, ready: walletsReady } = useWallets();
-  const preferredWallet = wallets.find(isPrivyWallet) ?? wallets[0];
+  const preferredWallet = preferredFanVibeWallet(wallets);
   const activeWallet = (address
     ? wallets.find(wallet => wallet.address.toLowerCase() === address.toLowerCase())
     : undefined) ?? preferredWallet;
@@ -404,6 +356,15 @@ function PrivyPositionsConnect({
 
   useEffect(() => {
     if (!walletsReady || wallets.length === 0) return;
+    if (!authenticated) return;
+    const embeddedWallet = wallets.find(wallet => isEmbeddedPrivyWallet(wallet.walletClientType));
+    if (embeddedWallet?.address && embeddedWallet.address.toLowerCase() !== address?.toLowerCase()) {
+      onAddress(embeddedWallet.address);
+      rememberWallet(embeddedWallet.address);
+      onError(null);
+      return;
+    }
+
     const currentStillConnected = address
       ? wallets.some(wallet => wallet.address.toLowerCase() === address.toLowerCase())
       : false;
@@ -413,13 +374,13 @@ function PrivyPositionsConnect({
       return;
     }
 
-    const nextWallet = wallets.find(isPrivyWallet) ?? wallets[0];
+    const nextWallet = preferredFanVibeWallet(wallets);
     if (nextWallet?.address) {
       onAddress(nextWallet.address);
       rememberWallet(nextWallet.address);
       onError(null);
     }
-  }, [address, onAddress, onError, wallets, walletsReady]);
+  }, [address, authenticated, onAddress, onError, wallets, walletsReady]);
 
   useEffect(() => {
     if (!ready || !walletsReady || !authenticated || activeWallet || creatingWalletRef.current) return;
@@ -524,9 +485,11 @@ function PrivyPositionsConnect({
           )}
         </div>
         <button
-          onClick={() => {
-            activeWallet?.disconnect();
-            logout();
+          onClick={async () => {
+            onAddress(null);
+            rememberWallet(null);
+            try { await activeWallet?.disconnect(); } catch {}
+            try { await logout(); } catch {}
             onAddress(null);
             rememberWallet(null);
           }}
@@ -555,51 +518,38 @@ function PrivyPositionsConnect({
 
 function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUsd: number | null; onError: (message: string | null) => void }) {
   const { wallets } = useWallets();
+  const { sendTransaction } = useSendTransaction();
+  const { exportWallet } = useExportWallet();
   const [mode, setMode] = useState<'balance' | 'withdraw' | 'buy'>('balance');
+  const [withdrawAsset, setWithdrawAsset] = useState<'OKB' | 'FVB'>('OKB');
   const [balanceWei, setBalanceWei] = useState<bigint | null>(() => getCachedBalance(address));
   const [fvbBalanceWei, setFvbBalanceWei] = useState<bigint | null>(null);
   const [fvbValueWei, setFvbValueWei] = useState<bigint | null>(null);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
-  const [buyAmount, setBuyAmount] = useState('0.12');
-  const [buyQuoteWei, setBuyQuoteWei] = useState<bigint | null>(null);
-  const [buyQuoteLoading, setBuyQuoteLoading] = useState(false);
-  const [buyMessage, setBuyMessage] = useState('');
+  const [migrationOpen, setMigrationOpen] = useState(false);
+  const [migrationAcknowledged, setMigrationAcknowledged] = useState(false);
+  const [exportPending, setExportPending] = useState(false);
   const [pending, setPending] = useState(false);
-  const [buyPending, setBuyPending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
-  const [buyTxHash, setBuyTxHash] = useState<`0x${string}` | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wallet = wallets.find(item => item.address.toLowerCase() === address.toLowerCase()) ?? wallets[0];
+  const isEmbeddedWallet = wallet ? isPrivyWallet(wallet) : false;
   const balanceUsd = formatOkbUsdFromWei(balanceWei, okbUsd);
-  const transferUsd = formatStakeUsd(amount, okbUsd);
+  const transferUsd = withdrawAsset === 'OKB'
+    ? formatStakeUsd(amount, okbUsd)
+    : usdFromWei(fvbAmountValueWei(amount, fvbValueWei, fvbBalanceWei), okbUsd);
   const fvbUsd = usdFromWei(fvbValueWei, okbUsd);
   const totalWei = balanceWei !== null && fvbValueWei !== null ? balanceWei + fvbValueWei : null;
   const totalUsd = usdFromWei(totalWei, okbUsd);
-  const remainingEligibilityWei = fvbBalanceWei === null
-    ? null
-    : fvbBalanceWei >= FVB_ELIGIBILITY_CAP_WEI
-      ? 0n
-      : FVB_ELIGIBILITY_CAP_WEI - fvbBalanceWei;
-  const buyAmountWei = useMemo(() => {
-    try {
-      return parseEther(buyAmount || '0');
-    } catch {
-      return 0n;
-    }
-  }, [buyAmount]);
-  const buyAmountUsd = usdFromWei(buyAmountWei > 0n ? buyAmountWei : null, okbUsd);
   const minBuyWei = okbUsd ? parseEther((10 / okbUsd).toFixed(8)) : 0n;
-  const belowMinimum = buyAmountWei > 0n && minBuyWei > 0n && buyAmountWei < minBuyWei;
-  const aboveEligibilityMax = remainingEligibilityWei !== null && buyQuoteWei !== null && buyQuoteWei > remainingEligibilityWei;
-  const canBuyFvb = buyAmountWei > 0n
-    && !!buyQuoteWei
-    && !belowMinimum
-    && !aboveEligibilityMax
-    && remainingEligibilityWei !== null
-    && remainingEligibilityWei !== 0n;
+  const hasFvbEntryMinimum = fvbValueWei === null
+    ? null
+    : okbUsd
+      ? fvbValueWei >= minBuyWei
+      : (fvbBalanceWei ?? 0n) > 0n;
 
   const refreshBalance = useCallback(async (showError = false) => {
     try {
@@ -622,13 +572,8 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
       });
       setFvbBalanceWei(nextBalance);
       if (nextBalance > 0n) {
-        const quote = await xLayerPublicClient.readContract({
-          address: FVB_EULR_HOOK_ADDRESS as `0x${string}`,
-          abi: EULR_HOOK_ABI,
-          functionName: 'quoteSell',
-          args: [nextBalance],
-        });
-        setFvbValueWei(quote.netOkbOut);
+        const marketPriceWei = await fetchFvbMarketPriceWei();
+        setFvbValueWei(marketPriceWei === null ? null : (nextBalance * marketPriceWei) / 10n ** 18n);
       } else {
         setFvbValueWei(0n);
       }
@@ -664,35 +609,6 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
     setFvbValueWei(null);
   }, [address]);
 
-  useEffect(() => {
-    if (mode !== 'buy' || buyAmountWei <= 0n) {
-      setBuyQuoteWei(null);
-      setBuyQuoteLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setBuyQuoteLoading(true);
-    xLayerPublicClient.readContract({
-      address: FVB_EULR_HOOK_ADDRESS as `0x${string}`,
-      abi: EULR_HOOK_ABI,
-      functionName: 'quoteBuy',
-      args: [buyAmountWei],
-    })
-      .then(quote => {
-        if (cancelled) return;
-        setBuyQuoteWei(quote.tokensOut);
-        setBuyQuoteLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setBuyQuoteWei(null);
-        setBuyQuoteLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [buyAmountWei, mode]);
-
   const withdraw = useCallback(async () => {
     if (!wallet || pending) return;
     setPending(true);
@@ -701,101 +617,103 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
     try {
       const to = recipient.trim();
       if (!isAddress(to)) throw new Error('Enter a valid wallet address.');
-      const amountWei = parseEther(amount || '0');
+      const amountWei = withdrawAsset === 'OKB' ? parseEther(amount || '0') : parseUnits(amount || '0', 18);
       if (amountWei <= 0n) throw new Error('Enter an amount to withdraw.');
 
       const balance = await xLayerPublicClient.getBalance({ address: address as `0x${string}` });
-      if (balance < amountWei) throw new Error(lowBalanceMessage(amountWei, balance));
+      if (withdrawAsset === 'OKB' && balance < amountWei) throw new Error(lowBalanceMessage(amountWei, balance));
+      if (withdrawAsset === 'FVB') {
+        if (balance <= 0n) throw new Error('Keep a small OKB balance for X Layer gas before sending FVB.');
+        if (fvbBalanceWei === null) throw new Error('FVB balance is syncing. Refresh and try again.');
+        if (fvbBalanceWei < amountWei) throw new Error(`Low FVB balance. You have ${formatFvbBalance(fvbBalanceWei)} FVB available.`);
+      }
 
-      await wallet.switchChain(xLayerMainnet.id);
-      const provider = await wallet.getEthereumProvider();
-      const hash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          from: address,
-          to,
-          value: `0x${amountWei.toString(16)}`,
-          chainId: `0x${xLayerMainnet.id.toString(16)}`,
-        }],
-      }) as `0x${string}`;
+      const fvbTransferData = withdrawAsset === 'FVB'
+        ? encodeFunctionData({
+            abi: ERC20_TRANSFER_ABI,
+            functionName: 'transfer',
+            args: [to as `0x${string}`, amountWei],
+          })
+        : null;
+
+      let hash: `0x${string}`;
+      if (isPrivyWallet(wallet)) {
+        const result = await sendTransaction(
+          withdrawAsset === 'FVB'
+            ? {
+                to: FANVIBE_TOKEN_ADDRESS as `0x${string}`,
+                data: fvbTransferData!,
+                chainId: xLayerMainnet.id,
+              }
+            : {
+                to: to as `0x${string}`,
+                value: amountWei,
+                chainId: xLayerMainnet.id,
+              },
+          {
+            address,
+            uiOptions: {
+              showWalletUIs: true,
+              description: `Send ${amount} ${withdrawAsset} to ${to.slice(0, 6)}...${to.slice(-4)} on X Layer.`,
+              buttonText: 'Confirm send',
+              successHeader: `${withdrawAsset} sent`,
+              successDescription: 'Your withdrawal is on chain.',
+            },
+          },
+        );
+        hash = result.hash as `0x${string}`;
+      } else {
+        await wallet.switchChain(xLayerMainnet.id);
+        const provider = await wallet.getEthereumProvider();
+        hash = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [
+            withdrawAsset === 'FVB'
+              ? {
+                  from: address,
+                  to: FANVIBE_TOKEN_ADDRESS,
+                  data: fvbTransferData!,
+                  chainId: `0x${xLayerMainnet.id.toString(16)}`,
+                }
+              : {
+                  from: address,
+                  to,
+                  value: `0x${amountWei.toString(16)}`,
+                  chainId: `0x${xLayerMainnet.id.toString(16)}`,
+                },
+          ],
+        }) as `0x${string}`;
+      }
 
       setAmount('');
       setRecipient('');
       setTxHash(hash);
       await refreshBalance();
+      await refreshFvbBalance();
     } catch (err) {
       onError(walletErrorMessage(err, 'Withdrawal failed.'));
     } finally {
       setPending(false);
     }
-  }, [address, amount, onError, pending, recipient, refreshBalance, wallet]);
+  }, [address, amount, fvbBalanceWei, onError, pending, recipient, refreshBalance, refreshFvbBalance, sendTransaction, wallet, withdrawAsset]);
 
-  const buyFvb = useCallback(async () => {
-    if (!wallet || buyPending) return;
-    setBuyPending(true);
-    setBuyTxHash(null);
-    setBuyMessage('');
+  const openSecureExport = useCallback(async () => {
+    if (!wallet || !isEmbeddedWallet) {
+      onError('This wallet is already external. Open it directly in OKX Wallet.');
+      return;
+    }
+    setExportPending(true);
     onError(null);
     try {
-      if (buyAmountWei <= 0n) throw new Error('Enter an OKB amount.');
-      if (belowMinimum) throw new Error('Minimum buy is $10 worth of OKB.');
-      if (!buyQuoteWei || buyQuoteWei <= 0n) throw new Error('Quote is still loading. Try again.');
-      if (remainingEligibilityWei === null) throw new Error('FVB balance is syncing. Try again in a moment.');
-      if (remainingEligibilityWei === 0n) throw new Error('This wallet already meets the 450K FVB reward-pool eligibility cap.');
-      if (aboveEligibilityMax) throw new Error(`Max buy for eligibility is ${formatFvbBalance(remainingEligibilityWei)} FVB.`);
-
-      const balance = await xLayerPublicClient.getBalance({ address: address as `0x${string}` });
-      if (balance < buyAmountWei) throw new Error(lowBalanceMessage(buyAmountWei, balance));
-
-      const data = encodeFunctionData({
-        abi: EULR_ROUTER_ABI,
-        functionName: 'buy',
-        args: [
-          FANVIBE_TOKEN_ADDRESS as `0x${string}`,
-          minWithSlippage(buyQuoteWei),
-          address as `0x${string}`,
-        ],
-      });
-
-      await wallet.switchChain(xLayerMainnet.id);
-      const provider = await wallet.getEthereumProvider();
-      const hash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          from: address,
-          to: FVB_EULR_ROUTER_ADDRESS,
-          value: `0x${buyAmountWei.toString(16)}`,
-          data,
-          chainId: `0x${xLayerMainnet.id.toString(16)}`,
-        }],
-      }) as `0x${string}`;
-
-      setBuyTxHash(hash);
-      setBuyMessage('Buy successful. You are on the Matchday Cup leaderboard.');
-      await refreshBalance();
-      await refreshFvbBalance();
-      setTimeout(() => {
-        refreshBalance();
-        refreshFvbBalance();
-      }, 3000);
+      await exportWallet({ address });
+      setMigrationOpen(false);
+      setMigrationAcknowledged(false);
     } catch (err) {
-      onError(walletErrorMessage(err, 'FVB buy failed.'));
+      onError(walletErrorMessage(err, 'Wallet export was not completed.'));
     } finally {
-      setBuyPending(false);
+      setExportPending(false);
     }
-  }, [
-    aboveEligibilityMax,
-    address,
-    belowMinimum,
-    buyAmountWei,
-    buyPending,
-    buyQuoteWei,
-    onError,
-    refreshBalance,
-    refreshFvbBalance,
-    remainingEligibilityWei,
-    wallet,
-  ]);
+  }, [address, exportWallet, isEmbeddedWallet, onError, wallet]);
 
   return (
     <div className="mt-4 border-t dark:border-zinc-900 border-zinc-100 pt-4">
@@ -838,14 +756,10 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
           </button>
           <button
             type="button"
-            onClick={() => {
-              setMode('buy');
-              setBuyMessage('');
-              setBuyTxHash(null);
-            }}
+            onClick={() => setMode('buy')}
             className={`rounded px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${mode === 'buy' ? 'dark:bg-white dark:text-zinc-950 bg-zinc-950 text-white' : 'dark:text-zinc-500 text-zinc-500 hover:text-blue-500'}`}
           >
-            Buy FVB
+            Trade FVB
           </button>
         </div>
       </div>
@@ -864,41 +778,70 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
           </button>
         </div>
       ) : mode === 'withdraw' ? (
-        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_120px_auto]">
-          <input
-            value={recipient}
-            onChange={event => setRecipient(event.target.value)}
-            placeholder="Recipient wallet"
-            className="min-w-0 rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 text-sm dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400"
-          />
-          <div className="relative">
-            <input
-              value={amount}
-              onChange={event => setAmount(event.target.value.replace(/[^\d.]/g, ''))}
-              placeholder="0.00"
-              inputMode="decimal"
-              className="w-full rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 pr-11 text-sm tabular-nums dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400"
-            />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">OKB</span>
+        <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex rounded-md bg-zinc-100 p-0.5 dark:bg-zinc-900">
+              {(['OKB', 'FVB'] as const).map(asset => (
+                <button
+                  key={asset}
+                  type="button"
+                  onClick={() => {
+                    setWithdrawAsset(asset);
+                    setAmount('');
+                  }}
+                  className={`rounded px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${withdrawAsset === asset ? 'dark:bg-white dark:text-zinc-950 bg-zinc-950 text-white' : 'dark:text-zinc-500 text-zinc-500 hover:text-blue-500'}`}
+                >
+                  {asset}
+                </button>
+              ))}
+            </div>
+            <span className="text-[10px] font-medium dark:text-zinc-500 text-zinc-500">
+              {withdrawAsset === 'FVB' ? 'FVB transfers require a little OKB for gas.' : 'Send OKB on X Layer.'}
+            </span>
           </div>
-          {transferUsd && <div className="-mt-1 text-[10px] font-medium tabular-nums text-zinc-400 md:hidden">{transferUsd}</div>}
-          <button
-            type="button"
-            onClick={withdraw}
-            disabled={pending || !recipient.trim() || !amount.trim()}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Send size={13} />
-            {pending ? 'Confirming' : 'Send'}
-          </button>
-          {transferUsd && <div className="hidden text-[10px] font-medium tabular-nums text-zinc-400 md:block md:col-start-2">{transferUsd}</div>}
+          <div className="grid gap-2 md:grid-cols-[1fr_140px_auto]">
+            <input
+              value={recipient}
+              onChange={event => setRecipient(event.target.value)}
+              placeholder="Recipient wallet"
+              className="min-w-0 rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 text-sm dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400"
+            />
+            <div className="relative">
+              <input
+                value={amount}
+                onChange={event => setAmount(event.target.value.replace(/[^\d.]/g, ''))}
+                placeholder="0.00"
+                inputMode="decimal"
+                className="w-full rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 pr-12 text-sm tabular-nums dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">{withdrawAsset}</span>
+            </div>
+            {transferUsd && <div className="-mt-1 text-[10px] font-medium tabular-nums text-zinc-400 md:hidden">{transferUsd}</div>}
+            <button
+              type="button"
+              onClick={withdraw}
+              disabled={pending || !recipient.trim() || !amount.trim()}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Send size={13} />
+              {pending ? 'Confirming' : `Send ${withdrawAsset}`}
+            </button>
+            {transferUsd && <div className="hidden text-[10px] font-medium tabular-nums text-zinc-400 md:block md:col-start-2">{transferUsd}</div>}
+          </div>
+          {withdrawAsset === 'FVB' && (
+            <div className="mt-2 text-[10px] leading-4 dark:text-zinc-500 text-zinc-500">
+              Available: {formatFvbBalance(fvbBalanceWei)} FVB. Moving FVB out can affect this wallet's holder status.
+            </div>
+          )}
         </div>
       ) : (
         <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
-          <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-xs font-semibold dark:text-zinc-200 text-zinc-800">Buy FVB</div>
-              <div className="mt-0.5 text-[11px] dark:text-zinc-500 text-zinc-500">Minimum $10. Eligible room {remainingEligibilityWei === null ? 'syncing' : `${formatFvbBalance(remainingEligibilityWei)} FVB`}.</div>
+              <div className="text-xs font-semibold dark:text-zinc-200 text-zinc-800">Trade FVB with OKX Wallet</div>
+              <div className="mt-0.5 max-w-xl text-[11px] leading-4 dark:text-zinc-500 text-zinc-500">
+                $FVB has graduated. Trade with OKX Wallet on X Layer, then return here and refresh. Verified $FVB trading volume drives Matchday Cup entry and rank.
+              </div>
             </div>
             <button
               type="button"
@@ -911,81 +854,113 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             </button>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-            <div>
-              <div className="relative">
-                <input
-                  id="portfolio-fvb-buy"
-                  value={buyAmount}
-                  onChange={event => {
-                    setBuyAmount(event.target.value.replace(/[^\d.]/g, ''));
-                    setBuyMessage('');
-                    setBuyTxHash(null);
-                  }}
-                  placeholder="0.00"
-                  inputMode="decimal"
-                  className="w-full rounded-md border dark:border-zinc-800 border-zinc-200 dark:bg-zinc-950 bg-white px-3 py-2 pr-11 text-sm tabular-nums dark:text-zinc-100 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400"
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">OKB</span>
+          <FvbTradeSafety showTradeLink className="mt-3" />
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="grid gap-2 text-[11px] sm:grid-cols-3">
+              <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Trading entry</div>
+                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">$10+ verified volume</div>
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-1.5">
-                {okbUsd ? [10, 25, 50].map(usd => {
-                  const okbAmount = (usd / okbUsd).toFixed(4);
-                  return (
-                    <button
-                      key={usd}
-                      type="button"
-                      onClick={() => {
-                        setBuyAmount(okbAmount);
-                        setBuyMessage('');
-                        setBuyTxHash(null);
-                      }}
-                      className="rounded-md bg-zinc-100 px-2 py-1.5 text-xs font-semibold dark:bg-zinc-900 dark:text-zinc-400 text-zinc-500 transition-colors hover:text-blue-500"
-                    >
-                      ${usd}
-                    </button>
-                  );
-                }) : ['0.12', '0.25', '0.5'].map(okbAmount => (
-                  <button
-                    key={okbAmount}
-                    type="button"
-                    onClick={() => setBuyAmount(okbAmount)}
-                    className="rounded-md bg-zinc-100 px-2 py-1.5 text-xs font-semibold dark:bg-zinc-900 dark:text-zinc-400 text-zinc-500 transition-colors hover:text-blue-500"
-                  >
-                    {okbAmount} OKB
-                  </button>
-                ))}
+              <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Holding status</div>
+                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">
+                  {hasFvbEntryMinimum === null ? 'Syncing' : hasFvbEntryMinimum ? 'FVB held' : 'No FVB yet'}
+                </div>
+              </div>
+              <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Required wallet</div>
+                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">OKX app or extension</div>
               </div>
             </div>
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <a
+                href={FANVIBE_TOKEN_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => navigator.clipboard?.writeText(FANVIBE_TOKEN_ADDRESS).catch(() => {})}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-blue-500 sm:min-w-[140px]"
+              >
+                <Wallet size={13} />
+                Open OKX Trade
+                <ExternalLink size={12} />
+              </a>
+              <a
+                href={FANVIBE_OKX_WALLET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-md border dark:border-zinc-800 border-zinc-200 px-3 py-2.5 text-xs font-semibold dark:text-zinc-300 text-zinc-700 transition-colors hover:text-blue-500"
+              >
+                Get OKX Wallet
+                <ExternalLink size={12} />
+              </a>
+            </div>
+          </div>
+
+          <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
             <button
               type="button"
-              onClick={buyFvb}
-              disabled={buyPending || buyQuoteLoading || !canBuyFvb}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 md:min-w-[110px]"
+              onClick={() => setMigrationOpen(open => !open)}
+              className="inline-flex items-center gap-2 text-[11px] font-semibold dark:text-zinc-400 text-zinc-500 transition-colors hover:text-blue-500"
             >
-              <Wallet size={13} />
-              {buyPending ? 'Confirming' : 'Buy'}
+              <KeyRound size={13} />
+              Using email wallet? Move it to OKX Wallet
             </button>
+
+            {migrationOpen && (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-start gap-2 text-[11px] leading-5 dark:text-zinc-500 text-zinc-500">
+                  <ShieldCheck size={15} className="mt-0.5 shrink-0 text-blue-500" />
+                  <p>
+                    Export opens Privy's secure screen. FanVibe never sees your private key. Import it into OKX Wallet, switch to X Layer, then trade $FVB from OKX Wallet.
+                  </p>
+                </div>
+                <div className="grid gap-2 text-[11px] sm:grid-cols-3">
+                  <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                    <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 1</div>
+                    <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Export FanVibe wallet</div>
+                  </div>
+                  <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                    <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 2</div>
+                    <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Import private key in OKX</div>
+                  </div>
+                  <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                    <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 3</div>
+                    <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Trade on X Layer</div>
+                  </div>
+                </div>
+                <label className="flex items-start gap-2 text-[11px] leading-5 dark:text-zinc-500 text-zinc-500">
+                  <input
+                    type="checkbox"
+                    checked={migrationAcknowledged}
+                    onChange={event => setMigrationAcknowledged(event.target.checked)}
+                    className="mt-1 h-3.5 w-3.5 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950"
+                  />
+                  <span>I understand FanVibe will never ask me to paste this key back into FanVibe, and anyone with the key can control this wallet.</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={openSecureExport}
+                    disabled={!isEmbeddedWallet || !migrationAcknowledged || exportPending}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  >
+                    <KeyRound size={13} />
+                    {exportPending ? 'Opening secure export' : 'Open secure export'}
+                  </button>
+                  {!isEmbeddedWallet && (
+                    <span className="inline-flex items-center text-[11px] font-medium dark:text-zinc-500 text-zinc-500">This wallet is already external.</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-            <span className="font-medium tabular-nums dark:text-zinc-500 text-zinc-500">{buyAmountUsd ?? 'US$0.00'}</span>
-            <span className="font-semibold tabular-nums dark:text-zinc-300 text-zinc-700">{buyQuoteLoading ? 'Quoting...' : `${formatFvbBalance(buyQuoteWei)} FVB est.`}</span>
-          </div>
-
-          <div className="mt-2 min-h-[18px] text-[11px] font-medium">
-            {belowMinimum ? (
-              <span className="text-amber-600 dark:text-amber-300">Minimum buy is $10 worth of OKB.</span>
-            ) : remainingEligibilityWei === null ? (
-              <span className="dark:text-zinc-500 text-zinc-500">Syncing FVB balance before buy limits are applied.</span>
-            ) : aboveEligibilityMax ? (
-              <span className="text-amber-600 dark:text-amber-300">This buy is above your remaining 450K FVB eligibility room.</span>
-            ) : remainingEligibilityWei === 0n ? (
-              <span className="text-emerald-600 dark:text-emerald-300">This wallet already meets the FVB eligibility cap.</span>
-            ) : buyMessage ? (
-              <span className="text-emerald-600 dark:text-emerald-300">{buyMessage}</span>
+          <div className="mt-2 min-h-[18px] text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
+            {hasFvbEntryMinimum ? (
+              <span className="text-emerald-600 dark:text-emerald-300">This wallet holds FVB. Trade volume is still what enters and ranks the Matchday Cup.</span>
             ) : (
-              <span className="dark:text-zinc-600 text-zinc-400">Buy with the same wallet you use for match stakes.</span>
+              <span>Generate at least $10 verified $FVB trading volume on OKX to enter. Use the same wallet for trades and match stakes.</span>
             )}
           </div>
         </div>
@@ -998,12 +973,6 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
         </a>
       )}
 
-      {buyTxHash && (
-        <a href={explorerTx(buyTxHash)} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
-          View buy transaction
-          <ExternalLink size={11} />
-        </a>
-      )}
     </div>
   );
 }
@@ -1059,6 +1028,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
   }, [address]);
 
   useEffect(() => {
+    if (PRIVY_ENABLED) return;
     const provider = (window as typeof window & { ethereum?: { request: (args: { method: string }) => Promise<unknown> } }).ethereum;
     provider?.request({ method: 'eth_accounts' })
       .then((accounts: unknown) => {

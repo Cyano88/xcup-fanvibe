@@ -2,9 +2,11 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Wallet } from 'lucide-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { parseEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 import { xLayerMainnet } from '../lib/chain';
+import { xLayerPublicClient } from '../lib/publicClient';
 import { walletErrorMessage } from '../lib/walletErrors';
+import { isEmbeddedPrivyWallet, preferredFanVibeWallet } from '../lib/privyWallets';
 
 interface PrivyWalletStakeButtonProps {
   amountOKB: string;
@@ -19,8 +21,8 @@ interface PrivyWalletStakeButtonProps {
   onError?: (message: string) => void;
 }
 
-function isEmbeddedWallet(walletClientType: string) {
-  return walletClientType === 'privy' || walletClientType === 'privy-v2';
+function formatLowBalance(required: bigint, available: bigint): string {
+  return `Connected wallet has ${formatEther(available)} OKB on X Layer, but this stake needs ${formatEther(required)} OKB.`;
 }
 
 export function PrivyWalletStakeButton({
@@ -39,7 +41,7 @@ export function PrivyWalletStakeButton({
   const { wallets } = useWallets();
   const [pending, setPending] = useState(false);
 
-  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const externalWallet = preferredFanVibeWallet(wallets.filter(wallet => !isEmbeddedPrivyWallet(wallet.walletClientType)));
 
   const handleStake = async () => {
     if (!ready) return;
@@ -60,10 +62,15 @@ export function PrivyWalletStakeButton({
       if (amountWei <= 0n) throw new Error('Invalid stake amount');
 
       const provider = await externalWallet.getEthereumProvider();
+      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+      const from = accounts[0] ?? externalWallet.address;
+      const balance = await xLayerPublicClient.getBalance({ address: from as `0x${string}` });
+      if (balance < amountWei) throw new Error(formatLowBalance(amountWei, balance));
+
       const hash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{
-          from: externalWallet.address,
+          from,
           to: refereeAddress,
           value: `0x${amountWei.toString(16)}`,
           data: calldata,
@@ -71,7 +78,7 @@ export function PrivyWalletStakeButton({
         }],
       }) as `0x${string}`;
 
-      onSuccess?.(hash, amountWei, externalWallet.address);
+      onSuccess?.(hash, amountWei, from);
     } catch (err) {
       onError?.(walletErrorMessage(err, 'Wallet stake failed'));
     } finally {

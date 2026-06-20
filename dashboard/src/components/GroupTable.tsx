@@ -72,7 +72,7 @@ function buildGroup(
 }
 
 export function GroupTable({ fixtures, matchStates, selectedGroup }: Props) {
-  const realtimeFixtures = fixtures.filter(f => f.mode === 'realtime' && (!selectedGroup || f.group === selectedGroup));
+  const realtimeFixtures = fixtures.filter(f => f.mode === 'realtime' && !f.round && (!selectedGroup || f.group === selectedGroup));
   if (realtimeFixtures.length === 0) return null;
 
   const groups = [...new Set(realtimeFixtures.map(f => f.group))].sort();

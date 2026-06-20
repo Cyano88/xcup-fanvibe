@@ -3,10 +3,7 @@ import { formatEther, parseEther } from 'viem';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { xLayerPublicClient } from '../lib/publicClient';
 import { formatOkbUsdFromWei, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
-
-function isEmbeddedWallet(walletClientType: string) {
-  return walletClientType === 'privy' || walletClientType === 'privy-v2';
-}
+import { preferredFanVibeWallet } from '../lib/privyWallets';
 
 function formatOKB(value: bigint): string {
   const n = Number(formatEther(value));
@@ -21,9 +18,7 @@ export function PrivyBalanceHint({ amountOKB }: { amountOKB: string }) {
   const okbUsd = useOkbUsdPrice();
 
   const wallet = useMemo(
-    () => wallets.find(candidate => !isEmbeddedWallet(candidate.walletClientType))
-      ?? wallets.find(candidate => isEmbeddedWallet(candidate.walletClientType))
-      ?? null,
+    () => preferredFanVibeWallet(wallets) ?? null,
     [wallets],
   );
 
@@ -43,20 +38,25 @@ export function PrivyBalanceHint({ amountOKB }: { amountOKB: string }) {
       return;
     }
 
-    xLayerPublicClient.getBalance({ address: wallet.address as `0x${string}` })
-      .then(nextBalance => {
-        if (cancelled) return;
-        setBalance(nextBalance);
-        setCheckedAddress(wallet.address);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setBalance(null);
-        setCheckedAddress(wallet.address);
-      });
+    const refresh = () => {
+      xLayerPublicClient.getBalance({ address: wallet.address as `0x${string}` })
+        .then(nextBalance => {
+          if (cancelled) return;
+          setBalance(nextBalance);
+          setCheckedAddress(wallet.address);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setCheckedAddress(wallet.address);
+        });
+    };
+
+    refresh();
+    const timer = window.setInterval(refresh, 5000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [authenticated, wallet]);
 

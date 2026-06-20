@@ -11,6 +11,7 @@ import {
 import { parseEther } from 'viem';
 import { xLayerMainnet } from '../lib/chain';
 import { walletErrorMessage } from '../lib/walletErrors';
+import { isEmbeddedPrivyWallet } from '../lib/privyWallets';
 
 interface PrivyStakeButtonProps {
   amountOKB: string;
@@ -26,10 +27,6 @@ interface PrivyStakeButtonProps {
 }
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
-
-function isEmbeddedWallet(walletClientType: string) {
-  return walletClientType === 'privy' || walletClientType === 'privy-v2';
-}
 
 export function PrivyStakeButton({
   amountOKB,
@@ -54,7 +51,7 @@ export function PrivyStakeButton({
   const [walletSyncing, setWalletSyncing] = useState(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const embeddedWallet = wallets.find(wallet => isEmbeddedWallet(wallet.walletClientType))
+  const embeddedWallet = wallets.find(wallet => isEmbeddedPrivyWallet(wallet.walletClientType))
     ?? getEmbeddedConnectedWallet(wallets);
   const stakeWalletAddress = embeddedWallet?.address ?? null;
 

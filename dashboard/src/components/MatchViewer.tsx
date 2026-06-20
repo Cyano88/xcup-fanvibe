@@ -5,6 +5,7 @@ import type { Fixture, MatchState, MatchEvent } from '../types';
 import { getSquad } from '../lib/squadData';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { baseFixtureId } from '../lib/seasonTournament';
+import { preferredFanVibeWallet } from '../lib/privyWallets';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const BROADCAST_FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
@@ -883,13 +884,15 @@ function RealtimeLiveCenter({
             <span className="text-zinc-500">Venue</span>
             <span className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{fixture.stadium?.name ?? fixture.venue}</span>
           </div>
+          {fixture.stadium?.city && (
+            <div className="flex justify-between gap-3">
+              <span className="text-zinc-500">City</span>
+              <span className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{fixture.stadium.city}</span>
+            </div>
+          )}
           <div className="flex justify-between gap-3">
-            <span className="text-zinc-500">City</span>
-            <span className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{fixture.stadium?.city ?? fixture.venue}</span>
-          </div>
-          <div className="flex justify-between gap-3">
-            <span className="text-zinc-500">Group</span>
-            <span className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{fixture.round ?? `Group ${fixture.group}`}</span>
+            <span className="text-zinc-500">{fixture.round ? 'Stage' : 'Group'}</span>
+            <span className="text-right font-semibold text-zinc-900 dark:text-zinc-100">{fixture.round ? (knockoutStageLabel(fixture.round) ?? fixture.round) : `Group ${fixture.group}`}</span>
           </div>
           <div className="flex justify-between gap-3">
             <span className="text-zinc-500">Kickoff</span>
@@ -1098,7 +1101,7 @@ function MatchChat({ fixtureId }: { fixtureId: string }) {
   const [posting, setPosting] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const { wallets } = useWallets();
-  const activeWallet = wallets[0];
+  const activeWallet = preferredFanVibeWallet(wallets);
   const user = fanDisplayName(walletAddress, profileName);
 
   const load = useCallback(async () => {

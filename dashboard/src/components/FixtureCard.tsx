@@ -3,12 +3,20 @@ import { AlarmClock, Check, Lock, MonitorPlay, Share2, TrendingUp, Zap } from 'l
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Pool, Outcome, MatchState } from '../types';
 import { encodeStakeCalldata, formatPool, countdown } from '../lib/encode';
-import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { formatOkbUsdFromWei, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
 import { reportStakeTx } from '../lib/stakeReport';
-import { FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
+import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
+import {
+  cleanStakeUsdInput,
+  minStakeMessage,
+  normalizedStakeUsd,
+  STAKE_MIN_USD,
+  usdToOkbAmount,
+} from '../lib/stakeMinimum';
+import { isEmbeddedPrivyWallet, preferredFanVibeWallet } from '../lib/privyWallets';
 
 interface Props {
   fixture: Fixture;
@@ -28,8 +36,6 @@ interface Props {
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
-const MIN_STAKE_OKB = 0.001;
-const MIN_STAKE_OKB_LABEL = '0.001';
 const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
 
 const FLAG_URL = (iso: string) =>
@@ -97,29 +103,6 @@ function formatShortDuration(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function isEmbeddedWallet(walletClientType: string) {
-  return walletClientType === 'privy' || walletClientType === 'privy-v2';
-}
-
-function cleanStakeAmountInput(value: string) {
-  const normalized = value.replace(',', '.');
-  if (normalized === '') return '';
-  if (!/^\d*(?:\.\d*)?$/.test(normalized)) return null;
-  const numericValue = Number(normalized);
-  if (Number.isFinite(numericValue) && numericValue > 0 && numericValue < MIN_STAKE_OKB) return MIN_STAKE_OKB_LABEL;
-  const [whole = '', decimals = ''] = normalized.split('.');
-  const trimmedWhole = whole.replace(/^0+(?=\d)/, '') || (whole.startsWith('0') ? '0' : whole);
-  return decimals !== undefined && normalized.includes('.')
-    ? `${trimmedWhole}.${decimals.slice(0, 3)}`
-    : trimmedWhole;
-}
-
-function normalizedStakeAmount(value: string) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return '';
-  return amount < MIN_STAKE_OKB ? MIN_STAKE_OKB_LABEL : amount.toFixed(3).replace(/\.?0+$/, '');
-}
-
 function PrimaryMatchStakeAction({
   amountOKB,
   calldata,
@@ -139,11 +122,12 @@ function PrimaryMatchStakeAction({
 }) {
   const { authenticated } = usePrivy();
   const { wallets } = useWallets();
-  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const activeWallet = preferredFanVibeWallet(wallets);
+  const externalWallet = activeWallet && !isEmbeddedPrivyWallet(activeWallet.walletClientType) ? activeWallet : null;
   const className = 'inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
   const label = authenticated || externalWallet ? 'Stake ->' : 'Sign in to stake';
 
-  if (!authenticated && externalWallet) {
+  if (externalWallet) {
     return (
       <PrivyWalletStakeButton
         amountOKB={amountOKB}
@@ -198,20 +182,22 @@ export function FixtureCard({
   }
   const { user } = usePrivy();
   const { wallets } = useWallets();
-  const connectedAddress = user?.wallet?.address ?? wallets[0]?.address ?? null;
+  const connectedAddress = preferredFanVibeWallet(wallets)?.address ?? user?.wallet?.address ?? null;
 
   const [showHome, setShowHome]   = useState(true);
   const [hovered, setHovered]     = useState(false);
   const [tick, setTick]           = useState(0);
   const [stakeOutcome, setStakeOutcome] = useState<Outcome | null>(null);
-  const [stakeAmount, setStakeAmount] = useState('0.01');
+  const [stakeAmountUsd, setStakeAmountUsd] = useState(String(STAKE_MIN_USD));
   const [stakeError, setStakeError] = useState<string | null>(null);
   const [stakeHash, setStakeHash] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const okbUsd = useOkbUsdPrice();
-  const stakeUsd = formatStakeUsd(stakeAmount, okbUsd);
-  const stakeAmountNumber = Number(stakeAmount);
-  const stakeAmountValid = Number.isFinite(stakeAmountNumber) && stakeAmountNumber >= MIN_STAKE_OKB;
+  const minStakeMsg = minStakeMessage(okbUsd);
+  const stakeAmount = usdToOkbAmount(stakeAmountUsd, okbUsd);
+  const stakeAmountUsdNumber = Number(stakeAmountUsd);
+  const stakeAmountValid = Number.isFinite(stakeAmountUsdNumber) && stakeAmountUsdNumber >= STAKE_MIN_USD && Number(stakeAmount) > 0;
+  const stakeOkbEquivalentLabel = stakeAmount ? `${stakeAmount} OKB` : 'OKB quote loading';
   const isSeasonPlay = fixture.mode === 'simulated';
   const isLiveMatch = matchState?.status === 'live' || matchState?.status === 'half_time';
   const isFinishedMatch = matchState?.status === 'finished';
@@ -323,7 +309,7 @@ export function FixtureCard({
 
   const checkStakeOpen = useCallback(async () => {
     if (!stakeAmountValid) {
-      setStakeError(`Minimum stake is ${MIN_STAKE_OKB_LABEL} OKB.`);
+      setStakeError(minStakeMsg);
       return false;
     }
     if (!onStake(fixture.id, stakeOutcome ?? 'home')) return false;
@@ -340,7 +326,7 @@ export function FixtureCard({
       return true;
     }
     return true;
-  }, [fixture.id, onStake, stakeAmountValid, stakeOutcome]);
+  }, [fixture.id, minStakeMsg, onStake, stakeAmountValid, stakeOutcome]);
 
   const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(parseProviderTime(fixture.kickoff)).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
@@ -348,6 +334,7 @@ export function FixtureCard({
 
   return (
     <div
+      data-fixture-id={fixture.id}
       className={`rounded-lg overflow-hidden shadow-sm transition-all duration-300 border
         dark:bg-zinc-950 bg-white
         ${isSettled
@@ -679,23 +666,24 @@ export function FixtureCard({
             <div className="mt-3 grid gap-2">
               <div className="grid min-w-0 gap-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-2">
                 <div className="flex h-9 min-w-0 items-center gap-1 dark:bg-zinc-950 bg-white border dark:border-zinc-800 border-zinc-200 rounded-lg px-2">
+                  <span className="shrink-0 text-xs font-bold dark:text-zinc-400 text-zinc-500">$</span>
                   <input
                     type="number"
-                    step="0.001"
-                    min={MIN_STAKE_OKB_LABEL}
+                    step="1"
+                    min={STAKE_MIN_USD}
                     inputMode="decimal"
-                    value={stakeAmount}
+                    value={stakeAmountUsd}
                     onChange={event => {
                       setStakeError(null);
-                      const next = cleanStakeAmountInput(event.target.value);
-                      if (next !== null) setStakeAmount(next);
+                      const next = cleanStakeUsdInput(event.target.value);
+                      if (next !== null) setStakeAmountUsd(next);
                     }}
-                    onBlur={() => setStakeAmount(current => normalizedStakeAmount(current) || MIN_STAKE_OKB_LABEL)}
+                    onBlur={() => setStakeAmountUsd(current => normalizedStakeUsd(current) || String(STAKE_MIN_USD))}
                     className="w-full min-w-0 bg-transparent text-sm font-semibold dark:text-zinc-100 text-zinc-800 outline-none"
                   />
-                  <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
+                  <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">USD</span>
                 </div>
-                {stakeUsd && <span className="shrink-0 whitespace-nowrap text-left text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400 sm:text-right">{stakeUsd}</span>}
+                <span className="shrink-0 whitespace-nowrap text-left text-[11px] font-medium tabular-nums dark:text-zinc-600 text-zinc-400 sm:text-right">{stakeOkbEquivalentLabel}</span>
               </div>
               {PRIVY_ENABLED && (
                 <PrimaryMatchStakeAction
@@ -718,7 +706,7 @@ export function FixtureCard({
             </div>
             {!stakeAmountValid && (
               <p className="mt-2 text-[11px] font-medium dark:text-zinc-600 text-zinc-500">
-                Minimum stake is {MIN_STAKE_OKB_LABEL} OKB.
+                {minStakeMsg}
               </p>
             )}
             {PRIVY_ENABLED && <div className="mt-2"><PrivyBalanceHint amountOKB={stakeAmount} /></div>}
@@ -765,16 +753,17 @@ export function FixtureCard({
             <button onClick={() => setStakeHash(null)} className="ml-auto text-zinc-500 hover:text-zinc-300">x</button>
           </div>
           <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
-            Hold FVB with this wallet to qualify for Matchday Cup rewards. Share this match with your invite link.
+            Trade $10+ FVB with this wallet to enter. Only use OKX Wallet / OKX DEX on X Layer for $FVB trades.
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <a
               href={FANVIBE_TOKEN_URL}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => navigator.clipboard?.writeText(FANVIBE_TOKEN_ADDRESS).catch(() => {})}
               className="rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-bold text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
             >
-              Buy FVB
+              Trade with OKX
             </a>
             <button
               onClick={onOpenLeaderboard}

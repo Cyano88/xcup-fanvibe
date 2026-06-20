@@ -4,10 +4,18 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import type { Fixture, Outcome } from '../types';
 import { encodeStakeCalldata } from '../lib/encode';
 import { CHAIN_ID_HEX, X_LAYER_RPC_URLS, explorerTx } from '../lib/chain';
-import { formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
+import { useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
+import {
+  cleanStakeUsdInput,
+  minStakeMessage,
+  normalizedStakeUsd,
+  STAKE_MIN_USD,
+  usdToOkbAmount,
+} from '../lib/stakeMinimum';
+import { isEmbeddedPrivyWallet, preferredFanVibeWallet } from '../lib/privyWallets';
 
 interface Props {
   fixture: Fixture;
@@ -20,8 +28,6 @@ interface Props {
 type Step = 'configure' | 'pending' | 'confirmed' | 'error';
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
-const MIN_STAKE_OKB = 0.001;
-const MIN_STAKE_OKB_LABEL = '0.001';
 
 const OUTCOME_LABEL: Record<Outcome, string> = {
   home: 'Home Win',
@@ -35,31 +41,9 @@ const OUTCOME_COLOR: Record<Outcome, string> = {
   away: 'border-blue-400/60 bg-blue-500/14 text-blue-100',
 };
 
-function isEmbeddedWallet(walletClientType: string) {
-  return walletClientType === 'privy' || walletClientType === 'privy-v2';
-}
-
-function cleanStakeAmountInput(value: string) {
-  const normalized = value.replace(',', '.');
-  if (normalized === '') return '';
-  if (!/^\d*(?:\.\d*)?$/.test(normalized)) return null;
-  const numericValue = Number(normalized);
-  if (Number.isFinite(numericValue) && numericValue > 0 && numericValue < MIN_STAKE_OKB) return MIN_STAKE_OKB_LABEL;
-  const [whole = '', decimals = ''] = normalized.split('.');
-  const trimmedWhole = whole.replace(/^0+(?=\d)/, '') || (whole.startsWith('0') ? '0' : whole);
-  return decimals !== undefined && normalized.includes('.')
-    ? `${trimmedWhole}.${decimals.slice(0, 3)}`
-    : trimmedWhole;
-}
-
-function normalizedStakeAmount(value: string) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return '';
-  return amount < MIN_STAKE_OKB ? MIN_STAKE_OKB_LABEL : amount.toFixed(3).replace(/\.?0+$/, '');
-}
-
 function PrimaryStakeAction({
   amountOKB,
+  amountUsd,
   calldata,
   refereeAddress,
   disabled,
@@ -68,6 +52,7 @@ function PrimaryStakeAction({
   onError,
 }: {
   amountOKB: string;
+  amountUsd: string;
   calldata: `0x${string}`;
   refereeAddress: string;
   disabled?: boolean;
@@ -77,9 +62,10 @@ function PrimaryStakeAction({
 }) {
   const { authenticated } = usePrivy();
   const { wallets } = useWallets();
-  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const activeWallet = preferredFanVibeWallet(wallets);
+  const externalWallet = activeWallet && !isEmbeddedPrivyWallet(activeWallet.walletClientType) ? activeWallet : null;
   const className = 'inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
-  const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB` : 'Sign in to stake';
+  const label = authenticated || externalWallet ? `Stake $${amountUsd || STAKE_MIN_USD}` : 'Sign in to stake';
 
   if (externalWallet) {
     return (
@@ -118,18 +104,20 @@ function PrimaryStakeAction({
 
 export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, onStakeClosed }: Props) {
   const [outcome, setOutcome] = useState<Outcome>(defaultOutcome);
-  const [amount, setAmount] = useState('0.01');
+  const [amountUsd, setAmountUsd] = useState(String(STAKE_MIN_USD));
   const [step, setStep] = useState<Step>('configure');
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const okbUsd = useOkbUsdPrice();
-  const stakeUsd = formatStakeUsd(amount, okbUsd);
-  const amountNumber = Number(amount);
-  const amountValid = Number.isFinite(amountNumber) && amountNumber >= MIN_STAKE_OKB;
+  const minStakeMsg = minStakeMessage(okbUsd);
+  const amount = usdToOkbAmount(amountUsd, okbUsd);
+  const amountUsdNumber = Number(amountUsd);
+  const amountValid = Number.isFinite(amountUsdNumber) && amountUsdNumber >= STAKE_MIN_USD && Number(amount) > 0;
+  const okbEquivalentLabel = amount ? `${amount} OKB` : 'OKB quote loading';
 
   const handleStake = useCallback(async () => {
     if (!amountValid) {
-      setError(`Minimum stake is ${MIN_STAKE_OKB_LABEL} OKB.`);
+      setError(minStakeMsg);
       setStep('error');
       return;
     }
@@ -222,7 +210,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
 
   const checkStakeOpen = useCallback(async () => {
     if (!amountValid) {
-      setError(`Minimum stake is ${MIN_STAKE_OKB_LABEL} OKB.`);
+      setError(minStakeMsg);
       return false;
     }
     const controller = new AbortController();
@@ -304,41 +292,40 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
 
               {/* Amount */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-200">Stake Amount (OKB)</label>
+                <label className="text-xs font-semibold text-zinc-200">Stake Amount (USD)</label>
                 <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-zinc-300 shrink-0">$</span>
                   <input
                     type="number"
-                    value={amount}
+                    value={amountUsd}
                     onChange={(e) => {
-                      const next = cleanStakeAmountInput(e.target.value);
-                      if (next !== null) setAmount(next);
+                      const next = cleanStakeUsdInput(e.target.value);
+                      if (next !== null) setAmountUsd(next);
                     }}
-                    onBlur={() => setAmount(current => normalizedStakeAmount(current) || MIN_STAKE_OKB_LABEL)}
-                    min={MIN_STAKE_OKB_LABEL}
-                    step="0.001"
+                    onBlur={() => setAmountUsd(current => normalizedStakeUsd(current) || String(STAKE_MIN_USD))}
+                    min={STAKE_MIN_USD}
+                    step="1"
                     inputMode="decimal"
                     className="flex-1 bg-zinc-950/78 border border-white/10 rounded-lg px-3 py-2 text-sm font-semibold text-white
                       focus:outline-none transition-colors"
                   />
-                  <span className="text-xs font-semibold text-zinc-300 shrink-0">OKB</span>
+                  <span className="text-xs font-semibold text-zinc-300 shrink-0">USD</span>
                 </div>
                 <div className="flex gap-2">
-                  {['0.01', '0.05', '0.1', '0.5'].map((v) => (
-                    <button key={v} onClick={() => setAmount(v)}
+                  {['1', '5', '10', '25'].map((v) => (
+                    <button key={v} onClick={() => setAmountUsd(v)}
                       className="text-xs px-2 py-1 rounded border border-white/10 bg-zinc-950/70 text-zinc-300 hover:text-white hover:bg-white/10 transition-colors">
-                      {v}
+                      ${v}
                     </button>
                   ))}
                 </div>
-                {stakeUsd && (
-                  <div className="text-[11px] font-medium text-zinc-500">
-                    Approx. {stakeUsd} USD
-                  </div>
-                )}
+                <div className="text-[11px] font-medium text-zinc-500">
+                  Equivalent: {okbEquivalentLabel} on X Layer
+                </div>
                 {PRIVY_ENABLED && <PrivyBalanceHint amountOKB={amount} />}
                 {!amountValid && (
                   <div className="text-[11px] font-medium text-zinc-500">
-                    Minimum stake is {MIN_STAKE_OKB_LABEL} OKB.
+                    {minStakeMsg}
                   </div>
                 )}
               </div>
@@ -349,6 +336,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
               {PRIVY_ENABLED ? (
                 <PrimaryStakeAction
                   amountOKB={amount}
+                  amountUsd={normalizedStakeUsd(amountUsd) || String(STAKE_MIN_USD)}
                   calldata={encodeStakeCalldata(fixture.id, outcome)}
                   refereeAddress={refereeAddress}
                   disabled={!amountValid}
@@ -372,7 +360,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
             <div className="flex flex-col items-center gap-3 py-4">
               <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
               <div className="text-center text-sm font-semibold text-zinc-300">Confirm in wallet...</div>
-              <div className="text-center text-xs text-zinc-500">Sending {amount} OKB{stakeUsd ? ` (${stakeUsd})` : ''} on X Layer Mainnet</div>
+              <div className="text-center text-xs text-zinc-500">Sending ${amountUsd} ({okbEquivalentLabel}) on X Layer Mainnet</div>
             </div>
           )}
 
@@ -385,7 +373,7 @@ export function StakeModal({ fixture, defaultOutcome, refereeAddress, onClose, o
                 <span className="text-sm font-medium">Stake confirmed</span>
               </div>
               <div className="text-xs text-zinc-500">
-                Your stake of <span className="text-zinc-300">{amount} OKB{stakeUsd ? ` (${stakeUsd})` : ''}</span> on{' '}
+                Your stake of <span className="text-zinc-300">${amountUsd} ({okbEquivalentLabel})</span> on{' '}
                 <span className="text-zinc-300">{OUTCOME_LABEL[outcome]}</span> is live on-chain.
               </div>
               <a

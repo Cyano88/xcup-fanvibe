@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
-import { fanDisplayName, getStoredProfileName, shortWallet } from '../lib/fanProfile';
+import { fanDisplayName, shortWallet } from '../lib/fanProfile';
 import { explorerAddr } from '../lib/chain';
+import { FvbTradeSafety } from './FvbTradeSafety';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
@@ -24,13 +25,25 @@ interface MatchdayEntry {
   score?: number;
   scoreComponents?: {
     volume: number;
+    trading?: number;
     wins: number;
     active: number;
     participation: number;
   };
+  fvbTradeVolumeWei?: string;
+  fvbTradeVolumeOkbWei?: string;
+  fvbTradeTransfers?: number;
+  fvbLastTradeAt?: number;
+  fvbTradeEntryMinimumUsd?: number;
+  fvbTradeEntryMinimumOkbWei?: string;
+  fvbTradePrizeMinimumUsd?: number;
+  fvbTradePrizeMinimumOkbWei?: string;
+  fvbTradeEligible?: boolean;
+  fvbPrizeEligible?: boolean;
   fvbBalanceWei?: string | null;
   fvbEligibleWei?: string | null;
-  fvbEligibilityCapWei?: string;
+  fvbEligibilityCapWei?: string | null;
+  fvbEntryMinimumUsd?: number;
   fvbEligible?: boolean | null;
 }
 
@@ -45,6 +58,19 @@ interface CountrySupportEntry {
   lastActiveAt: number;
 }
 
+interface FvbHolderEntry {
+  rank: number;
+  address: string;
+  displayName?: string;
+  fvbBalanceWei: string;
+  fvbValueOkbWei?: string | null;
+  fvbTradeVolumeWei?: string;
+  fvbTradeVolumeOkbWei?: string;
+  fvbTradeTransfers?: number;
+  fvbLastTradeAt?: number;
+  fvbEntryMinimumUsd?: number;
+}
+
 interface Props {
   okbUsd: number | null;
   address?: string | null;
@@ -54,12 +80,17 @@ interface Props {
 interface MatchdayActivityMeta {
   totalFans: number;
   eligibleFans: number;
+  prizeEligibleFans?: number;
   pendingFvbFans: number;
   syncingFvbFans: number;
 }
 
 interface ScoreRules {
   volumePointOKB?: string;
+  fvbTradeVolumePointOKB?: string;
+  fvbTradeEntryMinimumUsd?: number;
+  fvbTradePrizeMinimumUsd?: number;
+  fvbTradeScope?: string;
   winBonus: number;
   activeBonus: number;
   positionBonus: number;
@@ -96,6 +127,7 @@ function scoreBreakdown(entry: MatchdayEntry): string {
   const parts = entry.scoreComponents;
   if (!parts) return `${entry.positions} stake${entry.positions === 1 ? '' : 's'}`;
   return [
+    `FVB trade ${formatScore(parts.trading ?? 0)}`,
     `Volume ${formatScore(parts.volume)}`,
     `Wins ${formatScore(parts.wins)}`,
     `Active ${formatScore(parts.active)}`,
@@ -104,8 +136,8 @@ function scoreBreakdown(entry: MatchdayEntry): string {
 }
 
 function scoreRulesLabel(rules: ScoreRules | null): string {
-  if (!rules) return 'Score updates from real World Cup stakes, wins, active predictions, and participation.';
-  return `Scoring: 1 pt / ${rules.volumePointOKB ?? '0.001'} OKB, +${formatScore(rules.winBonus)} per win, +${formatScore(rules.activeBonus)} per active pick, +${formatScore(rules.positionBonus)} per stake.`;
+  if (!rules) return 'Trade $FVB on OKX to enter. Match stakes, wins, country backing, and holding add boost/status.';
+  return `Enter with $${rules.fvbTradeEntryMinimumUsd ?? 10}+ verified FVB trading volume. Prize-qualified wallets need $${rules.fvbTradePrizeMinimumUsd ?? 250}+ clean volume; match activity and wins boost rank.`;
 }
 
 function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
@@ -116,16 +148,19 @@ const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
 export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Props) {
-  const [activeBoard, setActiveBoard] = useState<'matchday' | 'countries'>('matchday');
+  const [activeBoard, setActiveBoard] = useState<'matchday' | 'holders' | 'countries'>('matchday');
   const [matchdayEntries, setMatchdayEntries] = useState<MatchdayEntry[]>([]);
+  const [fvbHolders, setFvbHolders] = useState<FvbHolderEntry[]>([]);
   const [countrySupport, setCountrySupport] = useState<CountrySupportEntry[]>([]);
   const [myRank, setMyRank] = useState<MatchdayEntry | null>(null);
   const [myRankLoaded, setMyRankLoaded] = useState(false);
   const [matchdayLoaded, setMatchdayLoaded] = useState(false);
+  const [holdersLoaded, setHoldersLoaded] = useState(false);
   const [supportLoaded, setSupportLoaded] = useState(false);
   const [matchdayActivity, setMatchdayActivity] = useState<MatchdayActivityMeta | null>(null);
   const [scoreRules, setScoreRules] = useState<ScoreRules | null>(null);
   const [visibleMatchday, setVisibleMatchday] = useState(LEADERBOARD_BATCH_SIZE);
+  const [visibleHolders, setVisibleHolders] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleCountries, setVisibleCountries] = useState(LEADERBOARD_BATCH_SIZE);
 
   useEffect(() => {
@@ -188,6 +223,30 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   useEffect(() => {
     let cancelled = false;
     const refresh = () => {
+      fetch(`${BACKEND_HTTP}/matchday-cup/fvb-holders?limit=50`)
+        .then(res => res.ok ? res.json() : Promise.reject(new Error('fvb holders')))
+        .then((data: { entries?: FvbHolderEntry[] }) => {
+          if (cancelled) return;
+          setFvbHolders(data.entries ?? []);
+          setHoldersLoaded(true);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setFvbHolders([]);
+          setHoldersLoaded(true);
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
       fetch(`${BACKEND_HTTP}/matchday-cup/country-support?limit=50`)
         .then(res => res.ok ? res.json() : Promise.reject(new Error('country support')))
         .then((data: { entries?: CountrySupportEntry[] }) => {
@@ -210,14 +269,23 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   }, []);
 
   const visibleMatchdayRows = matchdayEntries.slice(0, visibleMatchday);
+  const visibleHolderRows = fvbHolders.slice(0, visibleHolders);
   const visibleCountryRows = countrySupport.slice(0, visibleCountries);
-  const activeRowsLoaded = activeBoard === 'matchday' ? matchdayLoaded : supportLoaded;
+  const activeRowsLoaded = activeBoard === 'matchday'
+    ? matchdayLoaded
+    : activeBoard === 'holders'
+      ? holdersLoaded
+      : supportLoaded;
   const hasMoreRows = activeBoard === 'matchday'
     ? visibleMatchday < matchdayEntries.length
-    : visibleCountries < countrySupport.length;
+    : activeBoard === 'holders'
+      ? visibleHolders < fvbHolders.length
+      : visibleCountries < countrySupport.length;
   const showMoreRows = () => {
     if (activeBoard === 'matchday') {
       setVisibleMatchday(count => Math.min(count + LEADERBOARD_BATCH_SIZE, matchdayEntries.length));
+    } else if (activeBoard === 'holders') {
+      setVisibleHolders(count => Math.min(count + LEADERBOARD_BATCH_SIZE, fvbHolders.length));
     } else {
       setVisibleCountries(count => Math.min(count + LEADERBOARD_BATCH_SIZE, countrySupport.length));
     }
@@ -237,11 +305,12 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 Matchday leaderboard
               </div>
               <h3 className="mt-2 text-2xl font-semibold leading-tight tracking-tight text-white">
-                Top fans chasing the $200 Matchday Cup.
+                Top fans chasing the $500 Matchday Cup.
               </h3>
               <p className="mt-1 max-w-2xl text-sm leading-5 text-zinc-200/90">
-                Rankings come from OKB stakes placed on live World Cup match predictions. Hold $FVB for entry and use the same wallet for stakes.
+                Trade $FVB through OKX Wallet to enter. Match stakes, wins, country backing, and holding add boost/status while verified trading volume drives the board.
               </p>
+              <FvbTradeSafety compact showTradeLink className="mt-3 max-w-2xl" />
             </div>
             <button
               type="button"
@@ -260,16 +329,18 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
             <div className="mb-3 rounded-lg border dark:border-zinc-900 border-zinc-200 dark:bg-zinc-900/45 bg-zinc-50 px-3 py-3">
               {myRankLoaded && myRank ? (() => {
                 const volumeUsd = compactUsd(formatOkbUsdFromWei(myRank.volumeWei, okbUsd));
-                const fvbStatus = myRank.fvbEligible === null || myRank.fvbEligible === undefined
-                  ? 'FVB syncing'
-                  : myRank.fvbEligible
-                    ? `${formatFvbBalance(myRank.fvbEligibleWei)} FVB eligible`
-                    : 'Needs FVB';
+                const tradeUsd = compactUsd(formatOkbUsdFromWei(myRank.fvbTradeVolumeOkbWei ?? '0', okbUsd));
+                const fvbStatus = myRank.fvbEligible
+                  ? `${formatFvbBalance(myRank.fvbEligibleWei)} FVB held`
+                  : 'Hold FVB for boost';
+                const tradeStatus = myRank.fvbPrizeEligible
+                  ? 'Prize qualified'
+                  : myRank.fvbTradeEligible
+                    ? `Entered - $${myRank.fvbTradePrizeMinimumUsd ?? 250}+ volume for prize tier`
+                    : `Trade $${myRank.fvbTradeEntryMinimumUsd ?? 10}+ FVB to enter`;
                 const rankStatus = myRank.rank
-                  ? fvbStatus
-                  : myRank.fvbEligible === false && (myRank.score ?? 0) > 0
-                    ? 'Activity recorded. Hold FVB to enter the ranked board.'
-                    : fvbStatus;
+                  ? `${tradeStatus}. ${fvbStatus}.`
+                  : tradeStatus;
                 return (
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
                     <div className="min-w-0">
@@ -281,6 +352,11 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         <span className="text-sm font-bold tabular-nums dark:text-zinc-300 text-zinc-700">
                           {formatScore(myRank.score)} pts
                         </span>
+                        {myRank.fvbPrizeEligible && (
+                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
+                            Prize eligible
+                          </span>
+                        )}
                         <span className="truncate text-xs font-semibold dark:text-zinc-500 text-zinc-500">
                           {shortWallet(myRank.address)}
                         </span>
@@ -291,6 +367,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {(myRank.scoreComponents
                           ? [
+                              ['FVB trade', myRank.scoreComponents.trading ?? 0],
                               ['Volume', myRank.scoreComponents.volume],
                               ['Wins', myRank.scoreComponents.wins],
                               ['Active', myRank.scoreComponents.active],
@@ -306,7 +383,12 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         ))}
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-right sm:min-w-[260px]">
+                    <div className="grid grid-cols-4 gap-2 text-right sm:min-w-[320px]">
+                      <div>
+                        <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{formatOkbVolume(myRank.fvbTradeVolumeOkbWei ?? '0')}</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">FVB vol</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">{tradeUsd}</div>
+                      </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{myRank.wins}</div>
                         <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Wins</div>
@@ -317,6 +399,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                       </div>
                       <div>
                         <div className="text-sm font-black tabular-nums dark:text-white text-zinc-950">{formatOkbVolume(myRank.volumeWei)}</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">Staked</div>
                         <div className="text-[10px] font-bold uppercase tracking-wide dark:text-zinc-500 text-zinc-500">{volumeUsd}</div>
                       </div>
                     </div>
@@ -346,6 +429,13 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
               </button>
               <button
                 type="button"
+                onClick={() => setActiveBoard('holders')}
+                className={`rounded px-3 py-1.5 text-xs font-bold transition-colors ${activeBoard === 'holders' ? 'dark:bg-white bg-zinc-950 dark:text-zinc-950 text-white' : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-white hover:text-zinc-950'}`}
+              >
+                FVB holders
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveBoard('countries')}
                 className={`rounded px-3 py-1.5 text-xs font-bold transition-colors ${activeBoard === 'countries' ? 'dark:bg-white bg-zinc-950 dark:text-zinc-950 text-white' : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-white hover:text-zinc-950'}`}
               >
@@ -354,14 +444,18 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
             </div>
             <div className="text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
               {activeBoard === 'matchday'
-                ? `${plural(matchdayActivity?.eligibleFans ?? matchdayEntries.length, 'eligible fan')} ranked`
+                ? `${plural(matchdayActivity?.eligibleFans ?? matchdayEntries.length, 'trader')} ranked${matchdayActivity?.prizeEligibleFans ? ` - ${matchdayActivity.prizeEligibleFans} prize eligible` : ''}`
+                : activeBoard === 'holders'
+                  ? `${plural(fvbHolders.length, 'holder')} indexed`
                 : `${plural(countrySupport.length, 'country', 'countries')} ranked`}
             </div>
           </div>
           <div className="mt-2 text-[11px] font-medium leading-4 dark:text-zinc-500 text-zinc-500">
             {activeBoard === 'matchday'
               ? scoreRulesLabel(scoreRules)
-              : 'Country backing counts eligible wallets only, using home/away World Cup stakes. Draw stakes are excluded.'}
+              : activeBoard === 'holders'
+                ? 'Holder board is a status view. Matchday Cup ranking now requires verified FVB trading volume.'
+              : 'Country backing counts wallets that entered through verified FVB trading volume. Draw stakes are excluded.'}
           </div>
 
           <div className="mt-3 overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200">
@@ -370,18 +464,19 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
                   {activeRowsLoaded
                     ? matchdayActivity && matchdayActivity.totalFans > 0
-                      ? `${plural(matchdayActivity.totalFans, 'fan')} have match activity. Hold FVB with the same wallet to enter the ranked board.`
-                      : 'The first real World Cup stake starts the Matchday Cup ranking.'
+                      ? `${plural(matchdayActivity.totalFans, 'fan')} have activity. Trade $FVB on OKX with the same wallet to enter the ranked board.`
+                      : 'The first verified FVB trade starts the Matchday Cup ranking.'
                     : 'Loading Matchday rankings...'}
                 </div>
               ) : visibleMatchdayRows.map(entry => {
-                const profileName = entry.displayName ?? getStoredProfileName(entry.address);
+                const profileName = entry.displayName ?? '';
                 const volumeUsd = compactUsd(formatOkbUsdFromWei(entry.volumeWei, okbUsd));
-                const fvbStatus = entry.fvbEligible === null || entry.fvbEligible === undefined
-                  ? 'FVB syncing'
-                  : entry.fvbEligible
-                    ? `${formatFvbBalance(entry.fvbEligibleWei)} FVB eligible`
-                    : 'Needs FVB';
+                const tradeUsd = compactUsd(formatOkbUsdFromWei(entry.fvbTradeVolumeOkbWei ?? '0', okbUsd));
+                const fvbStatus = entry.fvbPrizeEligible
+                  ? 'Prize eligible'
+                  : entry.fvbTradeEligible
+                    ? 'Entered'
+                    : `Needs $${entry.fvbTradeEntryMinimumUsd ?? 10}+ trade`;
                 return (
                   <a
                     key={entry.address}
@@ -407,9 +502,49 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         {formatScore(entry.score)} pts
                       </div>
                       <div className="mt-0.5 text-[10px] font-medium text-zinc-500">
-                        {entry.wins}W / {entry.active} active - {formatOkbVolume(entry.volumeWei)} OKB
+                        FVB vol {formatOkbVolume(entry.fvbTradeVolumeOkbWei ?? '0')} OKB est. - {entry.wins}W / {entry.active} active
                       </div>
-                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{volumeUsd}</div>
+                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{tradeUsd} trade / {volumeUsd} staked</div>
+                    </div>
+                  </a>
+                );
+              })
+            ) : activeBoard === 'holders' ? (
+              visibleHolderRows.length === 0 ? (
+                <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
+                  {activeRowsLoaded
+                    ? 'FVB holders appear here after indexed wallet activity syncs. Holding supports status, but trading volume drives Matchday Cup rank.'
+                    : 'Loading FVB holder rankings...'}
+                </div>
+              ) : visibleHolderRows.map(entry => {
+                const profileName = entry.displayName ?? '';
+                const valueUsd = compactUsd(formatOkbUsdFromWei(entry.fvbValueOkbWei ?? '0', okbUsd));
+                return (
+                  <a
+                    key={entry.address}
+                    href={explorerAddr(entry.address)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="grid min-w-0 grid-cols-[auto_1fr_auto] items-center gap-3 border-b dark:border-zinc-900 border-zinc-200 px-3 py-3 text-sm last:border-b-0 transition-colors dark:hover:bg-white/[0.04] hover:bg-zinc-50"
+                  >
+                    <div className="grid h-7 w-7 place-items-center rounded dark:bg-white bg-zinc-950 text-xs font-black dark:text-zinc-950 text-white">{entry.rank}</div>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold dark:text-white text-zinc-950">
+                        {fanDisplayName(entry.address, profileName)}
+                      </div>
+                      <div className="mt-0.5 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
+                        {shortWallet(entry.address)} - {formatFvbBalance(entry.fvbBalanceWei)} FVB held
+                      </div>
+                      <div className="mt-1 truncate text-[10px] font-medium dark:text-zinc-500 text-zinc-500">
+                        FVB trading volume {formatOkbVolume(entry.fvbTradeVolumeOkbWei ?? '0')} OKB est. - {entry.fvbTradeTransfers ?? 0} trade{(entry.fvbTradeTransfers ?? 0) === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold tabular-nums dark:text-white text-zinc-950">
+                        {formatFvbBalance(entry.fvbBalanceWei)}
+                      </div>
+                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">FVB</div>
+                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{valueUsd} value</div>
                     </div>
                   </a>
                 );

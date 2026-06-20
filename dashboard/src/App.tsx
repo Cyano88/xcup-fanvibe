@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { createPublicClient, http, formatEther } from 'viem';
-import { BookOpen, BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Newspaper, Radio, Search, Trophy, Volume2, VolumeX, X } from 'lucide-react';
+import { BookOpen, BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Link2, Newspaper, Radio, Search, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { FixtureCard } from './components/FixtureCard';
 import { LogStream } from './components/LogStream';
@@ -8,6 +8,7 @@ import { MyPositions } from './components/MyPositions';
 import { MatchViewer } from './components/MatchViewer';
 import { GroupTable } from './components/GroupTable';
 import { MatchdayCupLeaderboard } from './components/MatchdayCupLeaderboard';
+import { FvbTradeSafety } from './components/FvbTradeSafety';
 import type { DaemonState, DaemonLog, Fixture, Pool, Outcome, SettlementResult, MetabolicState, MatchState, Team, UserPosition, ChampionPool } from './types';
 import { BracketView } from './components/BracketView';
 import { ChampionPick } from './components/ChampionPick';
@@ -17,7 +18,8 @@ import { shortAddr } from './lib/encode';
 import { flushPendingStakeReports } from './lib/stakeReport';
 import { captureReferralFromUrl } from './lib/accountData';
 import { formatOkbUsd, formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
-import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_LOGO, FANVIBE_TOKEN_URL } from './lib/fanvibeToken';
+import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_LOGO } from './lib/fanvibeToken';
+import { fetchFvbMarketPriceWei } from './lib/fvbPrice';
 import {
   SEASON_GROUPS,
   DEFAULT_SEASON_TIMING,
@@ -43,7 +45,7 @@ const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
-const FRANCE_26_THEME = '/assets/france-26-theme.mp3';
+const FANVIBE_THEME = '/assets/fvb-theme.mp4';
 const FANVIBE_V4_HOOK = '0x4B6612ca209f07db44f8A651E4217A75106C4080';
 const FANVIBE_V4_POOL_ID = '0x04a73ca9283b864136f6e14dc41de8dd1defad19b353242a9fc100d4b46fa15b';
 const FANVIBE_V4_DEPLOY_TX = '0xeff4a1213e9324508461375f49889aa1e3c49dd25c9cdfd2040cae18771080c8';
@@ -54,7 +56,6 @@ const SEASON_CACHE_KEY = 'fanvibe.seasonSnapshot.prod';
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const ACTIVE_TAB_KEY = 'fanvibe.activeTab';
 const SETTLEMENT_NOTICE_MS = 5 * 60 * 1000;
-const FVB_EULR_HOOK_ADDRESS = '0xA21240dADA683d2563034C4F43D080b488b07dDD';
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -62,33 +63,6 @@ const ERC20_BALANCE_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
-const EULR_HOOK_QUOTE_SELL_ABI = [
-  {
-    type: 'function',
-    name: 'quoteSell',
-    stateMutability: 'view',
-    inputs: [{ name: 'tokensIn', type: 'uint256' }],
-    outputs: [
-      {
-        name: '',
-        type: 'tuple',
-        components: [
-          { name: 'tokensIn', type: 'uint256' },
-          { name: 'grossOkbOut', type: 'uint256' },
-          { name: 'fee', type: 'uint256' },
-          { name: 'netOkbOut', type: 'uint256' },
-          { name: 'oldOkbCum', type: 'uint256' },
-          { name: 'newOkbCum', type: 'uint256' },
-          { name: 'oldMinted', type: 'uint256' },
-          { name: 'newMinted', type: 'uint256' },
-          { name: 'burnTaxBps', type: 'uint16' },
-          { name: 'burnTaxTokens', type: 'uint256' },
-          { name: 'effectiveTokensIn', type: 'uint256' },
-        ],
-      },
-    ],
   },
 ] as const;
 const WorldCupNews = lazy(() => import('./components/WorldCupNews').then(module => ({ default: module.WorldCupNews })));
@@ -254,13 +228,9 @@ async function fvbPortfolioValueWei(address: string): Promise<bigint> {
       args: [address as `0x${string}`],
     });
     if (balance <= 0n) return 0n;
-    const quote = await rpcClient.readContract({
-      address: FVB_EULR_HOOK_ADDRESS as `0x${string}`,
-      abi: EULR_HOOK_QUOTE_SELL_ABI,
-      functionName: 'quoteSell',
-      args: [balance],
-    });
-    return quote.netOkbOut;
+    const priceWei = await fetchFvbMarketPriceWei();
+    if (!priceWei) return 0n;
+    return (balance * priceWei) / 10n ** 18n;
   } catch {
     return 0n;
   }
@@ -420,6 +390,20 @@ export default function App() {
     const timer = window.setInterval(() => {
       flushPendingStakeReports().catch(() => {});
     }, 30_000);
+    const params = new URLSearchParams(window.location.search);
+    const matchId = params.get('match');
+    const ref = params.get('ref');
+    if (matchId) {
+      setFocusedFixtureId(matchId);
+      setActiveTab('home');
+      setHomeCupView('matches');
+      setViewMode('realtime');
+      setGroupFilter('all');
+    }
+    if (ref && /^0x[0-9a-fA-F]{40}$/.test(ref)) {
+      setInviteVisible(true);
+      setCapturedReferrer(ref);
+    }
     return () => window.clearInterval(timer);
   }, []);
   const initialSeasonRef = useRef<InitialSeasonState | null>(null);
@@ -456,6 +440,9 @@ export default function App() {
   const [viewMode, setViewMode]                 = useState<'simulated' | 'realtime'>('realtime');
   const [homeCupView, setHomeCupView]           = useState<'matches' | 'leaderboard'>('matches');
   const [activeTab, setActiveTab]               = useState<AppTab>(() => readActiveTab());
+  const [focusedFixtureId, setFocusedFixtureId] = useState<string | null>(null);
+  const [inviteVisible, setInviteVisible]       = useState(false);
+  const [capturedReferrer, setCapturedReferrer] = useState<string | null>(null);
   const [soundMuted, setSoundMuted]             = useState(false);
   const [seasonMode, setSeasonMode]             = useState<SeasonStorageMode>('prod');
   const [seasonTiming, setSeasonTimingState]    = useState<SeasonTiming>(DEFAULT_SEASON_TIMING);
@@ -1067,14 +1054,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const matchId = new URLSearchParams(window.location.search).get('match');
-    if (!matchId || watchingFixtureId === matchId) return;
-    const knownFixture = realtimeFixtures.some(fixture => fixture.id === matchId)
-      || fixtures.some(fixture => fixture.id === matchId)
-      || !!watchedFixtureRef.current[matchId];
-    if (!knownFixture && realtimeFixtures.length === 0) return;
-    handleWatch(matchId);
-  }, [fixtures, handleWatch, realtimeFixtures, watchingFixtureId]);
+    if (!focusedFixtureId) return;
+    const knownFixture = realtimeFixtures.some(fixture => fixture.id === focusedFixtureId)
+      || fixtures.some(fixture => fixture.id === focusedFixtureId);
+    if (!knownFixture) return;
+    const targetId = focusedFixtureId;
+    const t = window.setTimeout(() => {
+      const node = document.querySelector(`[data-fixture-id="${targetId}"]`);
+      if (node instanceof HTMLElement) {
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        node.classList.remove('fixture-focus-ring');
+        void node.offsetWidth;
+        node.classList.add('fixture-focus-ring');
+        window.setTimeout(() => node.classList.remove('fixture-focus-ring'), 2400);
+      }
+      setFocusedFixtureId(null);
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [focusedFixtureId, fixtures, realtimeFixtures]);
   const resetTestSeason = useCallback(() => {
     if (seasonMode !== 'test') return;
     const fresh = freshSeasonState(1, Date.now(), TEST_SEASON_TIMING, 'test');
@@ -1370,7 +1367,7 @@ export default function App() {
       })
     : visibleFixtures;
   const selectedGroupFixtures = activeTab === 'search' && viewMode === 'realtime' && SEASON_GROUPS.includes(fixtureGroupFilter)
-    ? simFixtures.filter(f => f.group === fixtureGroupFilter)
+    ? simFixtures.filter(f => f.group === fixtureGroupFilter && !f.round)
     : [];
   const selectedGroupResults = selectedGroupFixtures.filter(f => matchStates[f.id]?.status === 'finished');
   const simulatedFixtureSectionLabel = viewMode === 'simulated'
@@ -1529,7 +1526,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-zinc-100 text-zinc-900 font-sans">
-      <audio ref={themeAudioRef} src={FRANCE_26_THEME} autoPlay loop preload="auto" />
+      <audio ref={themeAudioRef} src={FANVIBE_THEME} autoPlay loop preload="auto" />
 
       {/* -- Header ----------------------------------------------------------- */}
       <header className="sticky top-0 z-40 border-b dark:border-zinc-900 border-zinc-200 dark:bg-zinc-950/95 bg-white/95 backdrop-blur-sm">
@@ -1761,31 +1758,26 @@ export default function App() {
                 <div className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.14em] text-blue-100/95">
                   <Trophy size={15} />
                   FVB Matchday Cup
+                  <span className="rounded-full border border-emerald-300/40 bg-emerald-400/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-emerald-100">
+                    Graduated to v4
+                  </span>
                 </div>
-                <div className="mt-2 flex max-w-2xl flex-wrap items-center gap-2">
-                  <p className="min-w-[220px] flex-1 text-sm leading-5 text-zinc-200/90">
-                    Stake OKB on real World Cup fixtures, hold $FVB with the same wallet, and climb the fan leaderboard. $FVB is FanVibe's World Cup token on X Layer.
+                <div className="mt-2 max-w-2xl">
+                  <p className="text-sm leading-5 text-zinc-200/90">
+                    Trade $FVB with OKX Wallet to enter the Matchday Cup. Match stakes, wins, country backing, and holding boost your rank as World Cup fixtures unfold.
                   </p>
-                  <a
-                    href={FANVIBE_TOKEN_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-white px-2.5 text-[11px] font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
-                  >
-                    Buy $FVB
-                    <ExternalLink size={10} />
-                  </a>
                 </div>
+                <FvbTradeSafety compact showTradeLink className="mt-2 max-w-2xl" />
                 <div className="mt-2 inline-flex items-baseline gap-1.5 text-white">
-                  <span className="text-2xl font-semibold leading-none">$200</span>
+                  <span className="text-2xl font-semibold leading-none">$500</span>
                   <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-300">Prize Pool</span>
                 </div>
 
                 <div className="mt-3 space-y-1.5">
                   {[
-                    ['1', 'Stake OKB on live matches'],
-                    ['2', 'Hold $FVB in the same wallet'],
-                    ['3', 'Win, stay active, climb the board'],
+                    ['1', 'Trade $10+ $FVB to enter'],
+                    ['2', '$250+ clean volume unlocks prize tier'],
+                    ['3', 'Stake, win, back countries for boosts'],
                   ].map(([step, title]) => (
                     <div key={step} className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
                       <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-blue-500 text-[10px] font-black text-white">{step}</span>
@@ -1794,7 +1786,7 @@ export default function App() {
                   ))}
                 </div>
 
-                <div className="mt-2 flex items-center gap-2 pl-7">
+                <div className="mt-2 flex items-center gap-2">
                   <div className="matchday-prize-orb" aria-hidden="true">
                     <img src={FANVIBE_TOKEN_LOGO} alt="" className="matchday-prize-ball" />
                     <div className="matchday-prize-flags">
@@ -1805,10 +1797,10 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-300">
-                    <div className="leading-none"><span>1st</span><span className="ml-1 text-xs font-bold text-white">$100</span></div>
-                    <div className="leading-none"><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$60</span></div>
-                    <div className="leading-none"><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$30</span></div>
-                    <div className="leading-none"><span>Wildcard</span><span className="ml-1 text-xs font-bold text-white">$10</span></div>
+                    <div className="leading-none"><span>1st</span><span className="ml-1 text-xs font-bold text-white">$250</span></div>
+                    <div className="leading-none"><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$150</span></div>
+                    <div className="leading-none"><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$75</span></div>
+                    <div className="leading-none"><span>Wildcard</span><span className="ml-1 text-xs font-bold text-white">$25</span></div>
                   </div>
                 </div>
               </div>
@@ -2222,6 +2214,26 @@ export default function App() {
                 Visit match groups to stake on favourites before the first live fixture window opens.
               </div>
             </div>
+          </div>
+        )}
+
+        {inviteVisible && activeTab === 'home' && homeCupView === 'matches' && (!settlementWalletAddress || !capturedReferrer || capturedReferrer.toLowerCase() !== settlementWalletAddress.toLowerCase()) && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-2 text-xs dark:border-blue-500/20 dark:bg-blue-500/10">
+            <span className="flex items-center gap-2 truncate text-blue-800 dark:text-blue-200">
+              <Link2 size={12} className="shrink-0" />
+              <span className="truncate font-semibold">Match opened from an invite</span>
+              <span className="hidden truncate font-medium text-blue-700/80 sm:inline dark:text-blue-300/70">
+                Stake to back the fan who shared it.
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setInviteVisible(false)}
+              aria-label="Dismiss invite notice"
+              className="shrink-0 rounded-md p-1 text-blue-700/80 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200/80 dark:hover:bg-blue-500/15 dark:hover:text-blue-100"
+            >
+              <X size={12} />
+            </button>
           </div>
         )}
 
@@ -2645,4 +2657,3 @@ export default function App() {
     </div>
   );
 }
-

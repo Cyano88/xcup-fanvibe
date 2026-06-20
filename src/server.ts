@@ -105,6 +105,8 @@ const FANVIBE_TOKEN_ADDRESS = (process.env.FANVIBE_TOKEN_ADDRESS ?? '0x35a676Ca9
 const FANVIBE_TOKEN_API_URL = process.env.FANVIBE_TOKEN_API_URL
   ?? 'https://api-prod.eulr.fun/api/tokens/0x35a676ca9347499f97819813a38ed14e6a7c5e3f?network=xlayer';
 const FVB_ENTRY_MIN_USD = Number(process.env.FVB_ENTRY_MIN_USD ?? '10');
+const FVB_TRADE_ENTRY_MIN_USD = Number(process.env.FVB_TRADE_ENTRY_MIN_USD ?? '10');
+const FVB_TRADE_PRIZE_MIN_USD = Number(process.env.FVB_TRADE_PRIZE_MIN_USD ?? '250');
 const OKB_USD_FALLBACK = Number(process.env.OKB_USD_PRICE ?? '88');
 const OKB_USD_CACHE_TTL_MS = Number(process.env.OKB_USD_CACHE_TTL_MS ?? '1800000');
 const PRIVATE_X_LAYER_RPC_URL = process.env.FVB_RPC_URL
@@ -301,6 +303,16 @@ async function getOkbUsdPrice(): Promise<{ price: number; source: string; update
 async function fvbEntryMinOkbWei(): Promise<bigint> {
   const okbUsd = await getOkbUsdPrice();
   return parseEther((FVB_ENTRY_MIN_USD / okbUsd.price).toFixed(8));
+}
+
+async function fvbTradeEntryMinOkbWei(): Promise<bigint> {
+  const okbUsd = await getOkbUsdPrice();
+  return parseEther((FVB_TRADE_ENTRY_MIN_USD / okbUsd.price).toFixed(8));
+}
+
+async function fvbTradePrizeMinOkbWei(): Promise<bigint> {
+  const okbUsd = await getOkbUsdPrice();
+  return parseEther((FVB_TRADE_PRIZE_MIN_USD / okbUsd.price).toFixed(8));
 }
 
 const FVB_TRADE_VOLUME_POINT_WEI = parseEther(process.env.FVB_TRADE_VOLUME_POINT_OKB ?? '0.00001');
@@ -683,12 +695,16 @@ function scoreRulesWithTrading() {
     ...engine.getMatchdayCupScoreRules(),
     fvbTradeVolumePointWei: FVB_TRADE_VOLUME_POINT_WEI.toString(),
     fvbTradeVolumePointOKB: formatEther(FVB_TRADE_VOLUME_POINT_WEI),
+    fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
+    fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
     fvbTradeSource: 'verified_onchain_fvb_transfer_logs',
     fvbTradeScope: fvbTradeSourceScope(),
   };
 }
 
-function attachFvbTrading<T extends { address: string; score?: number; scoreComponents?: Record<string, number>; lastActiveAt?: number }>(entries: T[]) {
+async function attachFvbTrading<T extends { address: string; score?: number; scoreComponents?: Record<string, number>; lastActiveAt?: number }>(entries: T[]) {
+  const entryMinWei = await fvbTradeEntryMinOkbWei();
+  const prizeMinWei = await fvbTradePrizeMinOkbWei();
   return entries
     .map(entry => {
       const stats = fvbTradeStats(entry.address);
@@ -697,6 +713,12 @@ function attachFvbTrading<T extends { address: string; score?: number; scoreComp
       return {
         ...entry,
         ...stats,
+        fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
+        fvbTradeEntryMinimumOkbWei: entryMinWei.toString(),
+        fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
+        fvbTradePrizeMinimumOkbWei: prizeMinWei.toString(),
+        fvbTradeEligible: tradeOkbWei >= entryMinWei,
+        fvbPrizeEligible: tradeOkbWei >= prizeMinWei,
         score: (entry.score ?? 0) + tradingPoints,
         scoreComponents: {
           ...(entry.scoreComponents ?? {}),
@@ -757,10 +779,56 @@ async function attachFvbEligibility<T extends { address: string }>(entries: T[])
 }
 
 async function matchdayEntriesWithEligibility(limit: number) {
-  const entries = attachFvbTrading(engine.getMatchdayCupLeaderboard(limit).map(entry => ({
+  type MatchdayEntrySeed = {
+    rank: number | null;
+    address: string;
+    displayName?: string;
+    volumeWei: string;
+    returnedWei: string;
+    wins: number;
+    losses: number;
+    active: number;
+    refunded: number;
+    positions: number;
+    winRate: number | null;
+    lastActiveAt: number;
+    score?: number;
+    scoreComponents?: Record<string, number>;
+    scoreRules?: Record<string, unknown>;
+  };
+  const baseEntries: MatchdayEntrySeed[] = engine.getMatchdayCupLeaderboard(limit).map(entry => ({
     ...entry,
     displayName: profileNameFor(entry.address),
-  })));
+  }));
+  const seen = new Set(baseEntries.map(entry => entry.address.toLowerCase()));
+  for (const wallet of Object.values(appData.fvbTradeIndex?.wallets ?? {})) {
+    const key = wallet.address.toLowerCase();
+    if (seen.has(key) || key === ZERO_ADDRESS || FVB_TRADE_COUNTERPARTIES.has(key)) continue;
+    seen.add(key);
+    baseEntries.push({
+      rank: null,
+      address: wallet.address,
+      displayName: profileNameFor(wallet.address),
+      volumeWei: '0',
+      returnedWei: '0',
+      wins: 0,
+      losses: 0,
+      active: 0,
+      refunded: 0,
+      positions: 0,
+      winRate: null,
+      lastActiveAt: wallet.lastTradeAt,
+      score: 0,
+      scoreComponents: {
+        volume: 0,
+        wins: 0,
+        active: 0,
+        participation: 0,
+      },
+      scoreRules: scoreRulesWithTrading(),
+    });
+  }
+  const entries = await attachFvbTrading(baseEntries);
   return attachFvbEligibility(entries);
 }
 
@@ -815,9 +883,9 @@ async function fvbHolderLeaderboard(limit: number) {
     .map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
-function qualifiedMatchdayEntries<T extends { rank: number | null; fvbEligible?: boolean | null }>(entries: T[]): T[] {
+function qualifiedMatchdayEntries<T extends { rank: number | null; fvbTradeEligible?: boolean | null }>(entries: T[]): T[] {
   return entries
-    .filter(entry => entry.fvbEligible === true)
+    .filter(entry => entry.fvbTradeEligible === true)
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 
@@ -1148,13 +1216,16 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
   const qualifiedEntries = qualifiedMatchdayEntries(allEntries);
   const entries = qualifiedEntries.slice(0, parsed.data);
   const entryMinimumOkbWei = await fvbEntryMinOkbWei();
+  const tradeEntryMinimumOkbWei = await fvbTradeEntryMinOkbWei();
+  const tradePrizeMinimumOkbWei = await fvbTradePrizeMinOkbWei();
   res.json({
     entries,
     activity: {
       totalFans: allEntries.length,
       eligibleFans: qualifiedEntries.length,
-      pendingFvbFans: allEntries.filter(entry => entry.fvbEligible === false).length,
+      pendingFvbFans: allEntries.filter(entry => entry.fvbTradeEligible === false).length,
       syncingFvbFans: allEntries.filter(entry => entry.fvbEligible === null || entry.fvbEligible === undefined).length,
+      prizeEligibleFans: allEntries.filter(entry => entry.fvbPrizeEligible === true).length,
     },
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
@@ -1162,6 +1233,14 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       capTokens: null,
       minimumUsd: FVB_ENTRY_MIN_USD,
       minimumOkbWei: entryMinimumOkbWei.toString(),
+    },
+    tradeEligibility: {
+      tokenAddress: FANVIBE_TOKEN_ADDRESS,
+      entryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
+      entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
+      prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
+      prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity. Final winners are reviewed before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,
@@ -1238,6 +1317,7 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
     lastActiveAt: 0,
     score: 0,
     scoreComponents: {
+      trading: 0,
       volume: 0,
       wins: 0,
       active: 0,
@@ -1247,11 +1327,17 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
     fvbTradeVolumeOkbWei: '0',
     fvbTradeTransfers: 0,
     fvbLastTradeAt: 0,
+    fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
+    fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
+    fvbTradeEligible: false,
+    fvbPrizeEligible: false,
     scoreRules: scoreRulesWithTrading(),
   };
   const entry = ranked ?? (unqualifiedStats ? { ...unqualifiedStats, rank: null } : emptyEntry);
   const entryWithEligibility = ranked || unqualifiedStats ? entry : (await attachFvbEligibility([entry]))[0];
   const entryMinimumOkbWei = await fvbEntryMinOkbWei();
+  const tradeEntryMinimumOkbWei = await fvbTradeEntryMinOkbWei();
+  const tradePrizeMinimumOkbWei = await fvbTradePrizeMinOkbWei();
   res.json({
     entry: ranked ? entryWithEligibility : { ...entryWithEligibility, rank: null },
     ranked: !!ranked,
@@ -1261,6 +1347,14 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
       capTokens: null,
       minimumUsd: FVB_ENTRY_MIN_USD,
       minimumOkbWei: entryMinimumOkbWei.toString(),
+    },
+    tradeEligibility: {
+      tokenAddress: FANVIBE_TOKEN_ADDRESS,
+      entryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
+      entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
+      prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
+      prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity. Final winners are reviewed before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,

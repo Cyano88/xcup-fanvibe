@@ -10,10 +10,17 @@ import { PrivyStakeButton } from './PrivyStakeButton';
 import { PrivyWalletStakeButton } from './PrivyWalletStakeButton';
 import { PrivyBalanceHint } from './PrivyBalanceHint';
 import { reportStakeTx } from '../lib/stakeReport';
+import {
+  cleanStakeAmountInput as cleanStakeAmountInputShared,
+  getMinStakeOkb,
+  getMinStakeOkbLabel,
+  minStakeMessage,
+  normalizedStakeAmount as normalizedStakeAmountShared,
+  STAKE_MIN_OKB_FALLBACK,
+} from '../lib/stakeMinimum';
+import { isEmbeddedPrivyWallet, preferredFanVibeWallet } from '../lib/privyWallets';
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
-const MIN_STAKE_OKB = 0.001;
-const MIN_STAKE_OKB_LABEL = '0.001';
 
 interface Props {
   fixtures: Fixture[];
@@ -52,29 +59,6 @@ function fmtWei(wei: string | bigint): string {
   return n < 0.0001 ? '0' : n.toFixed(4);
 }
 
-function isEmbeddedWallet(walletClientType: string) {
-  return walletClientType === 'privy' || walletClientType === 'privy-v2';
-}
-
-function cleanStakeAmountInput(value: string) {
-  const normalized = value.replace(',', '.');
-  if (normalized === '') return '';
-  if (!/^\d*(?:\.\d*)?$/.test(normalized)) return null;
-  const numericValue = Number(normalized);
-  if (Number.isFinite(numericValue) && numericValue > 0 && numericValue < MIN_STAKE_OKB) return MIN_STAKE_OKB_LABEL;
-  const [whole = '', decimals = ''] = normalized.split('.');
-  const trimmedWhole = whole.replace(/^0+(?=\d)/, '') || (whole.startsWith('0') ? '0' : whole);
-  return decimals !== undefined && normalized.includes('.')
-    ? `${trimmedWhole}.${decimals.slice(0, 3)}`
-    : trimmedWhole;
-}
-
-function normalizedStakeAmount(value: string) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return '';
-  return amount < MIN_STAKE_OKB ? MIN_STAKE_OKB_LABEL : amount.toFixed(3).replace(/\.?0+$/, '');
-}
-
 function PrimaryChampionStakeAction({
   amountOKB,
   calldata,
@@ -94,11 +78,12 @@ function PrimaryChampionStakeAction({
 }) {
   const { authenticated } = usePrivy();
   const { wallets } = useWallets();
-  const externalWallet = wallets.find(wallet => !isEmbeddedWallet(wallet.walletClientType));
+  const activeWallet = preferredFanVibeWallet(wallets);
+  const externalWallet = activeWallet && !isEmbeddedPrivyWallet(activeWallet.walletClientType) ? activeWallet : null;
   const buttonClass = 'inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3.5 text-xs font-bold text-white transition-all active:scale-95 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
   const label = authenticated || externalWallet ? `Stake ${amountOKB} OKB ->` : 'Sign in to stake';
 
-  if (!authenticated && externalWallet) {
+  if (externalWallet) {
     return (
       <PrivyWalletStakeButton
         amountOKB={amountOKB}
@@ -139,17 +124,20 @@ export function ChampionPick({
 }: Props) {
   const { user } = usePrivy();
   const { wallets } = useWallets();
-  const connectedAddress = user?.wallet?.address ?? wallets[0]?.address ?? null;
+  const connectedAddress = preferredFanVibeWallet(wallets)?.address ?? user?.wallet?.address ?? null;
   const [open, setOpen]           = useState(false);
   const [selected, setSelected]   = useState<string | null>(null);
-  const [amountOKB, setAmountOKB] = useState('0.01');
+  const [amountOKB, setAmountOKB] = useState(STAKE_MIN_OKB_FALLBACK.toFixed(4));
   const [txPending, setTxPending] = useState(false);
   const [txHash, setTxHash]       = useState<string | null>(null);
   const [txError, setTxError]     = useState<string | null>(null);
   const okbUsd = useOkbUsdPrice();
+  const minStakeOkb = getMinStakeOkb(okbUsd);
+  const minStakeOkbLabel = getMinStakeOkbLabel(okbUsd);
+  const minStakeMsg = minStakeMessage(okbUsd);
   const stakeUsd = formatStakeUsd(amountOKB, okbUsd);
   const amountNumber = Number(amountOKB);
-  const amountValid = Number.isFinite(amountNumber) && amountNumber >= MIN_STAKE_OKB;
+  const amountValid = Number.isFinite(amountNumber) && amountNumber >= minStakeOkb;
 
   // Local pool (client-side tracking until daemon picks it up)
   const [localPool, setLocalPool] = useState<Record<string, bigint>>({});
@@ -222,7 +210,7 @@ export function ChampionPick({
   async function handleStake() {
     if (!selected || !refereeAddress) return;
     if (!amountValid) {
-      setTxError(`Minimum stake is ${MIN_STAKE_OKB_LABEL} OKB.`);
+      setTxError(minStakeMsg);
       return;
     }
     setTxError(null);
@@ -386,15 +374,15 @@ export function ChampionPick({
                     <input
                       type="number"
                       step="0.001"
-                      min={MIN_STAKE_OKB_LABEL}
+                      min={minStakeOkbLabel}
                       inputMode="decimal"
                       value={amountOKB}
                       onChange={e => {
                         setTxError(null);
-                        const next = cleanStakeAmountInput(e.target.value);
+                        const next = cleanStakeAmountInputShared(e.target.value, minStakeOkb, minStakeOkbLabel);
                         if (next !== null) setAmountOKB(next);
                       }}
-                      onBlur={() => setAmountOKB(current => normalizedStakeAmount(current) || MIN_STAKE_OKB_LABEL)}
+                      onBlur={() => setAmountOKB(current => normalizedStakeAmountShared(current, minStakeOkb, minStakeOkbLabel) || minStakeOkbLabel)}
                       className="w-full min-w-0 bg-transparent text-sm font-semibold dark:text-zinc-100 text-zinc-800 outline-none"
                     />
                     <span className="shrink-0 text-[10px] dark:text-zinc-500 text-zinc-400">OKB</span>
@@ -448,7 +436,7 @@ export function ChampionPick({
               </div>
               {!amountValid && (
                 <p className="mt-2 text-[11px] font-medium dark:text-zinc-600 text-zinc-500">
-                  Minimum stake is {MIN_STAKE_OKB_LABEL} OKB.
+                  {minStakeMsg}
                 </p>
               )}
               {PRIVY_ENABLED && <div className="mt-2"><PrivyBalanceHint amountOKB={amountOKB} /></div>}
@@ -479,5 +467,3 @@ export function ChampionPick({
     </div>
   );
 }
-
-

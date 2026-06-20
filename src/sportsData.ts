@@ -441,7 +441,8 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
         : undefined,
     };
     const events = sportmonksEvents(api, fixture);
-    const matchState = buildMatchState(fixture, api, sportmonksMatchStateStatus(api), homeScore, awayScore, events, kickoff);
+    const stateStatus = sportmonksMatchStateStatus(api) ?? (status === 'settled' ? 'finished' : null);
+    const matchState = buildMatchState(fixture, api, stateStatus, homeScore, awayScore, events, kickoff);
     if (matchState) matchStates[fixture.id] = matchState;
     fixtures.push(fixture);
   }

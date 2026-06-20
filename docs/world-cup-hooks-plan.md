@@ -24,10 +24,10 @@ Working identity:
 - Token address: `0x35a676ca9347499f97819813a38ed14e6a7c5e3f`
 - Token page: `https://www.eulr.fun/token/0x35a676Ca9347499f97819813a38ED14e6a7C5e3F?fresh=1`
 - Launch EOA: `0x71f3...1b2a`
-- Launch status: live on eulr
+- Launch status: graduated and migrated from eulr to Uniswap v4
 - Initial creator purchase: `0.3000 OKB` gross / `0.2991 OKB` net for about `249.74K FVB`
 - Initial block: `62489676`
-- Current phase: eulr launch curve. Launch-curve trades help graduation but do not count as final OKX Wallet Uniswap v4 leaderboard volume.
+- Current phase: post-graduation Uniswap v4 trading. Only qualifying OKX Wallet front-end trades on Uniswap v4 count toward campaign volume.
 - Theme: every trade backs a nation, and live match phases change FanVibe's on-chain liquidity story.
 - Description: World Cup fan token for FanVibe. Trades become on-chain fan signals, countries compete on a live support board, and matchday phases feed a Uniswap v4 hook on X Layer.
 
@@ -48,8 +48,8 @@ Only post-graduation OKX Wallet front-end trades on Uniswap v4 count.
 Implications:
 
 - Bonding curve launchpad trades are useful for distribution, but they do not count toward ranking volume.
-- Current campaign objective is graduation first, then OKX Wallet Uniswap v4 volume after migration.
-- The main campaign must start after graduation/migration.
+- Current campaign objective is sustained OKX Wallet Uniswap v4 volume after migration.
+- The main campaign is now live because graduation/migration is complete.
 - Every app CTA and X post should send users to the OKX Wallet Uniswap v4 trading path.
 - Avoid sybil/self-volume behavior. Top projects are anti-sybil reviewed.
 
@@ -120,7 +120,7 @@ Implementation phases:
 2. Separate Matchday Cup leaderboard for real World Cup fixtures only. Status: complete in backend route `/matchday-cup/leaderboard` and dashboard component `MatchdayCupLeaderboard`.
 3. `$FVB` holder eligibility check. Status: complete in `MatchdayCupLeaderboard` via X Layer `balanceOf`.
 4. Country support layer. Status: complete in backend route `/matchday-cup/country-support`, derived from real World Cup home/away OKB stakes.
-5. Post-graduation CTA switch from eulr to OKX Wallet / Uniswap v4 route.
+5. Post-graduation CTA switch from eulr to OKX Wallet / Uniswap v4 route. Status: complete in dashboard token CTAs.
 
 ## Backend Upgrades
 

@@ -158,7 +158,7 @@ export function DocsPage() {
               A live football market with transparent X Layer settlement.
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              FanVibe lets users sign in, stake OKB on real World Cup match markets, hold FVB for Matchday Cup eligibility, follow live World Cup coverage, read football and OKX/X Layer news, and review every position from one portfolio. The platform keeps account activity visible, compact, and verifiable on X Layer.
+              FanVibe lets users sign in, trade and hold FVB, stake OKB on real World Cup match markets, follow live World Cup coverage, read football and OKX/X Layer news, and review every position from one portfolio. The platform keeps account activity visible, compact, and verifiable on X Layer.
             </p>
             <div className="mt-8 grid gap-3 border-y border-zinc-200 py-4 dark:border-zinc-900 sm:grid-cols-3">
               <div>
