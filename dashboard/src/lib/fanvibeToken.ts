@@ -1,4 +1,10 @@
 export const FANVIBE_TOKEN_ADDRESS = '0x35a676Ca9347499f97819813a38ED14e6a7C5e3F';
-export const FANVIBE_TOKEN_URL = 'https://www.eulr.fun/token/0x35a676Ca9347499f97819813a38ED14e6a7C5e3F?fresh=1';
+export const FANVIBE_X_LAYER_CHAIN_ID = '196';
+export const FANVIBE_NATIVE_OKB_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+export const FANVIBE_OKX_TOKEN_PAGE_URL = `https://web3.okx.com/token/x-layer/${FANVIBE_TOKEN_ADDRESS}`;
+export const FANVIBE_TOKEN_URL = FANVIBE_OKX_TOKEN_PAGE_URL;
+export const FANVIBE_OKX_WALLET_URL = 'https://web3.okx.com/download';
+export const FANVIBE_TOKEN_STATUS_URL = FANVIBE_OKX_TOKEN_PAGE_URL;
+export const FANVIBE_TOKEN_API_URL = 'https://api-prod.eulr.fun/api/tokens/0x35a676ca9347499f97819813a38ed14e6a7c5e3f?network=xlayer';
+export const FANVIBE_V4_MIGRATION_TX = '0x446fa4a18c6e84b8959db1b15892720348ed98c1f72983f487ee79b8c08e9e08';
 export const FANVIBE_TOKEN_LOGO = '/assets/fanvibe-world-token-logo.png';
-
