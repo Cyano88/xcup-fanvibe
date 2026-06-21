@@ -275,8 +275,12 @@ async function deletePostgres(key: string): Promise<void> {
 }
 
 async function readFallbackJson<T>(key: string, filePath: string): Promise<T | null> {
-  const raw = await upstash<string>(['GET', key]);
-  if (raw) return JSON.parse(raw) as T;
+  try {
+    const raw = await upstash<string>(['GET', key]);
+    if (raw) return JSON.parse(raw) as T;
+  } catch (err) {
+    console.warn(`[FanVibe] Upstash read failed for ${key}: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   try {
     const file = await readFile(filePath, 'utf8');
@@ -307,8 +311,12 @@ export async function writeSeasonState(mode: SeasonStorageMode, state: Persisted
 
   const serialized = JSON.stringify(payload);
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    await upstash(['SET', keyFor(mode), serialized]);
-    return;
+    try {
+      await upstash(['SET', keyFor(mode), serialized]);
+      return;
+    } catch (err) {
+      console.warn(`[FanVibe] Upstash write failed for ${keyFor(mode)}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   const target = fileFor(mode);
@@ -323,8 +331,12 @@ export async function clearSeasonState(mode: SeasonStorageMode): Promise<void> {
   }
 
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    await upstash(['DEL', keyFor(mode)]);
-    return;
+    try {
+      await upstash(['DEL', keyFor(mode)]);
+      return;
+    } catch (err) {
+      console.warn(`[FanVibe] Upstash delete failed for ${keyFor(mode)}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   try {
@@ -355,8 +367,12 @@ export async function writeRefereeMarket(state: PersistedRefereeMarket): Promise
 
   const serialized = JSON.stringify(payload);
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    await upstash(['SET', engineKeyFor(), serialized]);
-    return;
+    try {
+      await upstash(['SET', engineKeyFor(), serialized]);
+      return;
+    } catch (err) {
+      console.warn(`[FanVibe] Upstash write failed for ${engineKeyFor()}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   const target = engineFileFor();
@@ -387,8 +403,12 @@ export async function writeAppData(state: PersistedAppData): Promise<void> {
 
   const serialized = JSON.stringify(payload);
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    await upstash(['SET', appDataKeyFor(), serialized]);
-    return;
+    try {
+      await upstash(['SET', appDataKeyFor(), serialized]);
+      return;
+    } catch (err) {
+      console.warn(`[FanVibe] Upstash write failed for ${appDataKeyFor()}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   const target = appDataFileFor();
