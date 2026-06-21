@@ -1,5 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import pg from 'pg';
 import type { Fixture, MatchState, Team, Stake, Pool, SettlementResult, RejectedStakeRefund, ChampionStake } from './types.js';
 
 export type SeasonPhase = 'preseason' | 'playing' | 'champion' | 'interseason';
@@ -42,6 +43,11 @@ export interface PersistedSeasonState {
 const STORE_DIR = process.env.SEASON_STATE_DIR ?? join(process.cwd(), '.fanvibe-state');
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const POSTGRES_URL = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+const configuredPostgresTable = process.env.FANVIBE_POSTGRES_TABLE ?? 'fanvibe_state';
+const POSTGRES_TABLE = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(configuredPostgresTable)
+  ? configuredPostgresTable
+  : 'fanvibe_state';
 
 const keyFor = (mode: SeasonStorageMode) => `fanvibe:season:${mode}`;
 const fileFor = (mode: SeasonStorageMode) => join(STORE_DIR, `${keyFor(mode).replace(/:/g, '-')}.json`);
@@ -51,9 +57,11 @@ const appDataKeyFor = () => 'fanvibe:app:data';
 const appDataFileFor = () => join(STORE_DIR, 'fanvibe-app-data.json');
 
 export function seasonStorageStatus() {
+  const postgresConfigured = !!POSTGRES_URL;
   return {
-    driver: UPSTASH_URL && UPSTASH_TOKEN ? 'upstash' : 'file',
-    storeDir: UPSTASH_URL && UPSTASH_TOKEN ? null : STORE_DIR,
+    driver: postgresConfigured ? 'postgres' : UPSTASH_URL && UPSTASH_TOKEN ? 'upstash' : 'file',
+    storeDir: postgresConfigured || (UPSTASH_URL && UPSTASH_TOKEN) ? null : STORE_DIR,
+    postgresConfigured,
     upstashConfigured: !!(UPSTASH_URL && UPSTASH_TOKEN),
   };
 }
@@ -197,31 +205,123 @@ async function upstash<T>(command: unknown[]): Promise<T | null> {
   return json.result ?? null;
 }
 
-export async function readSeasonState(mode: SeasonStorageMode): Promise<PersistedSeasonState | null> {
-  const raw = await upstash<string>(['GET', keyFor(mode)]);
-  if (raw) return JSON.parse(raw) as PersistedSeasonState;
+const { Pool: PgPool } = pg;
+let pgPool: pg.Pool | null = null;
+let pgReady: Promise<void> | null = null;
+
+function postgresSsl() {
+  if (process.env.PGSSL === '1' || process.env.PGSSLMODE === 'require') {
+    return { rejectUnauthorized: false };
+  }
+  if (POSTGRES_URL?.includes('sslmode=require')) return { rejectUnauthorized: false };
+  return undefined;
+}
+
+function postgresPool(): pg.Pool | null {
+  if (!POSTGRES_URL) return null;
+  if (!pgPool) {
+    pgPool = new PgPool({
+      connectionString: POSTGRES_URL,
+      ssl: postgresSsl(),
+      max: Number(process.env.POSTGRES_POOL_MAX ?? '4'),
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+    });
+  }
+  return pgPool;
+}
+
+async function ensurePostgres(): Promise<void> {
+  const pool = postgresPool();
+  if (!pool) return;
+  pgReady ??= pool.query(`
+    CREATE TABLE IF NOT EXISTS ${POSTGRES_TABLE} (
+      key text PRIMARY KEY,
+      value jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `).then(() => undefined);
+  await pgReady;
+}
+
+async function readPostgres<T>(key: string): Promise<T | null> {
+  const pool = postgresPool();
+  if (!pool) return null;
+  await ensurePostgres();
+  const result = await pool.query<{ value: T }>(
+    `SELECT value FROM ${POSTGRES_TABLE} WHERE key = $1 LIMIT 1`,
+    [key],
+  );
+  return result.rows[0]?.value ?? null;
+}
+
+async function writePostgres(key: string, value: unknown): Promise<void> {
+  const pool = postgresPool();
+  if (!pool) return;
+  await ensurePostgres();
+  await pool.query(
+    `INSERT INTO ${POSTGRES_TABLE} (key, value, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, JSON.stringify(value)],
+  );
+}
+
+async function deletePostgres(key: string): Promise<void> {
+  const pool = postgresPool();
+  if (!pool) return;
+  await ensurePostgres();
+  await pool.query(`DELETE FROM ${POSTGRES_TABLE} WHERE key = $1`, [key]);
+}
+
+async function readFallbackJson<T>(key: string, filePath: string): Promise<T | null> {
+  const raw = await upstash<string>(['GET', key]);
+  if (raw) return JSON.parse(raw) as T;
 
   try {
-    const file = await readFile(fileFor(mode), 'utf8');
-    return JSON.parse(file) as PersistedSeasonState;
+    const file = await readFile(filePath, 'utf8');
+    return JSON.parse(file) as T;
   } catch {
     return null;
   }
 }
 
+export async function readSeasonState(mode: SeasonStorageMode): Promise<PersistedSeasonState | null> {
+  const key = keyFor(mode);
+  const pgState = await readPostgres<PersistedSeasonState>(key);
+  if (pgState) return pgState;
+
+  const fallback = await readFallbackJson<PersistedSeasonState>(key, fileFor(mode));
+  if (fallback && POSTGRES_URL) {
+    await writePostgres(key, fallback);
+  }
+  return fallback;
+}
+
 export async function writeSeasonState(mode: SeasonStorageMode, state: PersistedSeasonState): Promise<void> {
-  const payload = JSON.stringify({ ...state, mode, updatedAt: Date.now() });
+  const payload = { ...state, mode, updatedAt: Date.now() };
+  if (POSTGRES_URL) {
+    await writePostgres(keyFor(mode), payload);
+    return;
+  }
+
+  const serialized = JSON.stringify(payload);
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    await upstash(['SET', keyFor(mode), payload]);
+    await upstash(['SET', keyFor(mode), serialized]);
     return;
   }
 
   const target = fileFor(mode);
   await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, payload);
+  await writeFile(target, serialized);
 }
 
 export async function clearSeasonState(mode: SeasonStorageMode): Promise<void> {
+  if (POSTGRES_URL) {
+    await deletePostgres(keyFor(mode));
+    return;
+  }
+
   if (UPSTASH_URL && UPSTASH_TOKEN) {
     await upstash(['DEL', keyFor(mode)]);
     return;
@@ -235,49 +335,63 @@ export async function clearSeasonState(mode: SeasonStorageMode): Promise<void> {
 }
 
 export async function readRefereeMarket(): Promise<PersistedRefereeMarket | null> {
-  const raw = await upstash<string>(['GET', engineKeyFor()]);
-  if (raw) return JSON.parse(raw) as PersistedRefereeMarket;
+  const key = engineKeyFor();
+  const pgState = await readPostgres<PersistedRefereeMarket>(key);
+  if (pgState) return pgState;
 
-  try {
-    const file = await readFile(engineFileFor(), 'utf8');
-    return JSON.parse(file) as PersistedRefereeMarket;
-  } catch {
-    return null;
+  const fallback = await readFallbackJson<PersistedRefereeMarket>(key, engineFileFor());
+  if (fallback && POSTGRES_URL) {
+    await writePostgres(key, fallback);
   }
+  return fallback;
 }
 
 export async function writeRefereeMarket(state: PersistedRefereeMarket): Promise<void> {
-  const payload = JSON.stringify({ ...state, updatedAt: Date.now() });
+  const payload = { ...state, updatedAt: Date.now() };
+  if (POSTGRES_URL) {
+    await writePostgres(engineKeyFor(), payload);
+    return;
+  }
+
+  const serialized = JSON.stringify(payload);
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    await upstash(['SET', engineKeyFor(), payload]);
+    await upstash(['SET', engineKeyFor(), serialized]);
     return;
   }
 
   const target = engineFileFor();
   await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, payload);
+  await writeFile(target, serialized);
 }
 
 export async function readAppData(): Promise<PersistedAppData> {
-  const raw = await upstash<string>(['GET', appDataKeyFor()]);
-  if (raw) return JSON.parse(raw) as PersistedAppData;
+  const key = appDataKeyFor();
+  const pgState = await readPostgres<PersistedAppData>(key);
+  if (pgState) return pgState;
 
-  try {
-    const file = await readFile(appDataFileFor(), 'utf8');
-    return JSON.parse(file) as PersistedAppData;
-  } catch {
-    return { version: 1, profiles: {}, referrals: [], pendingStakeReports: [], updatedAt: Date.now() };
+  const fallback = await readFallbackJson<PersistedAppData>(key, appDataFileFor());
+  if (fallback) {
+    if (POSTGRES_URL) await writePostgres(key, fallback);
+    return fallback;
   }
+
+  return { version: 1, profiles: {}, referrals: [], pendingStakeReports: [], updatedAt: Date.now() };
 }
 
 export async function writeAppData(state: PersistedAppData): Promise<void> {
-  const payload = JSON.stringify({ ...state, updatedAt: Date.now() });
+  const payload = { ...state, updatedAt: Date.now() };
+  if (POSTGRES_URL) {
+    await writePostgres(appDataKeyFor(), payload);
+    return;
+  }
+
+  const serialized = JSON.stringify(payload);
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    await upstash(['SET', appDataKeyFor(), payload]);
+    await upstash(['SET', appDataKeyFor(), serialized]);
     return;
   }
 
   const target = appDataFileFor();
   await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, payload);
+  await writeFile(target, serialized);
 }
