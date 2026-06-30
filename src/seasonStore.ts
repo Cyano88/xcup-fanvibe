@@ -148,6 +148,7 @@ export interface PersistedFvbTradeWallet {
   estimatedOkbVolumeWei: string;
   transfers: number;
   lastTradeAt: number;
+  daily?: Record<string, PersistedFvbTradeDaily>;
 }
 
 export interface PersistedFvbTradeDaily {
@@ -187,6 +188,27 @@ export interface PersistedAppData {
   referrals: PersistedReferral[];
   pendingStakeReports: string[];
   fvbTradeIndex?: PersistedFvbTradeIndex;
+  xProfiles?: Record<string, PersistedXProfile>;
+  xDailyStats?: Record<string, PersistedXDailyStats>;
+  updatedAt: number;
+}
+
+export interface PersistedXProfile {
+  address: string;
+  xUserId: string;
+  handle: string;
+  connectedAt: number;
+  updatedAt: number;
+}
+
+export interface PersistedXDailyStats {
+  address: string;
+  xUserId: string;
+  handle: string;
+  date: string;
+  impressions: number;
+  engagements: number;
+  tweets: number;
   updatedAt: number;
 }
 

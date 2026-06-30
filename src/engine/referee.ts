@@ -383,6 +383,7 @@ export class RefereeEngine {
       active: number;
       refunded: number;
       positions: number;
+      dailyPositions: number;
       lastActiveAt: number;
     };
 
@@ -400,6 +401,7 @@ export class RefereeEngine {
         active: 0,
         refunded: 0,
         positions: 0,
+        dailyPositions: 0,
         lastActiveAt: 0,
       };
       entries.set(key, created);
@@ -505,6 +507,7 @@ export class RefereeEngine {
       active: number;
       refunded: number;
       positions: number;
+      dailyPositions: number;
       lastActiveAt: number;
     };
 
@@ -536,6 +539,7 @@ export class RefereeEngine {
         active: 0,
         refunded: 0,
         positions: 0,
+        dailyPositions: 0,
         lastActiveAt: 0,
       };
       entries.set(key, created);
@@ -553,6 +557,9 @@ export class RefereeEngine {
       entry.lastActiveAt = Math.max(entry.lastActiveAt, stake.timestamp);
 
       const stakeMs = stake.timestamp > 10_000_000_000 ? stake.timestamp : stake.timestamp * 1000;
+      if (new Date(stakeMs).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) {
+        entry.dailyPositions += 1;
+      }
       const settlement = this.settlements.find(s => s.fixtureId === stake.fixtureId && s.settledAt >= stakeMs);
       const outcome = settlement?.outcome ?? (fixture.status === 'settled' ? fixture.result : undefined);
       if (!outcome) {
@@ -590,6 +597,7 @@ export class RefereeEngine {
           active: entry.active,
           refunded: entry.refunded,
           positions: entry.positions,
+          dailyPositions: entry.dailyPositions,
           winRate: entry.wins + entry.losses > 0 ? entry.wins / (entry.wins + entry.losses) : null,
           lastActiveAt: entry.lastActiveAt,
           score: score.total,

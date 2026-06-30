@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import type { Request, Response } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -316,6 +317,12 @@ async function fvbTradePrizeMinOkbWei(): Promise<bigint> {
 }
 
 const FVB_TRADE_VOLUME_POINT_WEI = parseEther(process.env.FVB_TRADE_VOLUME_POINT_OKB ?? '0.00001');
+const DISTRIBUTION_DAILY_VOLUME_POINT_USD = Number(process.env.DISTRIBUTION_DAILY_VOLUME_POINT_USD ?? '1');
+const DISTRIBUTION_X_IMPRESSION_POINT = Math.max(1, Number(process.env.DISTRIBUTION_X_IMPRESSION_POINT ?? '100'));
+const DISTRIBUTION_REFERRAL_POINTS = Number(process.env.DISTRIBUTION_REFERRAL_POINTS ?? '1000');
+const DISTRIBUTION_STAKE_POINTS = Number(process.env.DISTRIBUTION_STAKE_POINTS ?? '100');
+const DISTRIBUTION_WIN_POINTS = Number(process.env.DISTRIBUTION_WIN_POINTS ?? '250');
+const DISTRIBUTION_STAKE_DAILY_CAP = Math.max(1, Number(process.env.DISTRIBUTION_STAKE_DAILY_CAP ?? '20'));
 
 function fvbTradeSourceScope(): 'counterparty_scoped' | 'all_transfers' {
   return FVB_TRADE_COUNTERPARTIES.size > 0 ? 'counterparty_scoped' : 'all_transfers';
@@ -360,6 +367,19 @@ function fvbTradeDailyBucket(timestampMs: number): PersistedFvbTradeDaily {
     updatedAt: Date.now(),
   };
   return index.daily[date];
+}
+
+function fvbWalletDailyBucket(wallet: PersistedFvbTradeWallet, timestampMs: number): PersistedFvbTradeDaily {
+  const date = fvbTradeDay(timestampMs);
+  wallet.daily ??= {};
+  wallet.daily[date] ??= {
+    date,
+    fvbVolumeWei: '0',
+    estimatedOkbVolumeWei: '0',
+    transfers: 0,
+    updatedAt: Date.now(),
+  };
+  return wallet.daily[date];
 }
 
 function fvbTradeVolumeForRange(startTimestamp: number, endTimestamp: number): {
@@ -423,6 +443,12 @@ function creditFvbTradeVolume(address: string, fvbAmountWei: bigint, estimatedOk
   wallet.estimatedOkbVolumeWei = (BigInt(wallet.estimatedOkbVolumeWei) + estimatedOkbWei).toString();
   wallet.transfers += 1;
   wallet.lastTradeAt = Math.max(wallet.lastTradeAt, timestamp);
+
+  const walletDaily = fvbWalletDailyBucket(wallet, timestamp);
+  walletDaily.fvbVolumeWei = (BigInt(walletDaily.fvbVolumeWei) + fvbAmountWei).toString();
+  walletDaily.estimatedOkbVolumeWei = (BigInt(walletDaily.estimatedOkbVolumeWei) + estimatedOkbWei).toString();
+  walletDaily.transfers += 1;
+  walletDaily.updatedAt = Date.now();
 
   const daily = fvbTradeDailyBucket(timestamp);
   daily.fvbVolumeWei = (BigInt(daily.fvbVolumeWei) + fvbAmountWei).toString();
@@ -682,50 +708,121 @@ async function scanFvbHolderCandidates(): Promise<void> {
 
 function fvbTradeStats(address: string) {
   const wallet = appData.fvbTradeIndex?.wallets[address.toLowerCase()];
+  const today = fvbTradeDay(Date.now());
+  const daily = wallet?.daily?.[today];
   return {
     fvbTradeVolumeWei: wallet?.fvbVolumeWei ?? '0',
     fvbTradeVolumeOkbWei: wallet?.estimatedOkbVolumeWei ?? '0',
     fvbTradeTransfers: wallet?.transfers ?? 0,
     fvbLastTradeAt: wallet?.lastTradeAt ?? 0,
+    fvbDailyTradeVolumeWei: daily?.fvbVolumeWei ?? '0',
+    fvbDailyTradeVolumeOkbWei: daily?.estimatedOkbVolumeWei ?? '0',
+    fvbDailyTradeTransfers: daily?.transfers ?? 0,
   };
 }
 
 function scoreRulesWithTrading() {
   return {
-    ...engine.getMatchdayCupScoreRules(),
-    fvbTradeVolumePointWei: FVB_TRADE_VOLUME_POINT_WEI.toString(),
-    fvbTradeVolumePointOKB: formatEther(FVB_TRADE_VOLUME_POINT_WEI),
+    dailyVolumePointUsd: DISTRIBUTION_DAILY_VOLUME_POINT_USD,
+    xImpressionPoint: DISTRIBUTION_X_IMPRESSION_POINT,
+    referralPoints: DISTRIBUTION_REFERRAL_POINTS,
+    stakePoints: DISTRIBUTION_STAKE_POINTS,
+    winPoints: DISTRIBUTION_WIN_POINTS,
+    stakeDailyCap: DISTRIBUTION_STAKE_DAILY_CAP,
     fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
     fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
-    matchdayRequiresFanVibeStake: true,
+    xRequired: true,
+    matchdayRequiresFanVibeStake: false,
     fvbTradeSource: 'verified_onchain_fvb_transfer_logs',
     fvbTradeScope: fvbTradeSourceScope(),
   };
 }
 
-async function attachFvbTrading<T extends { address: string; positions?: number; score?: number; scoreComponents?: Record<string, number>; lastActiveAt?: number }>(entries: T[]) {
+function xProfileFor(address: string) {
+  return appData.xProfiles?.[address.toLowerCase()] ?? null;
+}
+
+function xStatsFor(address: string) {
+  const key = `${address.toLowerCase()}:${fvbTradeDay(Date.now())}`;
+  return appData.xDailyStats?.[key] ?? null;
+}
+
+function xScoreFor(address: string) {
+  const stats = xStatsFor(address);
+  const impressions = Math.max(0, Number(stats?.impressions ?? 0));
+  return Math.floor(impressions / DISTRIBUTION_X_IMPRESSION_POINT);
+}
+
+function walletMeetsTradeMinimum(address: string, prizeMinWei: bigint): boolean {
+  return BigInt(fvbTradeStats(address).fvbTradeVolumeOkbWei) >= prizeMinWei;
+}
+
+function qualifiedReferralCount(address: string, prizeMinWei: bigint): number {
+  const key = address.toLowerCase();
+  if (!xProfileFor(key) || !walletMeetsTradeMinimum(key, prizeMinWei)) return 0;
+  return appData.referrals.filter(referral =>
+    referral.status === 'qualified'
+    && referral.referrer.toLowerCase() === key
+    && !!xProfileFor(referral.referred)
+    && walletMeetsTradeMinimum(referral.referred, prizeMinWei)
+  ).length;
+}
+
+async function attachFvbTrading<T extends { address: string; positions?: number; dailyPositions?: number; wins?: number; score?: number; scoreComponents?: Record<string, number>; lastActiveAt?: number }>(entries: T[]) {
   const entryMinWei = await fvbTradeEntryMinOkbWei();
   const prizeMinWei = await fvbTradePrizeMinOkbWei();
+  const okbUsd = await getOkbUsdPrice();
   return entries
     .map(entry => {
       const stats = fvbTradeStats(entry.address);
       const tradeOkbWei = BigInt(stats.fvbTradeVolumeOkbWei);
-      const tradingPoints = Number(tradeOkbWei / FVB_TRADE_VOLUME_POINT_WEI);
+      const dailyTradeOkb = Number(formatEther(BigInt(stats.fvbDailyTradeVolumeOkbWei)));
+      const dailyVolumePoints = Math.floor((dailyTradeOkb * okbUsd.price) / Math.max(0.000001, DISTRIBUTION_DAILY_VOLUME_POINT_USD));
+      const socialPoints = xScoreFor(entry.address);
+      const referrals = qualifiedReferralCount(entry.address, prizeMinWei);
+      const referralPoints = referrals * DISTRIBUTION_REFERRAL_POINTS;
+      const countedStakes = Math.min(entry.dailyPositions ?? 0, DISTRIBUTION_STAKE_DAILY_CAP);
+      const stakePoints = countedStakes * DISTRIBUTION_STAKE_POINTS;
+      const winPoints = (entry.wins ?? 0) * DISTRIBUTION_WIN_POINTS;
+      const xProfile = xProfileFor(entry.address);
+      const xStats = xStatsFor(entry.address);
+      const fvbPrizeEligible = tradeOkbWei >= prizeMinWei;
+      const xConnected = !!xProfile;
+      const distributionQualified = fvbPrizeEligible && xConnected;
+      const score = distributionQualified
+        ? dailyVolumePoints + socialPoints + referralPoints + stakePoints + winPoints
+        : 0;
       return {
         ...entry,
         ...stats,
+        xConnected,
+        xHandle: xProfile?.handle ?? null,
+        xUserId: xProfile?.xUserId ?? null,
+        xImpressions: xStats?.impressions ?? 0,
+        xEngagements: xStats?.engagements ?? 0,
+        xTweets: xStats?.tweets ?? 0,
+        qualifiedReferrals: referrals,
         fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
         fvbTradeEntryMinimumOkbWei: entryMinWei.toString(),
         fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
         fvbTradePrizeMinimumOkbWei: prizeMinWei.toString(),
         fvbTradeEligible: tradeOkbWei >= entryMinWei,
-        fvbPrizeEligible: tradeOkbWei >= prizeMinWei,
+        fvbPrizeEligible,
         fanvibeActive: (entry.positions ?? 0) > 0,
-        matchdayQualified: tradeOkbWei >= prizeMinWei && (entry.positions ?? 0) > 0,
-        score: (entry.score ?? 0) + tradingPoints,
+        matchdayQualified: distributionQualified,
+        distributionQualified,
+        eligibilityReason: !fvbPrizeEligible
+          ? `Trade $${FVB_TRADE_PRIZE_MIN_USD}+ FVB`
+          : !xConnected
+            ? 'Connect X'
+            : 'Qualified',
+        score,
         scoreComponents: {
-          ...(entry.scoreComponents ?? {}),
-          trading: tradingPoints,
+          dailyVolume: dailyVolumePoints,
+          social: socialPoints,
+          referrals: referralPoints,
+          stakes: stakePoints,
+          wins: winPoints,
         },
         lastActiveAt: Math.max(entry.lastActiveAt ?? 0, stats.fvbLastTradeAt),
       };
@@ -793,6 +890,7 @@ async function matchdayEntriesWithEligibility(limit: number) {
     active: number;
     refunded: number;
     positions: number;
+    dailyPositions?: number;
     winRate: number | null;
     lastActiveAt: number;
     score?: number;
@@ -819,14 +917,16 @@ async function matchdayEntriesWithEligibility(limit: number) {
       active: 0,
       refunded: 0,
       positions: 0,
+      dailyPositions: 0,
       winRate: null,
       lastActiveAt: wallet.lastTradeAt,
       score: 0,
       scoreComponents: {
-        volume: 0,
+        dailyVolume: 0,
+        social: 0,
+        referrals: 0,
+        stakes: 0,
         wins: 0,
-        active: 0,
-        participation: 0,
       },
       scoreRules: scoreRulesWithTrading(),
     });
@@ -1243,6 +1343,8 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       syncingFvbFans: allEntries.filter(entry => entry.fvbEligible === null || entry.fvbEligible === undefined).length,
       prizeEligibleFans: allEntries.filter(entry => entry.fvbPrizeEligible === true).length,
       activeFanVibeFans: allEntries.filter(entry => entry.fanvibeActive === true).length,
+      xConnectedFans: allEntries.filter(entry => entry.xConnected === true).length,
+      pendingXFans: allEntries.filter(entry => entry.fvbPrizeEligible === true && entry.xConnected !== true).length,
       pendingFanVibeActionFans: allEntries.filter(entry => entry.fvbPrizeEligible === true && entry.fanvibeActive !== true).length,
     },
     fvbEligibility: {
@@ -1258,8 +1360,8 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      fanvibeAction: 'Prize leaderboard requires at least one FanVibe World Cup market stake from the same wallet.',
-      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity plus FanVibe activity. Final winners are reviewed before payout.',
+      fanvibeAction: 'Distribution Cup ranking requires connected X plus verified FVB trading volume.',
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity, connected X, and review before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,
@@ -1329,29 +1431,41 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
     returnedWei: '0',
     wins: 0,
     losses: 0,
-    active: 0,
-    refunded: 0,
-    positions: 0,
-    winRate: null,
-    lastActiveAt: 0,
-    score: 0,
-    scoreComponents: {
-      trading: 0,
-      volume: 0,
-      wins: 0,
       active: 0,
-      participation: 0,
+      refunded: 0,
+      positions: 0,
+      dailyPositions: 0,
+      winRate: null,
+      lastActiveAt: 0,
+      score: 0,
+      scoreComponents: {
+      dailyVolume: 0,
+      social: 0,
+      referrals: 0,
+      stakes: 0,
+      wins: 0,
     },
     fvbTradeVolumeWei: '0',
     fvbTradeVolumeOkbWei: '0',
+    fvbDailyTradeVolumeWei: '0',
+    fvbDailyTradeVolumeOkbWei: '0',
+    fvbDailyTradeTransfers: 0,
     fvbTradeTransfers: 0,
     fvbLastTradeAt: 0,
+    xConnected: false,
+    xHandle: null,
+    xImpressions: 0,
+    xEngagements: 0,
+    xTweets: 0,
+    qualifiedReferrals: 0,
     fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
     fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
     fvbTradeEligible: false,
     fvbPrizeEligible: false,
     fanvibeActive: false,
     matchdayQualified: false,
+    distributionQualified: false,
+    eligibilityReason: 'Connect X',
     scoreRules: scoreRulesWithTrading(),
   };
   const entry = ranked ?? (unqualifiedStats ? { ...unqualifiedStats, rank: null } : emptyEntry);
@@ -1375,8 +1489,8 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      fanvibeAction: 'Prize leaderboard requires at least one FanVibe World Cup market stake from the same wallet.',
-      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity plus FanVibe activity. Final winners are reviewed before payout.',
+      fanvibeAction: 'Distribution Cup ranking requires connected X plus verified FVB trading volume.',
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity, connected X, and review before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,
@@ -1492,6 +1606,77 @@ app.put('/profiles/:address', async (req, res) => {
   }
   await persistAppData();
   res.json({ address: address.data, name: appData.profiles[key]?.name ?? '' });
+});
+
+function requireAdmin(req: Request, res: Response): boolean {
+  if (!ADMIN_API_TOKEN) {
+    res.status(503).json({ error: 'admin api is not configured' });
+    return false;
+  }
+  const token = req.header('x-admin-token') ?? req.header('authorization')?.replace(/^Bearer\s+/i, '');
+  if (token !== ADMIN_API_TOKEN) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+app.get('/x-profile/:address', (req, res) => {
+  const parsed = addressSchema.safeParse(req.params.address);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+  res.json({ profile: xProfileFor(parsed.data) });
+});
+
+app.post('/admin/x-profile', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const schema = z.object({
+    address: addressSchema,
+    xUserId: z.string().min(1).max(128),
+    handle: z.string().min(1).max(64).transform(value => value.replace(/^@/, '')),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const key = parsed.data.address.toLowerCase();
+  const now = Date.now();
+  appData.xProfiles ??= {};
+  appData.xProfiles[key] = {
+    address: parsed.data.address,
+    xUserId: parsed.data.xUserId,
+    handle: parsed.data.handle,
+    connectedAt: appData.xProfiles[key]?.connectedAt ?? now,
+    updatedAt: now,
+  };
+  await persistAppData();
+  res.json({ ok: true, profile: appData.xProfiles[key] });
+});
+
+app.post('/admin/x-daily-stats', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const schema = z.object({
+    address: addressSchema,
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).default(fvbTradeDay(Date.now())),
+    impressions: z.coerce.number().int().min(0),
+    engagements: z.coerce.number().int().min(0).default(0),
+    tweets: z.coerce.number().int().min(0).default(0),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const profile = xProfileFor(parsed.data.address);
+  if (!profile) return res.status(400).json({ error: 'x profile is not connected' });
+  const key = `${parsed.data.address.toLowerCase()}:${parsed.data.date}`;
+  appData.xDailyStats ??= {};
+  appData.xDailyStats[key] = {
+    address: parsed.data.address,
+    xUserId: profile.xUserId,
+    handle: profile.handle,
+    date: parsed.data.date,
+    impressions: parsed.data.impressions,
+    engagements: parsed.data.engagements,
+    tweets: parsed.data.tweets,
+    updatedAt: Date.now(),
+  };
+  await persistAppData();
+  res.json({ ok: true, stats: appData.xDailyStats[key] });
 });
 
 app.post('/referrals/claim', async (req, res) => {
