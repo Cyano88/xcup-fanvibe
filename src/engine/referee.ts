@@ -46,7 +46,7 @@ const OUTCOME_MAP: Record<number, Outcome> = { 0: 'home', 1: 'draw', 2: 'away' }
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
 const MAX_PERSISTED_SETTLEMENTS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENTS ?? '200'));
 const MAX_PERSISTED_SETTLEMENT_JOBS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENT_JOBS ?? '200'));
-const SIMULATION_ENABLED = process.env.ENABLE_SIMULATION === 'true';
+const SIMULATION_ENABLED = false;
 const MATCHDAY_VOLUME_POINT_WEI = 1_000_000_000_000_000n; // 0.001 OKB
 const MATCHDAY_WIN_BONUS_POINTS = 5_000;
 const MATCHDAY_ACTIVE_BONUS_POINTS = 500;

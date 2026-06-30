@@ -190,6 +190,7 @@ export interface PersistedAppData {
   fvbTradeIndex?: PersistedFvbTradeIndex;
   xProfiles?: Record<string, PersistedXProfile>;
   xDailyStats?: Record<string, PersistedXDailyStats>;
+  xAuthStates?: Record<string, PersistedXAuthState>;
   updatedAt: number;
 }
 
@@ -199,6 +200,12 @@ export interface PersistedXProfile {
   handle: string;
   connectedAt: number;
   updatedAt: number;
+  accessTokenCipher?: string;
+  refreshTokenCipher?: string;
+  tokenType?: string;
+  scope?: string;
+  expiresAt?: number;
+  lastSyncedAt?: number;
 }
 
 export interface PersistedXDailyStats {
@@ -210,6 +217,13 @@ export interface PersistedXDailyStats {
   engagements: number;
   tweets: number;
   updatedAt: number;
+}
+
+export interface PersistedXAuthState {
+  address: string;
+  codeVerifier: string;
+  createdAt: number;
+  returnTo?: string;
 }
 
 async function upstash<T>(command: unknown[]): Promise<T | null> {

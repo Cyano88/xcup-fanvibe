@@ -3,13 +3,14 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { createPublicClient, createWalletClient, formatEther, http, parseAbiItem, parseEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
-import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedFvbTradeDaily, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedSeasonState, type SeasonStorageMode } from './seasonStore.js';
+import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedFvbTradeDaily, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedSeasonState, type PersistedXProfile, type SeasonStorageMode } from './seasonStore.js';
 import { SeasonController } from './engine/seasonController.js';
 import { getWorldCupFeed, getWorldCupMatchDetail } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
@@ -323,6 +324,21 @@ const DISTRIBUTION_REFERRAL_POINTS = Number(process.env.DISTRIBUTION_REFERRAL_PO
 const DISTRIBUTION_STAKE_POINTS = Number(process.env.DISTRIBUTION_STAKE_POINTS ?? '100');
 const DISTRIBUTION_WIN_POINTS = Number(process.env.DISTRIBUTION_WIN_POINTS ?? '250');
 const DISTRIBUTION_STAKE_DAILY_CAP = Math.max(1, Number(process.env.DISTRIBUTION_STAKE_DAILY_CAP ?? '20'));
+const X_CLIENT_ID = process.env.X_CLIENT_ID ?? process.env.TWITTER_CLIENT_ID ?? '';
+const X_CLIENT_SECRET = process.env.X_CLIENT_SECRET ?? process.env.TWITTER_CLIENT_SECRET ?? '';
+const X_CALLBACK_URL = process.env.X_CALLBACK_URL ?? '';
+const X_FRONTEND_REDIRECT_URL = process.env.X_FRONTEND_REDIRECT_URL
+  ?? process.env.FRONTEND_URL
+  ?? 'https://www.fanvibe.xyz';
+const X_TOKEN_ENCRYPTION_KEY = process.env.X_TOKEN_ENCRYPTION_KEY ?? process.env.X_ENCRYPTION_KEY ?? '';
+const X_AUTH_STATE_TTL_MS = Number(process.env.X_AUTH_STATE_TTL_MS ?? '900000');
+const X_SYNC_INTERVAL_MS = Number(process.env.X_SYNC_INTERVAL_MS ?? String(24 * 60 * 60 * 1000));
+const X_SYNC_MAX_PAGES = Math.max(1, Number(process.env.X_SYNC_MAX_PAGES ?? '25'));
+const X_SCORE_TERMS = (process.env.X_SCORE_TERMS ?? 'fanvibe,FanVibe,#fanvibe,$FVB,FVB')
+  .split(',')
+  .map(term => term.trim().toLowerCase())
+  .filter(Boolean);
+let xSyncRunning = false;
 
 function fvbTradeSourceScope(): 'counterparty_scoped' | 'all_transfers' {
   return FVB_TRADE_COUNTERPARTIES.size > 0 ? 'counterparty_scoped' : 'all_transfers';
@@ -745,6 +761,233 @@ function xProfileFor(address: string) {
 function xStatsFor(address: string) {
   const key = `${address.toLowerCase()}:${fvbTradeDay(Date.now())}`;
   return appData.xDailyStats?.[key] ?? null;
+}
+
+function xAuthConfigured(): boolean {
+  return Boolean(X_CLIENT_ID && X_CALLBACK_URL && X_TOKEN_ENCRYPTION_KEY);
+}
+
+function base64Url(input: Buffer): string {
+  return input.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function tokenKey(): Buffer {
+  return createHash('sha256').update(X_TOKEN_ENCRYPTION_KEY).digest();
+}
+
+function encryptToken(value: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', tokenKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${base64Url(iv)}.${base64Url(tag)}.${base64Url(encrypted)}`;
+}
+
+function decryptToken(value?: string): string | null {
+  if (!value || !X_TOKEN_ENCRYPTION_KEY) return null;
+  const parts = value.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const [iv, tag, encrypted] = parts.map(part => Buffer.from(part.replace(/-/g, '+').replace(/_/g, '/'), 'base64'));
+    const decipher = createDecipheriv('aes-256-gcm', tokenKey(), iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+function pruneXAuthStates(now = Date.now()): void {
+  if (!appData.xAuthStates) return;
+  for (const [state, item] of Object.entries(appData.xAuthStates)) {
+    if (now - item.createdAt > X_AUTH_STATE_TTL_MS) delete appData.xAuthStates[state];
+  }
+}
+
+function xFrontendRedirect(params: Record<string, string>): string {
+  const url = new URL(X_FRONTEND_REDIRECT_URL);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  return url.toString();
+}
+
+function safeXReturnTo(value?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const target = new URL(value);
+    const frontend = new URL(X_FRONTEND_REDIRECT_URL);
+    const allowedHosts = new Set([frontend.host, 'fanvibe.xyz', 'www.fanvibe.xyz']);
+    return target.protocol === 'https:' && allowedHosts.has(target.host) ? target.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function xProfilePublic(profile: PersistedXProfile | null) {
+  if (!profile) return null;
+  return {
+    address: profile.address,
+    xUserId: profile.xUserId,
+    handle: profile.handle,
+    connectedAt: profile.connectedAt,
+    updatedAt: profile.updatedAt,
+    lastSyncedAt: profile.lastSyncedAt ?? null,
+  };
+}
+
+type XTokenResponse = {
+  token_type?: string;
+  expires_in?: number;
+  access_token?: string;
+  refresh_token?: string;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+};
+
+async function exchangeXToken(params: URLSearchParams): Promise<XTokenResponse> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (X_CLIENT_SECRET) {
+    headers.Authorization = `Basic ${Buffer.from(`${X_CLIENT_ID}:${X_CLIENT_SECRET}`).toString('base64')}`;
+  } else {
+    params.set('client_id', X_CLIENT_ID);
+  }
+  const response = await fetch('https://api.twitter.com/2/oauth2/token', {
+    method: 'POST',
+    headers,
+    body: params,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const json = await response.json().catch(() => ({})) as XTokenResponse;
+  if (!response.ok) {
+    throw new Error(json.error_description ?? json.error ?? `X token HTTP ${response.status}`);
+  }
+  if (!json.access_token) throw new Error('X token response missing access token');
+  return json;
+}
+
+async function refreshXAccessToken(profile: PersistedXProfile): Promise<string | null> {
+  const existingAccess = decryptToken(profile.accessTokenCipher);
+  if (existingAccess && (!profile.expiresAt || profile.expiresAt > Date.now() + 60_000)) return existingAccess;
+  const refreshToken = decryptToken(profile.refreshTokenCipher);
+  if (!refreshToken) return existingAccess;
+
+  const params = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+  });
+  const token = await exchangeXToken(params);
+  profile.accessTokenCipher = encryptToken(token.access_token!);
+  if (token.refresh_token) profile.refreshTokenCipher = encryptToken(token.refresh_token);
+  profile.tokenType = token.token_type ?? profile.tokenType ?? 'bearer';
+  profile.scope = token.scope ?? profile.scope;
+  profile.expiresAt = token.expires_in ? Date.now() + token.expires_in * 1000 : profile.expiresAt;
+  profile.updatedAt = Date.now();
+  await persistAppData();
+  return token.access_token!;
+}
+
+function tweetMatchesScoreTerms(text: string): boolean {
+  const lower = text.toLowerCase();
+  return X_SCORE_TERMS.length === 0 || X_SCORE_TERMS.some(term => lower.includes(term));
+}
+
+function tweetMetricTotal(metrics: Record<string, unknown> | undefined): number {
+  if (!metrics) return 0;
+  return ['like_count', 'reply_count', 'retweet_count', 'quote_count', 'bookmark_count']
+    .reduce((total, key) => total + Math.max(0, Number(metrics[key] ?? 0)), 0);
+}
+
+async function fetchXDailyStats(profile: PersistedXProfile, date = fvbTradeDay(Date.now())) {
+  const accessToken = await refreshXAccessToken(profile);
+  if (!accessToken) throw new Error('x access token unavailable');
+  const start = `${date}T00:00:00Z`;
+  const end = `${date}T23:59:59Z`;
+  const fields = 'created_at,text,public_metrics,non_public_metrics,organic_metrics';
+  const url = new URL(`https://api.twitter.com/2/users/${encodeURIComponent(profile.xUserId)}/tweets`);
+  url.searchParams.set('max_results', '100');
+  url.searchParams.set('start_time', start);
+  url.searchParams.set('end_time', end);
+  url.searchParams.set('tweet.fields', fields);
+  url.searchParams.set('exclude', 'retweets,replies');
+
+  const allTweets: Array<{
+    text?: string;
+    public_metrics?: Record<string, unknown>;
+    non_public_metrics?: Record<string, unknown>;
+    organic_metrics?: Record<string, unknown>;
+  }> = [];
+  let nextToken: string | undefined;
+  let publicOnly = false;
+  for (let page = 0; page < X_SYNC_MAX_PAGES; page += 1) {
+    if (nextToken) url.searchParams.set('pagination_token', nextToken);
+    else url.searchParams.delete('pagination_token');
+    if (publicOnly) url.searchParams.set('tweet.fields', 'created_at,text,public_metrics');
+    let response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20_000) });
+    if (!publicOnly && (response.status === 400 || response.status === 403)) {
+      publicOnly = true;
+      url.searchParams.set('tweet.fields', 'created_at,text,public_metrics');
+      response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20_000) });
+    }
+    const json = await response.json().catch(() => ({})) as {
+      data?: typeof allTweets;
+      meta?: { result_count?: number; next_token?: string };
+      title?: string;
+      detail?: string;
+    };
+    if (!response.ok) throw new Error(json.detail ?? json.title ?? `X tweets HTTP ${response.status}`);
+    allTweets.push(...(json.data ?? []));
+    nextToken = json.meta?.next_token;
+    if (!nextToken) break;
+  }
+
+  const tweets = allTweets.filter(tweet => tweetMatchesScoreTerms(tweet.text ?? ''));
+  let impressions = 0;
+  let engagements = 0;
+  for (const tweet of tweets) {
+    const publicEngagement = tweetMetricTotal(tweet.public_metrics);
+    const nonPublic = Number(tweet.non_public_metrics?.impression_count ?? 0);
+    const organic = Number(tweet.organic_metrics?.impression_count ?? 0);
+    impressions += Math.max(0, nonPublic || organic || publicEngagement);
+    engagements += publicEngagement;
+  }
+  return { date, impressions, engagements, tweets: tweets.length };
+}
+
+async function syncXProfileStats(profile: PersistedXProfile, date = fvbTradeDay(Date.now())) {
+  const stats = await fetchXDailyStats(profile, date);
+  const key = `${profile.address.toLowerCase()}:${date}`;
+  appData.xDailyStats ??= {};
+  appData.xDailyStats[key] = {
+    address: profile.address,
+    xUserId: profile.xUserId,
+    handle: profile.handle,
+    date,
+    impressions: stats.impressions,
+    engagements: stats.engagements,
+    tweets: stats.tweets,
+    updatedAt: Date.now(),
+  };
+  profile.lastSyncedAt = Date.now();
+  profile.updatedAt = Date.now();
+  await persistAppData();
+  return appData.xDailyStats[key];
+}
+
+async function syncConnectedXProfiles(): Promise<void> {
+  if (xSyncRunning || !xAuthConfigured()) return;
+  xSyncRunning = true;
+  try {
+    const profiles = Object.values(appData.xProfiles ?? {}).filter(profile => profile.refreshTokenCipher || profile.accessTokenCipher);
+    for (const profile of profiles) {
+      try {
+        await syncXProfileStats(profile);
+      } catch (err) {
+        console.warn(`[FanVibe] X sync failed for ${profile.address}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  } finally {
+    xSyncRunning = false;
+  }
 }
 
 function xScoreFor(address: string) {
@@ -1624,7 +1867,106 @@ function requireAdmin(req: Request, res: Response): boolean {
 app.get('/x-profile/:address', (req, res) => {
   const parsed = addressSchema.safeParse(req.params.address);
   if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
-  res.json({ profile: xProfileFor(parsed.data) });
+  res.json({ profile: xProfilePublic(xProfileFor(parsed.data)), configured: xAuthConfigured() });
+});
+
+app.get('/auth/x/start', async (req, res) => {
+  if (!xAuthConfigured()) return res.status(503).json({ error: 'x auth is not configured' });
+  const parsed = z.object({
+    address: addressSchema,
+    returnTo: z.string().url().optional(),
+  }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid x auth request' });
+
+  pruneXAuthStates();
+  const state = base64Url(randomBytes(32));
+  const codeVerifier = base64Url(randomBytes(48));
+  const codeChallenge = base64Url(createHash('sha256').update(codeVerifier).digest());
+  appData.xAuthStates ??= {};
+  appData.xAuthStates[state] = {
+    address: parsed.data.address,
+    codeVerifier,
+    createdAt: Date.now(),
+    returnTo: safeXReturnTo(parsed.data.returnTo),
+  };
+  await persistAppData();
+
+  const authUrl = new URL('https://twitter.com/i/oauth2/authorize');
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('client_id', X_CLIENT_ID);
+  authUrl.searchParams.set('redirect_uri', X_CALLBACK_URL);
+  authUrl.searchParams.set('scope', 'tweet.read users.read offline.access');
+  authUrl.searchParams.set('state', state);
+  authUrl.searchParams.set('code_challenge', codeChallenge);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
+  res.redirect(authUrl.toString());
+});
+
+app.get('/auth/x/callback', async (req, res) => {
+  if (!xAuthConfigured()) return res.redirect(xFrontendRedirect({ x: 'not_configured' }));
+  const parsed = z.object({
+    code: z.string().min(1),
+    state: z.string().min(16),
+  }).safeParse(req.query);
+  if (!parsed.success) return res.redirect(xFrontendRedirect({ x: 'invalid_callback' }));
+
+  pruneXAuthStates();
+  const pending = appData.xAuthStates?.[parsed.data.state];
+  if (!pending || Date.now() - pending.createdAt > X_AUTH_STATE_TTL_MS) {
+    return res.redirect(xFrontendRedirect({ x: 'expired' }));
+  }
+  delete appData.xAuthStates?.[parsed.data.state];
+
+  try {
+    const token = await exchangeXToken(new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: parsed.data.code,
+      redirect_uri: X_CALLBACK_URL,
+      code_verifier: pending.codeVerifier,
+    }));
+    const meRes = await fetch('https://api.twitter.com/2/users/me?user.fields=username', {
+      headers: { Authorization: `Bearer ${token.access_token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const meJson = await meRes.json().catch(() => ({})) as { data?: { id?: string; username?: string }; detail?: string; title?: string };
+    if (!meRes.ok || !meJson.data?.id || !meJson.data?.username) {
+      throw new Error(meJson.detail ?? meJson.title ?? `X users/me HTTP ${meRes.status}`);
+    }
+
+    const key = pending.address.toLowerCase();
+    const now = Date.now();
+    appData.xProfiles ??= {};
+    appData.xProfiles[key] = {
+      address: pending.address,
+      xUserId: meJson.data.id,
+      handle: meJson.data.username.replace(/^@/, ''),
+      connectedAt: appData.xProfiles[key]?.connectedAt ?? now,
+      updatedAt: now,
+      accessTokenCipher: encryptToken(token.access_token!),
+      refreshTokenCipher: token.refresh_token ? encryptToken(token.refresh_token) : appData.xProfiles[key]?.refreshTokenCipher,
+      tokenType: token.token_type ?? 'bearer',
+      scope: token.scope,
+      expiresAt: token.expires_in ? now + token.expires_in * 1000 : undefined,
+      lastSyncedAt: appData.xProfiles[key]?.lastSyncedAt,
+    };
+    await persistAppData();
+    syncXProfileStats(appData.xProfiles[key]).catch(err => {
+      console.warn(`[FanVibe] Initial X sync failed for ${pending.address}: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    res.redirect(pending.returnTo ?? xFrontendRedirect({ x: 'connected', address: pending.address }));
+  } catch (err) {
+    console.warn(`[FanVibe] X callback failed: ${err instanceof Error ? err.message : String(err)}`);
+    await persistAppData();
+    res.redirect(pending.returnTo ?? xFrontendRedirect({ x: 'failed' }));
+  }
+});
+
+app.post('/auth/x/disconnect', async (req, res) => {
+  const parsed = z.object({ address: addressSchema }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+  delete appData.xProfiles?.[parsed.data.address.toLowerCase()];
+  await persistAppData();
+  res.json({ ok: true });
 });
 
 app.post('/admin/x-profile', async (req, res) => {
@@ -1640,6 +1982,7 @@ app.post('/admin/x-profile', async (req, res) => {
   const now = Date.now();
   appData.xProfiles ??= {};
   appData.xProfiles[key] = {
+    ...appData.xProfiles[key],
     address: parsed.data.address,
     xUserId: parsed.data.xUserId,
     handle: parsed.data.handle,
@@ -1647,7 +1990,7 @@ app.post('/admin/x-profile', async (req, res) => {
     updatedAt: now,
   };
   await persistAppData();
-  res.json({ ok: true, profile: appData.xProfiles[key] });
+  res.json({ ok: true, profile: xProfilePublic(appData.xProfiles[key]) });
 });
 
 app.post('/admin/x-daily-stats', async (req, res) => {
@@ -1677,6 +2020,41 @@ app.post('/admin/x-daily-stats', async (req, res) => {
   };
   await persistAppData();
   res.json({ ok: true, stats: appData.xDailyStats[key] });
+});
+
+app.post('/admin/x-sync/run', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  if (!xAuthConfigured()) return res.status(503).json({ error: 'x auth is not configured' });
+  const parsed = z.object({
+    address: addressSchema.optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).default(fvbTradeDay(Date.now())),
+  }).safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  if (parsed.data.address) {
+    const profile = xProfileFor(parsed.data.address);
+    if (!profile) return res.status(404).json({ error: 'x profile is not connected' });
+    const stats = await syncXProfileStats(profile, parsed.data.date);
+    return res.json({ ok: true, synced: 1, stats });
+  }
+
+  if (xSyncRunning) return res.status(409).json({ error: 'x sync already running' });
+  const profiles = Object.values(appData.xProfiles ?? {}).filter(profile => profile.refreshTokenCipher || profile.accessTokenCipher);
+  let synced = 0;
+  const failures: Array<{ address: string; error: string }> = [];
+  xSyncRunning = true;
+  try {
+    for (const profile of profiles) {
+      try {
+        await syncXProfileStats(profile, parsed.data.date);
+        synced += 1;
+      } catch (err) {
+        failures.push({ address: profile.address, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  } finally {
+    xSyncRunning = false;
+  }
+  res.json({ ok: true, synced, failures });
 });
 
 app.post('/referrals/claim', async (req, res) => {
@@ -2214,7 +2592,7 @@ app.post('/comments/:fixtureId', (req, res) => {
 // ── Server start ──────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
-const SIMULATION_ENABLED = process.env.ENABLE_SIMULATION === 'true';
+const SIMULATION_ENABLED = false;
 
 httpServer.listen(PORT, async () => {
   console.log(`[FanVibe] HTTP server on port ${PORT}`);
@@ -2240,6 +2618,7 @@ httpServer.listen(PORT, async () => {
       await scanFvbTradeVolume();
     }
     await scanFvbHolderCandidates();
+    await syncConnectedXProfiles();
     setInterval(() => {
       retryPendingStakeReports().catch(err => {
         console.error(`[FanVibe] Pending stake retry failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -2255,6 +2634,11 @@ httpServer.listen(PORT, async () => {
         console.error(`[FanVibe] FVB holder scan failed: ${err instanceof Error ? err.message : String(err)}`);
       });
     }, FVB_TRADE_SCAN_INTERVAL_MS);
+    setInterval(() => {
+      syncConnectedXProfiles().catch(err => {
+        console.error(`[FanVibe] X sync failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }, X_SYNC_INTERVAL_MS);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[FanVibe] Engine start failed: ${msg}`);

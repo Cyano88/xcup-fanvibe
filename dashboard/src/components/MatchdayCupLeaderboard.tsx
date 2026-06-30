@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trophy } from 'lucide-react';
+import { Link2, Trophy } from 'lucide-react';
 import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
 import { fanDisplayName, shortWallet } from '../lib/fanProfile';
 import { explorerAddr } from '../lib/chain';
@@ -169,6 +169,11 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   const [visibleMatchday, setVisibleMatchday] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleTraders, setVisibleTraders] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleCountries, setVisibleCountries] = useState(LEADERBOARD_BATCH_SIZE);
+  const connectX = () => {
+    if (!address) return;
+    const returnTo = window.location.href;
+    window.location.href = `${BACKEND_HTTP}/auth/x/start?address=${encodeURIComponent(address)}&returnTo=${encodeURIComponent(returnTo)}`;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -319,13 +324,25 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
               </p>
               <FvbTradeSafety compact showTradeLink className="mt-3 max-w-2xl" />
             </div>
-            <button
-              type="button"
-              onClick={onOpenWorldCup}
-              className="inline-flex h-9 shrink-0 items-center rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
-            >
-              Open matches
-            </button>
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              {address && (
+                <button
+                  type="button"
+                  onClick={connectX}
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-blue-500 px-3 text-xs font-bold text-white transition-colors hover:bg-blue-400"
+                >
+                  <Link2 size={14} />
+                  Connect X
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onOpenWorldCup}
+                className="inline-flex h-9 shrink-0 items-center rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
+              >
+                Open matches
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -340,12 +357,15 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 const fvbStatus = myRank.fvbEligible
                   ? `${formatFvbBalance(myRank.fvbEligibleWei)} FVB held`
                   : 'Hold FVB for status';
+                const xStatus = myRank.xConnected
+                  ? `X @${myRank.xHandle ?? 'connected'}`
+                  : 'Connect X';
                 const tradeStatus = myRank.matchdayQualified
                   ? 'Distribution qualified'
                   : myRank.eligibilityReason ?? `Connect X and trade $${myRank.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
                 const rankStatus = myRank.rank
-                  ? `${tradeStatus}. ${fvbStatus}.`
-                  : tradeStatus;
+                  ? `${tradeStatus}. ${xStatus}. ${fvbStatus}.`
+                  : `${tradeStatus}. ${xStatus}.`;
                 return (
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
                     <div className="min-w-0">
@@ -370,6 +390,13 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         {rankStatus}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={connectX}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold ring-1 ${myRank.xConnected ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-300' : 'bg-blue-500/10 text-blue-700 ring-blue-500/20 dark:text-blue-300'}`}
+                        >
+                          {myRank.xConnected ? `@${myRank.xHandle ?? 'X connected'}` : 'Connect X'}
+                        </button>
                         {(myRank.scoreComponents
                           ? [
                               ['Daily vol', myRank.scoreComponents.dailyVolume],
