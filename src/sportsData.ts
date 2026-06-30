@@ -219,17 +219,17 @@ function parseProviderTime(value?: string): number {
 
 function statusFromProvider(status?: string): FixtureStatus {
   const value = normalize(status);
-  if (['live', 'inplay', 'halftime', 'firsthalf', 'secondhalf'].includes(value)) return 'locked';
-  if (['finished', 'fulltime', 'ft', 'completed'].includes(value)) return 'settled';
+  if (['live', 'inplay', 'halftime', 'ht', 'firsthalf', 'secondhalf', 'extratime', 'et', 'penalties'].includes(value)) return 'locked';
+  if (['finished', 'fulltime', 'ft', 'completed', 'aet', 'ftaet', 'ftpen', 'afterextratime', 'afterpenalties', 'ended'].includes(value)) return 'settled';
   if (['cancelled', 'postponed', 'suspended'].includes(value)) return 'locked';
   return 'open';
 }
 
 function matchStateStatusFromProvider(status?: string): MatchState['status'] | null {
   const value = normalize(status);
-  if (['halftime'].includes(value)) return 'half_time';
-  if (['live', 'inplay', 'firsthalf', 'secondhalf'].includes(value)) return 'live';
-  if (['finished', 'fulltime', 'ft', 'completed'].includes(value)) return 'finished';
+  if (['halftime', 'ht'].includes(value)) return 'half_time';
+  if (['live', 'inplay', 'firsthalf', 'secondhalf', 'extratime', 'et', 'penalties'].includes(value)) return 'live';
+  if (['finished', 'fulltime', 'ft', 'completed', 'aet', 'ftaet', 'ftpen', 'afterextratime', 'afterpenalties', 'ended'].includes(value)) return 'finished';
   return null;
 }
 
@@ -257,8 +257,8 @@ function sportmonksTeam(match: SportmonksFixture, location: 'home' | 'away'): Te
 
 function sportmonksStatus(match: SportmonksFixture): FixtureStatus {
   const state = normalize(match.state?.developer_name ?? match.state?.short_name ?? match.state?.name);
-  if (['inplay', 'live', '1sthalf', '2ndhalf', 'halftime', 'break'].includes(state)) return 'locked';
-  if (['finished', 'ft', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'settled';
+  if (['inplay', 'live', '1sthalf', '2ndhalf', 'halftime', 'ht', 'break', 'extratime', 'et', 'penalties'].includes(state)) return 'locked';
+  if (['finished', 'fulltime', 'ft', 'completed', 'aet', 'ftaet', 'ftpen', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'settled';
   if (['postponed', 'cancelled', 'suspended', 'interrupted'].includes(state)) return 'locked';
   return 'open';
 }
@@ -266,9 +266,9 @@ function sportmonksStatus(match: SportmonksFixture): FixtureStatus {
 function sportmonksMatchStateStatus(match: SportmonksFixture): MatchState['status'] | null {
   if (match.periods?.some(period => period.ticking)) return 'live';
   const state = normalize(match.state?.developer_name ?? match.state?.short_name ?? match.state?.name);
-  if (['halftime', 'break'].includes(state)) return 'half_time';
-  if (['inplay', 'live', '1sthalf', '2ndhalf'].includes(state)) return 'live';
-  if (['finished', 'ft', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'finished';
+  if (['halftime', 'ht', 'break'].includes(state)) return 'half_time';
+  if (['inplay', 'live', '1sthalf', '2ndhalf', 'extratime', 'et', 'penalties'].includes(state)) return 'live';
+  if (['finished', 'fulltime', 'ft', 'completed', 'aet', 'ftaet', 'ftpen', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'finished';
   return null;
 }
 
