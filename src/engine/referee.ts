@@ -47,6 +47,9 @@ const MATCHDAY_WIN_BONUS_POINTS = 5_000;
 const MATCHDAY_ACTIVE_BONUS_POINTS = 500;
 const MATCHDAY_POSITION_BONUS_POINTS = 250;
 const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
+const REFEREE_BLOCK_POLL_INTERVAL_MS = Math.max(12_000, Number(process.env.REFEREE_BLOCK_POLL_INTERVAL_MS ?? '60000'));
+const REFEREE_BLOCK_POLL_MAX_BLOCKS = Math.max(1, Number(process.env.REFEREE_BLOCK_POLL_MAX_BLOCKS ?? '6'));
+const REFEREE_BLOCK_POLL_RECENT_BLOCKS = Math.max(0, Number(process.env.REFEREE_BLOCK_POLL_RECENT_BLOCKS ?? '0'));
 
 // ── Champion prediction market ─────────────────────────────────────────────────
 export const CHAMP_FIXTURE_ID = 'champion-2026';
@@ -955,29 +958,31 @@ export class RefereeEngine {
           this.lastBlock = latestNum - 1;
         }
 
-        // Scan every missed block since last poll (cap at 20 to avoid overload)
-        // and always rescan the latest window so short RPC/report outages do
-        // not leave newly sent stakes invisible until a later manual report.
+        // Scan missed blocks with a conservative cap. Explicit stake reports
+        // cover fast confirmation paths, so full recent-window rescans are
+        // opt-in to keep RPC usage predictable.
         const from = this.lastBlock + 1;
-        const to   = Math.min(latestNum, from + 20);
+        const to   = Math.min(latestNum, from + REFEREE_BLOCK_POLL_MAX_BLOCKS - 1);
 
         for (let n = from; n <= to; n++) {
           const block = await this.httpClient.getBlock({ blockNumber: BigInt(n), includeTransactions: true });
           this.scanBlock(block as Block & { transactions: Transaction[] });
         }
 
-        const recentFrom = Math.max(to + 1, latestNum - 24);
-        for (let n = recentFrom; n <= latestNum; n++) {
-          const block = await this.httpClient.getBlock({ blockNumber: BigInt(n), includeTransactions: true });
-          this.scanBlock(block as Block & { transactions: Transaction[] });
+        if (REFEREE_BLOCK_POLL_RECENT_BLOCKS > 0) {
+          const recentFrom = Math.max(to + 1, latestNum - REFEREE_BLOCK_POLL_RECENT_BLOCKS + 1);
+          for (let n = recentFrom; n <= latestNum; n++) {
+            const block = await this.httpClient.getBlock({ blockNumber: BigInt(n), includeTransactions: true });
+            this.scanBlock(block as Block & { transactions: Transaction[] });
+          }
         }
 
-        this.lastBlock = Math.max(to, latestNum - 24);
+        this.lastBlock = Math.max(to, latestNum - REFEREE_BLOCK_POLL_RECENT_BLOCKS);
         this.onUpdate?.();
       } catch {
         this.log('RPC', 'warn', 'Block range poll failed');
       }
-    }, 12_000);
+    }, REFEREE_BLOCK_POLL_INTERVAL_MS);
   }
 
   // Direct TX lookup — called when frontend reports a confirmed stake hash
