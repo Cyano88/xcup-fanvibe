@@ -1,14 +1,13 @@
 import {
   createPublicClient,
   createWalletClient,
-  http,
   formatEther,
   formatUnits,
   encodeFunctionData,
   type Address,
   type PrivateKeyAccount,
 } from 'viem';
-import { xLayerMainnet, USDT_ADDRESS, NATIVE_OKB, PANCAKE_V3_FACTORY } from '../chain.js';
+import { xLayerHttpTransport, xLayerMainnet, USDT_ADDRESS, NATIVE_OKB, PANCAKE_V3_FACTORY } from '../chain.js';
 import type { LogLevel, LogPrefix } from '../types.js';
 
 type LogFn = (prefix: LogPrefix, level: LogLevel, msg: string, tx?: string) => void;
@@ -194,9 +193,10 @@ export async function checkAndRefuel(
   account: PrivateKeyAccount,
   log: LogFn,
 ): Promise<string | null> {
-  const httpRpc = process.env.X_LAYER_MAINNET_RPC ?? 'https://rpc.xlayer.tech';
-  const publicClient = createPublicClient({ chain: xLayerMainnet, transport: http(httpRpc) });
-  const walletClient = createWalletClient({ chain: xLayerMainnet, transport: http(httpRpc), account });
+  const httpRpc = process.env.X_LAYER_MAINNET_RPC ?? process.env.X_LAYER_HTTP_RPC ?? process.env.X_LAYER_RPC_URL;
+  const transport = xLayerHttpTransport(httpRpc);
+  const publicClient = createPublicClient({ chain: xLayerMainnet, transport });
+  const walletClient = createWalletClient({ chain: xLayerMainnet, transport, account });
 
   log('METABOLISM', 'warn', 'OKB below threshold — scanning protocol fee reserves...');
 

@@ -180,7 +180,7 @@ export function DocsPage() {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">World Cup coverage</h2>
               <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-                FanVibe is built around football attention. The app combines live World Cup fixtures, match states, the FVB Matchday Cup, and a news feed that keeps users current between markets.
+                FanVibe is built around football attention. The app combines live World Cup fixtures, match states, the Distribution Cup, and a news feed that keeps users current between markets.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">

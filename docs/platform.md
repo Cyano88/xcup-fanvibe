@@ -10,7 +10,7 @@ FanVibe lets users:
 - Stake OKB on match outcomes.
 - Stake OKB on champion markets.
 - Follow Sportmonks-backed World Cup fixtures across live, upcoming, and finished states.
-- Enter the FVB Matchday Cup by using the same wallet for FVB and real World Cup stakes.
+- Enter the Distribution Cup by trading FVB through OKX Wallet, connecting X, and keeping FanVibe match activity on the same wallet.
 - Track every position in one portfolio.
 - Review payouts, refunds, wallet balance, and total account value.
 - Invite users through account-based referral links with backend-qualified rewards.
@@ -55,7 +55,7 @@ The app keeps account identity simple: if a profile name is set, it is used in t
 FanVibe supports two market types:
 
 - Fixture markets: home, draw, away.
-- Matchday Cup leaderboard: rank through real World Cup stakes, FVB eligibility, wins, and activity.
+- Distribution Cup leaderboard: rank through verified FVB trading volume, X activity, referrals, real World Cup stakes, and wins.
 
 Markets are denominated in OKB. USD value is shown where OKB balances or stake values appear so users can quickly understand position size.
 
@@ -128,7 +128,7 @@ FanVibe uses Sportmonks as the production source of truth for World Cup fixtures
 This gives the product three connected layers:
 
 - Prediction markets: OKB stakes on real World Cup outcomes and account settlement.
-- FVB Matchday Cup: FVB eligibility, country support, and campaign leaderboards.
+- Distribution Cup: verified FVB trading, connected X activity, country support, and campaign leaderboards.
 - World Cup coverage: provider-backed match context plus news that keeps users engaged between market actions.
 
 ## News
@@ -151,7 +151,7 @@ FanVibe uses X Layer because it needs:
 | Area | FanVibe implementation |
 | --- | --- |
 | World Cup consumer surface | Sportmonks-backed live, upcoming, and finished World Cup fixtures plus football news |
-| Prediction markets | OKB fixture markets, Matchday Cup leaderboard, portfolio history, wallet and email smart-wallet sign-in |
+| Prediction markets | OKB fixture markets, Distribution Cup leaderboard, portfolio history, wallet and email smart-wallet sign-in |
 | X Layer proof | Stake indexing, payout/refund records, explorer links, public proof panel |
 | Autonomous operations | Referee settlement jobs, restart recovery, champion settlement, refund queue |
 | Gas resilience | O2-style metabolism loop, threshold monitoring, reserve rebalancing, OKX route plus fallback route |
@@ -219,7 +219,7 @@ npm run build
 - Open `https://fanvibe.xyz`.
 - Sign in by wallet or email.
 - Stake a small OKB amount on a fixture.
-- Open the Matchday leaderboard and verify FVB eligibility/country backing.
+- Open the Distribution Cup leaderboard and verify FVB trading, X connection status, and country backing.
 - Open Portfolio and verify the position appears.
 - Open News and review World Cup plus OKX/X Layer updates.
 - Expand `Why X Layer` and open the v4 hook proof links.

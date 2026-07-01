@@ -22,11 +22,6 @@ interface Props {
   fixture: Fixture;
   pool?: Pool;
   matchState?: MatchState;
-  seasonPhase?: 'preseason' | 'playing' | 'champion' | 'interseason';
-  seasonTimer?: number;
-  seasonKickoffDelayMs?: number;
-  seasonStartedAt?: number;
-  seasonFixtureStartsAt?: number | null;
   stakeClosedNotice?: string;
   refereeAddress: string;
   onStake: (fixtureId: string, outcome: Outcome) => boolean;
@@ -96,13 +91,6 @@ function TBDCard({ fixture }: { fixture: Fixture }) {
   );
 }
 
-function formatShortDuration(totalSeconds: number): string {
-  const secs = Math.max(0, totalSeconds);
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
 function PrimaryMatchStakeAction({
   amountOKB,
   calldata,
@@ -166,11 +154,6 @@ export function FixtureCard({
   fixture,
   pool,
   matchState,
-  seasonPhase,
-  seasonTimer = 0,
-  seasonKickoffDelayMs = 0,
-  seasonStartedAt,
-  seasonFixtureStartsAt,
   stakeClosedNotice,
   refereeAddress,
   onStake,
@@ -198,16 +181,15 @@ export function FixtureCard({
   const stakeAmountUsdNumber = Number(stakeAmountUsd);
   const stakeAmountValid = Number.isFinite(stakeAmountUsdNumber) && stakeAmountUsdNumber >= STAKE_MIN_USD && Number(stakeAmount) > 0;
   const stakeOkbEquivalentLabel = stakeAmount ? `${stakeAmount} OKB` : 'OKB quote loading';
-  const isSeasonPlay = fixture.mode === 'simulated';
   const isLiveMatch = matchState?.status === 'live' || matchState?.status === 'half_time';
   const isFinishedMatch = matchState?.status === 'finished';
   const canStream = isLiveMatch;
 
   // Countdown refresh
   useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), isSeasonPlay ? 1000 : 30_000);
+    const t = setInterval(() => setTick((n) => n + 1), 30_000);
     return () => clearInterval(t);
-  }, [isSeasonPlay]);
+  }, []);
   void tick;
 
   // Auto-flip flag every 3 s (pauses on hover)
@@ -238,32 +220,10 @@ export function FixtureCard({
   const awayPoolUsdLabel = outcomePoolUsdLabel(p.away);
   const isSettled = fixture.status === 'settled';
   const isLocked  = fixture.status === 'locked' || isSettled;
-  const seasonFixtureStartsIn = seasonPhase === 'preseason'
-    ? seasonTimer + Math.ceil(seasonKickoffDelayMs / 1000)
-    : seasonPhase === 'playing'
-      ? seasonFixtureStartsAt === null
-        ? Number.POSITIVE_INFINITY
-        : Math.ceil(((seasonFixtureStartsAt ?? seasonStartedAt ?? Date.now()) - Date.now()) / 1000)
-      : 0;
-  const timeLabel = isSeasonPlay
-    ? !Number.isFinite(seasonFixtureStartsIn)
-      ? 'Awaiting MD'
-      : seasonFixtureStartsIn > 0
-      ? formatShortDuration(seasonFixtureStartsIn)
-      : seasonPhase === 'playing'
-        ? 'Starting'
-        : 'Awaiting'
-    : countdown(fixture.kickoff);
-  const isStakeWindowOpen = isSeasonPlay
-    ? !isLocked
-      && matchState?.status !== 'live'
-      && matchState?.status !== 'half_time'
-      && matchState?.status !== 'finished'
-      && (fixture.status === 'open' || fixture.status === 'upcoming')
-      && (!Number.isFinite(seasonFixtureStartsIn) || seasonFixtureStartsIn > 5)
-    : !isSettled
-      && matchState?.status !== 'finished'
-      && (fixture.status === 'open' || fixture.status === 'upcoming' || fixture.status === 'locked');
+  const timeLabel = countdown(fixture.kickoff);
+  const isStakeWindowOpen = !isSettled
+    && matchState?.status !== 'finished'
+    && (fixture.status === 'open' || fixture.status === 'upcoming' || fixture.status === 'locked');
   const stakeStateLabel = isFinishedMatch || isSettled
     ? 'Result final'
     : isLiveMatch
@@ -284,7 +244,7 @@ export function FixtureCard({
       ? `/?${matchParam}${refParam}`
       : `${window.location.origin}/?${matchParam}${refParam}`;
   })();
-  const matchShareText = `Back ${fixture.home.code} vs ${fixture.away.code} on FanVibe. Stake OKB on the match and hold FVB for Matchday Cup eligibility.`;
+  const matchShareText = `Back ${fixture.home.code} vs ${fixture.away.code} on FanVibe. Stake OKB on the match, trade FVB, and connect X for Distribution Cup scoring.`;
 
   const selectStake = useCallback((outcome: Outcome) => {
     if (!onStake(fixture.id, outcome)) return;
@@ -328,7 +288,7 @@ export function FixtureCard({
     return true;
   }, [fixture.id, minStakeMsg, onStake, stakeAmountValid, stakeOutcome]);
 
-  const kickoffStr = isSeasonPlay ? (!Number.isFinite(seasonFixtureStartsIn) ? 'after previous MD' : seasonFixtureStartsIn > 0 ? 'until window' : 'season clock') : new Date(parseProviderTime(fixture.kickoff)).toLocaleString('en-US', {
+  const kickoffStr = new Date(parseProviderTime(fixture.kickoff)).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
   });
 

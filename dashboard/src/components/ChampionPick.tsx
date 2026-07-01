@@ -3,7 +3,6 @@ import { ChevronDown, ChevronUp, Trophy, Zap, CheckCircle } from 'lucide-react';
 import { parseEther } from 'viem';
 import type { Fixture, MatchState, ChampionPool } from '../types';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { STRENGTH } from '../lib/clientSim';
 import { encodeChampionStake, CHAMP_TEAM_INDEX } from '../lib/encode';
 import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
 import { PrivyStakeButton } from './PrivyStakeButton';
@@ -21,6 +20,14 @@ import {
 import { isEmbeddedPrivyWallet, preferredFanVibeWallet } from '../lib/privyWallets';
 
 const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
+const TEAM_STRENGTH: Record<string, number> = {
+  ARG: 95, FRA: 93, BRA: 92, ENG: 88, ESP: 87, GER: 86, POR: 85, NED: 83,
+  BEL: 82, CRO: 77, URU: 77, MAR: 75, SEN: 74, JPN: 73, SWE: 76, NOR: 74,
+  COL: 72, MEX: 72, SUI: 71, CAN: 71, USA: 70, TUR: 69, CIV: 69, AUS: 67,
+  KOR: 67, ECU: 66, ALG: 65, EGY: 64, KSA: 61, AUT: 68, CZE: 66, SCO: 65,
+  GHA: 60, PAR: 60, TUN: 60, IRN: 61, RSA: 57, COD: 56, BIH: 58, IRQ: 52,
+  QAT: 52, CPV: 48, PAN: 48, JOR: 48, UZB: 50, NZL: 45, HAI: 42, CUW: 35,
+};
 
 interface Props {
   fixtures: Fixture[];
@@ -179,7 +186,7 @@ export function ChampionPick({
   // Odds: squad model first, then market flow as OKB enters the pool.
   const activeTeams = championTeams.filter(t => !eliminatedTeams.has(t.code));
   const ratingWeight = (code: string) => {
-    const strength = STRENGTH[code] ?? 60;
+    const strength = TEAM_STRENGTH[code] ?? 60;
     return Math.exp((strength - 72) / 10);
   };
   const totalRatingWeight = activeTeams.reduce((s, t) => s + ratingWeight(t.code), 0);

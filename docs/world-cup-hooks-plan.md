@@ -104,8 +104,8 @@ Do not hide the existing prediction-market app. The strongest story is that FanV
 User-facing copy must avoid hackathon-volume mechanics. The public story is:
 
 - Stake OKB on real World Cup matches.
-- Hold `$FVB` to enter the `$200 FVB Matchday Cup`.
-- Push `$FVB` toward Uniswap v4 graduation.
+- Trade `$FVB` through OKX Wallet on X Layer.
+- Connect X and climb Distribution Cup through real activity.
 
 Prize split:
 
@@ -117,10 +117,11 @@ Prize split:
 Implementation phases:
 
 1. Public campaign panel. Status: complete in `dashboard/src/App.tsx`.
-2. Separate Matchday Cup leaderboard for real World Cup fixtures only. Status: complete in backend route `/matchday-cup/leaderboard` and dashboard component `MatchdayCupLeaderboard`.
-3. `$FVB` holder eligibility check. Status: complete in `MatchdayCupLeaderboard` via X Layer `balanceOf`.
-4. Country support layer. Status: complete in backend route `/matchday-cup/country-support`, derived from real World Cup home/away OKB stakes.
-5. Post-graduation CTA switch from eulr to OKX Wallet / Uniswap v4 route. Status: complete in dashboard token CTAs.
+2. Distribution Cup leaderboard. Status: complete in backend route `/matchday-cup/leaderboard` and dashboard component `MatchdayCupLeaderboard`.
+3. Verified `$FVB` trading index. Status: complete via FVB transfer-log indexing, scoped to the v4 pool manager and optional configured counterparties.
+4. X OAuth scoring. Status: complete in backend routes `/auth/x/start` and `/auth/x/callback`; daily stats are scored from relevant posts.
+5. Country support layer. Status: complete in backend route `/matchday-cup/country-support`, derived from real World Cup home/away OKB stakes.
+6. Post-graduation CTA switch from eulr to OKX Wallet / Uniswap v4 route. Status: complete in dashboard token CTAs.
 
 ## Backend Upgrades
 
@@ -212,9 +213,8 @@ Prepare before final submission:
 ## Immediate Next Steps
 
 1. Confirm eulr mainnet create flow with the launch EOA. Status: launched.
-2. Reserve/create the dedicated X account.
-3. Finalize name/ticker/image.
-4. Launch on eulr with a curve parameter that can realistically graduate.
-5. Update FanVibe app with the token/hook campaign panel.
-6. Add backend phase sync for the existing hook or new hook.
-7. Begin daily campaign posts immediately after launch.
+2. Keep OKX Wallet trade CTAs pointed at the migrated FVB token route.
+3. Monitor the FVB transfer index and Distribution Cup rankings after deploy.
+4. Keep X OAuth callback and encryption settings configured in Railway.
+5. Add backend phase sync for the existing hook or new hook.
+6. Continue daily campaign posts and submission evidence collection.

@@ -1,44 +1,7 @@
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import pg from 'pg';
-import type { Fixture, MatchState, Team, Stake, Pool, SettlementResult, RejectedStakeRefund, ChampionStake } from './types.js';
-
-export type SeasonPhase = 'preseason' | 'playing' | 'champion' | 'interseason';
-export type SeasonStorageMode = 'prod' | 'test';
-
-export interface SeasonTiming {
-  preseasonSeconds: number;
-  matchMs: number;
-  matchdayGapMs: number;
-  interseasonSeconds: number;
-  waveGapMs: number;
-}
-
-export interface PersistedSeasonState {
-  version: 1;
-  mode: SeasonStorageMode;
-  seasonNumber: number;
-  phase: SeasonPhase;
-  phaseEndsAt: number;
-  phaseTimer: number;
-  fixtures: Fixture[];
-  matchStates: Record<string, MatchState>;
-  eliminatedTeams: string[];
-  champion: Team | null;
-  previousKnockoutResults?: {
-    seasonNumber: number;
-    champion: Team | null;
-    fixtures: Fixture[];
-    matchStates: Record<string, MatchState>;
-  } | null;
-  seasonWinners?: Array<{
-    seasonNumber: number;
-    team: Team;
-  }>;
-  tournamentGen: number;
-  timings: SeasonTiming;
-  updatedAt: number;
-}
+import type { Fixture, Stake, Pool, SettlementResult, RejectedStakeRefund, ChampionStake } from './types.js';
 
 const STORE_DIR = process.env.SEASON_STATE_DIR ?? join(process.cwd(), '.fanvibe-state');
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
@@ -49,8 +12,6 @@ const POSTGRES_TABLE = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(configuredPostgresTable)
   ? configuredPostgresTable
   : 'fanvibe_state';
 
-const keyFor = (mode: SeasonStorageMode) => `fanvibe:season:${mode}`;
-const fileFor = (mode: SeasonStorageMode) => join(STORE_DIR, `${keyFor(mode).replace(/:/g, '-')}.json`);
 const engineKeyFor = () => 'fanvibe:referee:market';
 const engineFileFor = () => join(STORE_DIR, 'fanvibe-referee-market.json');
 const appDataKeyFor = () => 'fanvibe:app:data';
@@ -303,13 +264,6 @@ async function writePostgres(key: string, value: unknown): Promise<void> {
   );
 }
 
-async function deletePostgres(key: string): Promise<void> {
-  const pool = postgresPool();
-  if (!pool) return;
-  await ensurePostgres();
-  await pool.query(`DELETE FROM ${POSTGRES_TABLE} WHERE key = $1`, [key]);
-}
-
 async function readFallbackJson<T>(key: string, filePath: string): Promise<T | null> {
   try {
     const raw = await upstash<string>(['GET', key]);
@@ -323,62 +277,6 @@ async function readFallbackJson<T>(key: string, filePath: string): Promise<T | n
     return JSON.parse(file) as T;
   } catch {
     return null;
-  }
-}
-
-export async function readSeasonState(mode: SeasonStorageMode): Promise<PersistedSeasonState | null> {
-  const key = keyFor(mode);
-  const pgState = await readPostgres<PersistedSeasonState>(key);
-  if (pgState) return pgState;
-
-  const fallback = await readFallbackJson<PersistedSeasonState>(key, fileFor(mode));
-  if (fallback && POSTGRES_URL) {
-    await writePostgres(key, fallback);
-  }
-  return fallback;
-}
-
-export async function writeSeasonState(mode: SeasonStorageMode, state: PersistedSeasonState): Promise<void> {
-  const payload = { ...state, mode, updatedAt: Date.now() };
-  if (POSTGRES_URL) {
-    await writePostgres(keyFor(mode), payload);
-    return;
-  }
-
-  const serialized = JSON.stringify(payload);
-  if (UPSTASH_URL && UPSTASH_TOKEN) {
-    try {
-      await upstash(['SET', keyFor(mode), serialized]);
-      return;
-    } catch (err) {
-      console.warn(`[FanVibe] Upstash write failed for ${keyFor(mode)}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  const target = fileFor(mode);
-  await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, serialized);
-}
-
-export async function clearSeasonState(mode: SeasonStorageMode): Promise<void> {
-  if (POSTGRES_URL) {
-    await deletePostgres(keyFor(mode));
-    return;
-  }
-
-  if (UPSTASH_URL && UPSTASH_TOKEN) {
-    try {
-      await upstash(['DEL', keyFor(mode)]);
-      return;
-    } catch (err) {
-      console.warn(`[FanVibe] Upstash delete failed for ${keyFor(mode)}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  try {
-    await unlink(fileFor(mode));
-  } catch {
-    // No local snapshot to clear.
   }
 }
 

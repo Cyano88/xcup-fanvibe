@@ -1,6 +1,6 @@
-# FanVibe Final Audit Notes
+# FanVibe Audit Notes
 
-Date: 2026-05-28
+Date: 2026-07-01
 
 ## Scope
 
@@ -40,7 +40,14 @@ Backend:
 npm audit --audit-level=high
 ```
 
-Status: clean.
+Status: residual high advisory remains after non-forced `npm audit fix`.
+
+Remaining issue:
+
+- `viem -> ws` reports `ws` high-severity advisories.
+- npm's available fix requires `npm audit fix --force` and would install `viem@0.2.1`, which is a breaking downgrade from the current viem 2.x stack.
+
+Assessment: do not apply the forced fix without a full X Layer transaction, wallet, and contract-call regression pass.
 
 Dashboard:
 
@@ -49,9 +56,15 @@ npm audit --audit-level=high
 npm audit fix
 ```
 
-Status: moderate transitive advisories remain in wallet dependency trees. The available npm fix requires `npm audit fix --force` and would install a breaking Privy version change, so it was not applied without a full wallet regression pass.
+Status: residual transitive wallet-stack advisories remain after non-forced `npm audit fix`.
 
-Assessment: acceptable residual risk for public beta use because the unresolved items are transitive wallet-stack advisories and the forced fix is higher release risk than the advisories in this context.
+Remaining issues:
+
+- `uuid` moderate advisory through Metamask/wagmi/Privy wallet dependencies.
+- `ws` high advisories through viem/Reown/WalletConnect/wagmi dependencies.
+- npm's available forced fixes would downgrade or otherwise break the Privy/viem wallet stack.
+
+Assessment: acceptable residual risk for public beta use only with continued dependency monitoring. The forced fixes are higher release risk than the advisories in this context.
 
 ## Secret Hygiene
 
@@ -86,5 +99,5 @@ Ready:
 Known non-blocking notes:
 
 - Dashboard bundle remains large because wallet and Privy packages are heavy.
-- Dashboard audit still reports moderate transitive advisories that require a breaking forced dependency change.
+- Backend and dashboard audits still report transitive wallet-stack advisories that require breaking forced dependency changes.
 - Use small OKB amounts while testing.

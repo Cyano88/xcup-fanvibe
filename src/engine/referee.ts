@@ -1,7 +1,6 @@
 import {
   createPublicClient,
   createWalletClient,
-  http,
   webSocket,
   formatEther,
   parseEther,
@@ -17,14 +16,11 @@ import {
   type Transaction,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { xLayerMainnet, explorerTx } from '../chain.js';
-import { FIXTURES } from './fixtures.js';
+import { xLayerHttpTransport, xLayerMainnet, explorerTx } from '../chain.js';
 import { checkAndRefuel } from './metabolism.js';
-import { MatchSimulator } from './simulation.js';
 import { readRefereeMarket, writeRefereeMarket, type PersistedChampionPosition, type PersistedSettlementJob } from '../seasonStore.js';
 import type {
   Fixture,
-  Team,
   Stake,
   Pool,
   DaemonLog,
@@ -46,51 +42,11 @@ const OUTCOME_MAP: Record<number, Outcome> = { 0: 'home', 1: 'draw', 2: 'away' }
 const OUTCOME_INDEX: Record<Outcome, number> = { home: 0, draw: 1, away: 2 };
 const MAX_PERSISTED_SETTLEMENTS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENTS ?? '200'));
 const MAX_PERSISTED_SETTLEMENT_JOBS = Math.max(20, Number(process.env.MAX_PERSISTED_SETTLEMENT_JOBS ?? '200'));
-const SIMULATION_ENABLED = false;
 const MATCHDAY_VOLUME_POINT_WEI = 1_000_000_000_000_000n; // 0.001 OKB
 const MATCHDAY_WIN_BONUS_POINTS = 5_000;
 const MATCHDAY_ACTIVE_BONUS_POINTS = 500;
 const MATCHDAY_POSITION_BONUS_POINTS = 250;
 const UNRESOLVED_TEAM_CODES = new Set(['TBD', '1ST', '2ND', '3RD', 'WIN', 'LOS']);
-
-const TBD_TEAM: Team = { name: 'TBD', code: 'TBD', flag: '🏆', iso: 'un' };
-const NEXT_SIM_KICKOFF_MS = Number(process.env.SIM_NEXT_KICKOFF_MS ?? '30000');
-
-const BRACKET: Record<string, {
-  winner: { matchId: string; slot: 'home' | 'away' };
-  loser?: { matchId: string; slot: 'home' | 'away' };
-}> = {
-  'k32-1':  { winner: { matchId: 'k16-1', slot: 'home' } },
-  'k32-2':  { winner: { matchId: 'k16-1', slot: 'away' } },
-  'k32-3':  { winner: { matchId: 'k16-2', slot: 'home' } },
-  'k32-4':  { winner: { matchId: 'k16-2', slot: 'away' } },
-  'k32-5':  { winner: { matchId: 'k16-3', slot: 'home' } },
-  'k32-6':  { winner: { matchId: 'k16-3', slot: 'away' } },
-  'k32-7':  { winner: { matchId: 'k16-4', slot: 'home' } },
-  'k32-8':  { winner: { matchId: 'k16-4', slot: 'away' } },
-  'k32-9':  { winner: { matchId: 'k16-5', slot: 'home' } },
-  'k32-10': { winner: { matchId: 'k16-5', slot: 'away' } },
-  'k32-11': { winner: { matchId: 'k16-6', slot: 'home' } },
-  'k32-12': { winner: { matchId: 'k16-6', slot: 'away' } },
-  'k32-13': { winner: { matchId: 'k16-7', slot: 'home' } },
-  'k32-14': { winner: { matchId: 'k16-7', slot: 'away' } },
-  'k32-15': { winner: { matchId: 'k16-8', slot: 'home' } },
-  'k32-16': { winner: { matchId: 'k16-8', slot: 'away' } },
-  'k16-1':  { winner: { matchId: 'qf-1', slot: 'home' } },
-  'k16-2':  { winner: { matchId: 'qf-1', slot: 'away' } },
-  'k16-3':  { winner: { matchId: 'qf-2', slot: 'home' } },
-  'k16-4':  { winner: { matchId: 'qf-2', slot: 'away' } },
-  'k16-5':  { winner: { matchId: 'qf-3', slot: 'home' } },
-  'k16-6':  { winner: { matchId: 'qf-3', slot: 'away' } },
-  'k16-7':  { winner: { matchId: 'qf-4', slot: 'home' } },
-  'k16-8':  { winner: { matchId: 'qf-4', slot: 'away' } },
-  'qf-1':   { winner: { matchId: 'sf-1', slot: 'home' } },
-  'qf-2':   { winner: { matchId: 'sf-1', slot: 'away' } },
-  'qf-3':   { winner: { matchId: 'sf-2', slot: 'home' } },
-  'qf-4':   { winner: { matchId: 'sf-2', slot: 'away' } },
-  'sf-1':   { winner: { matchId: 'f-1', slot: 'home' }, loser: { matchId: '3pl-1', slot: 'home' } },
-  'sf-2':   { winner: { matchId: 'f-1', slot: 'away' }, loser: { matchId: '3pl-1', slot: 'away' } },
-};
 
 // ── Champion prediction market ─────────────────────────────────────────────────
 export const CHAMP_FIXTURE_ID = 'champion-2026';
@@ -149,7 +105,7 @@ export class RefereeEngine {
   private readonly httpClient: PublicClient;
   private readonly walletClient: WalletClient;
 
-  private fixtures: Fixture[] = structuredClone(FIXTURES);
+  private fixtures: Fixture[] = [];
   private stakes = new Map<string, Stake>();
   private rejectedStakeRefunds = new Map<string, RejectedStakeRefund>();
   private pools = new Map<string, Pool>();
@@ -162,7 +118,6 @@ export class RefereeEngine {
   private champWinner?: string;
   private championSeasonNumber?: number;
   private providerMatchStates = new Map<string, MatchState>();
-  private simulator: MatchSimulator;
 
   private logs: DaemonLog[] = [];
   private logId = 0;
@@ -179,10 +134,10 @@ export class RefereeEngine {
     if (!pk?.startsWith('0x')) throw new Error('REFEREE_PRIVATE_KEY missing or malformed');
 
     this.account = privateKeyToAccount(pk as `0x${string}`);
-    const rpc = process.env.X_LAYER_MAINNET_RPC ?? 'https://rpc.xlayer.tech';
+    const rpc = process.env.X_LAYER_MAINNET_RPC ?? process.env.X_LAYER_HTTP_RPC ?? process.env.X_LAYER_RPC_URL;
 
-    this.httpClient = createPublicClient({ chain: xLayerMainnet, transport: http(rpc) });
-    this.walletClient = createWalletClient({ chain: xLayerMainnet, transport: http(rpc), account: this.account });
+    this.httpClient = createPublicClient({ chain: xLayerMainnet, transport: xLayerHttpTransport(rpc) });
+    this.walletClient = createWalletClient({ chain: xLayerMainnet, transport: xLayerHttpTransport(rpc), account: this.account });
 
     this.metabolicState = {
       okbBalance: '0',
@@ -193,19 +148,8 @@ export class RefereeEngine {
     };
 
     for (const f of this.fixtures) {
-      if (f.mode === 'simulated' && f.round && f.round !== 'R32') {
-        f.home = { ...TBD_TEAM };
-        f.away = { ...TBD_TEAM };
-        f.status = 'upcoming';
-      }
       this.pools.set(f.id, { fixtureId: f.id, home: '0', draw: '0', away: '0', fees: '0', count: 0 });
     }
-
-    this.simulator = new MatchSimulator(
-      (_fixtureId, _state) => this.onUpdate?.(),
-      async (fixtureId, outcome) => { await this.settleFixture(fixtureId, outcome); },
-      this.log.bind(this),
-    );
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -738,19 +682,6 @@ export class RefereeEngine {
     this.startWebSocketListener();
     this.startMetabolismLoop();
 
-    const simulated = SIMULATION_ENABLED
-      ? this.fixtures.filter(f => f.mode === 'simulated' && f.home.code !== 'TBD' && f.away.code !== 'TBD')
-      : [];
-    if (simulated.length > 0) {
-      const delayMins    = parseInt(process.env.SIM_FIRST_KICKOFF_DELAY ?? '5');
-      const intervalMins = parseInt(process.env.SIM_MATCH_INTERVAL_MINS ?? '0');
-      const firstKickoff = Date.now() + delayMins * 60_000;
-      this.simulator.schedule(simulated, firstKickoff, intervalMins * 60_000);
-      this.log('SYSTEM', 'success', `Simulation scheduled — ${simulated.length} matches, first kickoff in ${delayMins} min, ${intervalMins} min intervals`);
-    } else if (!SIMULATION_ENABLED) {
-      this.log('SYSTEM', 'info', 'Simulation retired - simulated fixture scheduler disabled');
-    }
-
     this.log('SYSTEM', 'success', `Engine live on X Layer Mainnet (chain 196). Watching ${this.fixtures.length} fixtures.`);
   }
 
@@ -793,7 +724,7 @@ export class RefereeEngine {
     }
     const sanitizedCount = sanitized.stakes + sanitized.refunds + sanitized.pools + sanitized.settlements + sanitized.jobs;
     if (sanitizedCount > 0) {
-      this.log('SYSTEM', 'warn', `Sanitized retired simulated match history - removed ${sanitized.stakes} stakes, ${sanitized.refunds} refunds, ${sanitized.pools} pools, ${sanitized.settlements} settlements, ${sanitized.jobs} jobs.`);
+      this.log('SYSTEM', 'warn', `Sanitized legacy non-realtime match history - removed ${sanitized.stakes} stakes, ${sanitized.refunds} refunds, ${sanitized.pools} pools, ${sanitized.settlements} settlements, ${sanitized.jobs} jobs.`);
       await this.persistMarketStateNow();
     }
     this.log('SYSTEM', 'success', `Loaded referee market history - ${this.stakes.size} stakes, ${this.settlements.length} settlements.`);
@@ -942,7 +873,6 @@ export class RefereeEngine {
   }
 
   async resetMarketState(fixtures = this.fixtures): Promise<void> {
-    this.simulator.cancelAll();
     this.fixtures = structuredClone(fixtures);
     this.stakes.clear();
     this.rejectedStakeRefunds.clear();
@@ -1444,7 +1374,6 @@ export class RefereeEngine {
 
     fixture.status = 'settled';
     fixture.result = outcome;
-    this.advanceBracket(fixture, outcome);
 
     const resumedResult = await this.upsertMatchSettlementResult(job) ?? this.resultFromSettlementJob(job);
 
@@ -1472,35 +1401,6 @@ export class RefereeEngine {
       return;
     }
     await this.settleChampion(champTeam.code);
-  }
-
-  private advanceBracket(fixture: Fixture, outcome: Outcome): void {
-    if (!SIMULATION_ENABLED) return;
-    if (fixture.mode !== 'simulated') return;
-    const entry = BRACKET[fixture.id];
-    if (!entry) return;
-
-    const winner = outcome === 'away' ? fixture.away
-      : outcome === 'home' ? fixture.home
-      : Math.random() > 0.5 ? fixture.home : fixture.away;
-    const loser = winner.code === fixture.home.code ? fixture.away : fixture.home;
-
-    this.placeAdvancingTeam(entry.winner, winner);
-    if (entry.loser) this.placeAdvancingTeam(entry.loser, loser);
-  }
-
-  private placeAdvancingTeam(target: { matchId: string; slot: 'home' | 'away' }, team: Team): void {
-    const next = this.fixtures.find((f) => f.id === target.matchId);
-    if (!next) return;
-
-    next[target.slot] = team;
-    const ready = next.home.code !== 'TBD' && next.away.code !== 'TBD';
-    if (!ready || next.status === 'locked' || next.status === 'settled') return;
-
-    next.status = 'upcoming';
-    next.baseOdds = { home: 50, draw: 25, away: 25 };
-    this.log('SYSTEM', 'info', `Qualified: ${team.code} -> ${next.id} ${target.slot}`);
-    if (SIMULATION_ENABLED) this.simulator.schedule([next], Date.now() + NEXT_SIM_KICKOFF_MS, 0);
   }
 
   private startMetabolismLoop(): void {
@@ -1647,8 +1547,7 @@ export class RefereeEngine {
       wsConnected:     this.wsConnected,
       settlements:     this.settlements.slice(-20),
       rejectedStakeRefunds: Array.from(this.rejectedStakeRefunds.values()).slice(-50),
-      matchStates:     { ...Object.fromEntries(this.providerMatchStates), ...this.simulator.getStates() },
-      simulationMode:  this.fixtures.some(f => f.mode === 'simulated'),
+      matchStates:     Object.fromEntries(this.providerMatchStates),
       championPool,
     };
   }

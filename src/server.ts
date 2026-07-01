@@ -10,11 +10,10 @@ import { createPublicClient, createWalletClient, formatEther, http, parseAbiItem
 import { privateKeyToAccount } from 'viem/accounts';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
-import { clearSeasonState, readAppData, readSeasonState, seasonStorageStatus, writeAppData, writeSeasonState, type PersistedAppData, type PersistedFvbTradeDaily, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedSeasonState, type PersistedXProfile, type SeasonStorageMode } from './seasonStore.js';
-import { SeasonController } from './engine/seasonController.js';
+import { readAppData, seasonStorageStatus, writeAppData, type PersistedAppData, type PersistedFvbTradeDaily, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedXProfile } from './seasonStore.js';
 import { getWorldCupFeed, getWorldCupMatchDetail } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
-import { explorerTx, xLayerMainnet } from './chain.js';
+import { explorerTx, xLayerHttpTransport, xLayerMainnet, xLayerRpcUrls } from './chain.js';
 
 // ── App bootstrap ─────────────────────────────────────────────────────────────
 
@@ -40,7 +39,6 @@ const httpServer = createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
 
 const engine = new RefereeEngine();
-let seasonController: SeasonController;
 let appData: PersistedAppData = { version: 1, profiles: {}, referrals: [], pendingStakeReports: [], updatedAt: Date.now() };
 
 const REFERRAL_MIN_STAKE_WEI = parseEther('0.001');
@@ -56,25 +54,6 @@ function broadcast(type: string, data: unknown): void {
   for (const client of wss.clients) {
     if (client.readyState === WebSocket.OPEN) client.send(msg);
   }
-}
-
-function compactSeasonState(state: PersistedSeasonState | null): PersistedSeasonState | null {
-  if (!state) return null;
-  const compactMatchStates = (matchStates: Record<string, MatchState> = {}) =>
-    Object.fromEntries(Object.entries(matchStates).map(([fixtureId, matchState]) => [
-      fixtureId,
-      { ...matchState, events: [] },
-    ]));
-  return {
-    ...state,
-    matchStates: compactMatchStates(state.matchStates),
-    previousKnockoutResults: state.previousKnockoutResults
-      ? {
-        ...state.previousKnockoutResults,
-        matchStates: compactMatchStates(state.previousKnockoutResults.matchStates),
-      }
-      : null,
-  };
 }
 
 const addressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
@@ -115,14 +94,8 @@ const PRIVATE_X_LAYER_RPC_URL = process.env.FVB_RPC_URL
   ?? process.env.X_LAYER_HTTP_RPC
   ?? process.env.X_LAYER_RPC_URL
   ?? process.env.REWARD_RPC_URL;
-const FVB_RPC_URLS = [
-  PRIVATE_X_LAYER_RPC_URL,
-  'https://xlayer.drpc.org',
-  'https://rpc.xlayer.tech',
-  'https://xlayerrpc.okx.com',
-  xLayerMainnet.rpcUrls.default.http[0],
-].filter((url, index, urls): url is string => Boolean(url) && urls.indexOf(url) === index);
-const fvbPublicClients = FVB_RPC_URLS.map(url => createPublicClient({ chain: xLayerMainnet, transport: http(url) }));
+const FVB_RPC_URLS = xLayerRpcUrls(PRIVATE_X_LAYER_RPC_URL);
+const fvbPublicClient = createPublicClient({ chain: xLayerMainnet, transport: xLayerHttpTransport(PRIVATE_X_LAYER_RPC_URL) });
 const FVB_PRICE_QUOTE_AMOUNT_WEI = 10n ** 18n;
 const FVB_PRICE_CACHE_TTL_MS = Number(process.env.FVB_PRICE_CACHE_TTL_MS ?? '30000');
 const FVB_OKX_QUOTE_ENABLED = process.env.FVB_OKX_QUOTE_ENABLED !== '0';
@@ -174,19 +147,17 @@ const ERC20_BALANCE_ABI = [
 ] as const;
 
 async function readFvbBalance(address: string): Promise<bigint | null> {
-  for (const client of fvbPublicClients) {
-    try {
-      return await client.readContract({
-        address: FANVIBE_TOKEN_ADDRESS,
-        abi: ERC20_BALANCE_ABI,
-        functionName: 'balanceOf',
-        args: [address as Address],
-      });
-    } catch {
-      // Try the next public RPC; X Layer providers occasionally disagree on contract reads.
-    }
+  try {
+    return await fvbPublicClient.readContract({
+      address: FANVIBE_TOKEN_ADDRESS,
+      abi: ERC20_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [address as Address],
+    });
+  } catch {
+    // The fallback transport already tried configured and public X Layer RPCs.
+    return null;
   }
-  return null;
 }
 
 function parsePositiveWei(value: unknown): string | null {
@@ -487,7 +458,7 @@ function markFvbTradeLogProcessed(key: string, timestamp: number): boolean {
 }
 
 async function processFvbTradeLogs(
-  client: typeof fvbPublicClients[number],
+  client: typeof fvbPublicClient,
   logs: readonly FvbTransferLog[],
   priceWei: bigint,
 ): Promise<number> {
@@ -534,7 +505,7 @@ async function processFvbTradeLogs(
   return indexed;
 }
 
-async function fvbTradeStartBlock(client = fvbPublicClients[0]): Promise<bigint> {
+async function fvbTradeStartBlock(client = fvbPublicClient): Promise<bigint> {
   const envBlock = process.env.FVB_TRADE_START_BLOCK;
   if (envBlock && /^\d+$/.test(envBlock)) return BigInt(envBlock);
 
@@ -549,8 +520,7 @@ async function fvbTradeStartBlock(client = fvbPublicClients[0]): Promise<bigint>
 
 async function rebuildFvbTradeIndex(): Promise<void> {
   if (!FVB_TRADE_INDEX_ENABLED || fvbTradeBackfillRunning) return;
-  const client = fvbPublicClients[0];
-  if (!client) throw new Error('FVB RPC unavailable');
+  const client = fvbPublicClient;
   fvbTradeBackfillRunning = true;
   const index = ensureFvbTradeIndex();
   const startedAt = Date.now();
@@ -633,8 +603,7 @@ async function rebuildFvbTradeIndex(): Promise<void> {
 
 async function scanFvbTradeVolume(): Promise<void> {
   if (!FVB_TRADE_INDEX_ENABLED || fvbTradeScanRunning || fvbTradeBackfillRunning) return;
-  const client = fvbPublicClients[0];
-  if (!client) return;
+  const client = fvbPublicClient;
   fvbTradeScanRunning = true;
   try {
     const index = ensureFvbTradeIndex();
@@ -678,8 +647,7 @@ async function scanFvbTradeVolume(): Promise<void> {
 
 async function scanFvbHolderCandidates(): Promise<void> {
   if (!FVB_TRADE_INDEX_ENABLED || fvbHolderScanRunning) return;
-  const client = fvbPublicClients[0];
-  if (!client) return;
+  const client = fvbPublicClient;
   fvbHolderScanRunning = true;
   try {
     const index = ensureFvbTradeIndex();
@@ -1403,8 +1371,9 @@ function rewardWalletClients() {
   const privateKey = process.env.REWARD_WALLET_PRIVATE_KEY;
   if (!privateKey || !/^0x[0-9a-fA-F]{64}$/.test(privateKey)) return null;
   const account = privateKeyToAccount(privateKey as `0x${string}`);
-  const publicClient = createPublicClient({ chain: xLayerMainnet, transport: http(REWARD_RPC_URL) });
-  const walletClient = createWalletClient({ account, chain: xLayerMainnet, transport: http(REWARD_RPC_URL) });
+  const transport = xLayerHttpTransport(REWARD_RPC_URL);
+  const publicClient = createPublicClient({ chain: xLayerMainnet, transport });
+  const walletClient = createWalletClient({ account, chain: xLayerMainnet, transport });
   return { account, publicClient, walletClient };
 }
 
@@ -1451,24 +1420,8 @@ async function retryPendingStakeReports(): Promise<void> {
 engine.onLog = (log: DaemonLog) => broadcast('log', log);
 engine.onUpdate = () => broadcast('state', engine.getState());
 
-seasonController = new SeasonController(engine, (prefix, level, message, txHash) => {
-  broadcast('log', {
-    id: Date.now(),
-    ts: new Date().toISOString(),
-    prefix,
-    level,
-    message,
-    txHash,
-  } satisfies DaemonLog);
-});
-seasonController.onUpdate = state => {
-  engine.syncChampionSeason(state.seasonNumber);
-  broadcast('season', compactSeasonState(state));
-};
-
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'state', data: engine.getState(), ts: Date.now() }));
-  ws.send(JSON.stringify({ type: 'season', data: compactSeasonState(seasonController.getState()), ts: Date.now() }));
 });
 
 // ── REST API ──────────────────────────────────────────────────────────────────
@@ -1489,11 +1442,6 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     uptime: process.uptime(),
     storage: seasonStorageStatus(),
-    season: {
-      number: seasonController.getState().seasonNumber,
-      phase: seasonController.getState().phase,
-      updatedAt: seasonController.getState().updatedAt,
-    },
   });
 });
 
@@ -2202,87 +2150,6 @@ app.get('/worldcup/news', async (req, res) => {
   res.json(feed);
 });
 
-const SeasonModeSchema = z.object({ mode: z.enum(['prod', 'test']).default('prod') });
-const QUALIFIED_OR_TBD = new Set([...CHAMP_TEAMS, 'TBD']);
-
-const TeamSnapshotSchema = z.object({
-  name: z.string().min(1).max(80),
-  code: z.string().min(2).max(4),
-  flag: z.string().max(16).optional(),
-  iso: z.string().min(2).max(8),
-}).passthrough();
-
-const FixtureSnapshotSchema = z.object({
-  id: z.string().min(1).max(48).regex(/^[a-z0-9-]+$/i),
-  matchday: z.number().int().min(1).max(16),
-  group: z.string().min(1).max(4),
-  round: z.string().max(4).optional(),
-  home: TeamSnapshotSchema,
-  away: TeamSnapshotSchema,
-  kickoff: z.string().min(10).max(40),
-  venue: z.string().min(1).max(160),
-  status: z.enum(['upcoming', 'open', 'locked', 'settled']),
-  result: z.enum(['home', 'draw', 'away']).optional(),
-  baseOdds: z.object({
-    home: z.number().min(0).max(100),
-    draw: z.number().min(0).max(100),
-    away: z.number().min(0).max(100),
-  }),
-  mode: z.enum(['realtime', 'simulated']),
-}).passthrough();
-
-const MatchStateSnapshotSchema = z.object({
-  fixtureId: z.string().min(1).max(48),
-  status: z.enum(['scheduled', 'live', 'half_time', 'finished']),
-  minute: z.number().int().min(0).max(130),
-  homeScore: z.number().int().min(0).max(30),
-  awayScore: z.number().int().min(0).max(30),
-  events: z.array(z.any()).max(240),
-  simulatedKickoff: z.string().max(40),
-  possession: z.number().min(0).max(100),
-  finishedAt: z.number().optional(),
-}).passthrough();
-
-const SeasonSnapshotStateSchema = z.object({
-  version: z.number().int().min(1).max(3),
-  mode: z.enum(['prod', 'test']),
-  seasonNumber: z.number().int().min(1).max(100000),
-  phase: z.enum(['preseason', 'playing', 'champion', 'interseason']),
-  phaseEndsAt: z.number().min(0),
-  phaseTimer: z.number().min(0).max(86400),
-  fixtures: z.array(FixtureSnapshotSchema).min(1).max(128),
-  matchStates: z.record(MatchStateSnapshotSchema).default({}),
-  eliminatedTeams: z.array(z.string().min(2).max(4)).max(48).default([]),
-  champion: TeamSnapshotSchema.nullish(),
-  tournamentGen: z.number().int().min(0).max(1000000),
-  timings: z.object({
-    preseasonSeconds: z.number().min(1).max(3600),
-    matchMs: z.number().min(10_000).max(7_200_000),
-    matchdayGapMs: z.number().min(0).max(7_200_000),
-    interseasonSeconds: z.number().min(1).max(7200),
-    waveGapMs: z.number().min(0).max(600_000),
-  }),
-  updatedAt: z.number().min(0),
-}).passthrough();
-
-function validateSeasonSnapshotState(state: unknown): PersistedSeasonState {
-  const parsed = SeasonSnapshotStateSchema.parse(state);
-  const fixtureIds = new Set(parsed.fixtures.map(fixture => fixture.id));
-  for (const fixture of parsed.fixtures) {
-    if (!QUALIFIED_OR_TBD.has(fixture.home.code) || !QUALIFIED_OR_TBD.has(fixture.away.code)) {
-      throw new Error(`invalid team in fixture ${fixture.id}`);
-    }
-    const totalOdds = fixture.baseOdds.home + fixture.baseOdds.draw + fixture.baseOdds.away;
-    if (totalOdds < 95 || totalOdds > 105) throw new Error(`invalid odds in fixture ${fixture.id}`);
-  }
-  for (const [fixtureId, matchState] of Object.entries(parsed.matchStates)) {
-    if (!fixtureIds.has(fixtureId) || matchState.fixtureId !== fixtureId) {
-      throw new Error(`invalid match state fixture ${fixtureId}`);
-    }
-  }
-  return parsed as PersistedSeasonState;
-}
-
 function outcomeFromMatchState(matchState: MatchState): Outcome {
   if (matchState.penaltyWinner) return matchState.penaltyWinner;
   if (matchState.homeScore > matchState.awayScore) return 'home';
@@ -2309,105 +2176,6 @@ async function refreshWorldCupFixture(fixtureId: string): Promise<{ mode: string
     return null;
   }
 }
-
-async function syncSeasonSnapshotWithReferee(state: PersistedSeasonState): Promise<void> {
-  if (!Array.isArray(state.fixtures)) return;
-  const realtimeFixtures = state.fixtures.filter(fixture => fixture.mode === 'realtime');
-  if (realtimeFixtures.length === 0) return;
-
-  engine.syncChampionSeason(state.seasonNumber);
-  engine.syncFixtures(realtimeFixtures);
-  engine.syncMatchStates(state.matchStates ?? {});
-
-  const finished = Object.values(state.matchStates ?? {})
-    .filter((matchState): matchState is MatchState =>
-      matchState?.status === 'finished'
-      && realtimeFixtures.some(fixture => fixture.id === matchState.fixtureId),
-    );
-
-  for (const matchState of finished) {
-    const result = await engine.settleSyncedFixture(matchState.fixtureId, outcomeFromMatchState(matchState));
-    if (result) broadcast('settlement', result);
-  }
-}
-
-async function syncStoredSeasonSnapshotsWithReferee(): Promise<void> {
-  const testSnapshot = await readSeasonState('test');
-  if (testSnapshot) await syncSeasonSnapshotWithReferee(testSnapshot);
-}
-
-app.get('/season/snapshot', async (req, res) => {
-  const parsed = SeasonModeSchema.safeParse(req.query);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const state = parsed.data.mode === 'prod'
-    ? seasonController.getState()
-    : await readSeasonState(parsed.data.mode as SeasonStorageMode);
-  res.json({ state: compactSeasonState(state), durable: !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN });
-});
-
-app.get('/season/match/:fixtureId', async (req, res) => {
-  const parsed = SeasonModeSchema.safeParse(req.query);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const state = parsed.data.mode === 'prod'
-    ? seasonController.getState()
-    : await readSeasonState(parsed.data.mode as SeasonStorageMode);
-  if (!state) return res.status(404).json({ error: 'season state not found' });
-  const fixture = state.fixtures.find(item => item.id === req.params.fixtureId);
-  if (!fixture) return res.status(404).json({ error: 'fixture not found' });
-  res.json({
-    fixture,
-    matchState: state.matchStates[fixture.id] ?? null,
-    phase: state.phase,
-    updatedAt: state.updatedAt,
-  });
-});
-
-app.post('/season/snapshot', async (req, res) => {
-  const schema = z.object({
-    mode: z.enum(['prod', 'test']).default('prod'),
-    state: z.any(),
-  });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  if (parsed.data.mode === 'prod') return res.status(403).json({ error: 'production season is server-owned' });
-  let state: PersistedSeasonState;
-  try {
-    state = validateSeasonSnapshotState(parsed.data.state);
-  } catch (err: unknown) {
-    return res.status(400).json({ error: err instanceof Error ? err.message : 'invalid season snapshot' });
-  }
-  if (state.mode !== parsed.data.mode) return res.status(400).json({ error: 'snapshot mode mismatch' });
-  await writeSeasonState(parsed.data.mode as SeasonStorageMode, state);
-  await syncSeasonSnapshotWithReferee(state);
-  res.json({ ok: true });
-});
-
-app.post('/season/reset', async (req, res) => {
-  const schema = z.object({
-    mode: z.enum(['prod', 'test']).default('test'),
-    secret: z.string().optional(),
-    resetMarket: z.boolean().default(false),
-  });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const expected = process.env.ADMIN_TEST_SECRET;
-  if (!expected || parsed.data.secret !== expected) return res.status(401).json({ error: 'unauthorized' });
-  if (parsed.data.mode === 'prod') {
-    const currentSeason = seasonController.getState().seasonNumber;
-    const nextSeason = parsed.data.resetMarket ? 1 : currentSeason + 1;
-    const state = await seasonController.resetToFreshSeason(nextSeason);
-    if (parsed.data.resetMarket) {
-      await engine.resetMarketState(state.fixtures);
-    }
-    broadcast('season', state);
-    broadcast('state', engine.getState());
-    broadcast('season-reset', { mode: 'prod' });
-    return res.json({ ok: true, state, marketReset: parsed.data.resetMarket, seasonNumber: nextSeason });
-  }
-  await clearSeasonState(parsed.data.mode);
-  broadcast('season-reset', { mode: parsed.data.mode });
-  res.json({ ok: true });
-});
 
 app.get('/encode-stake', (req, res) => {
   const schema = z.object({
@@ -2592,7 +2360,6 @@ app.post('/comments/:fixtureId', (req, res) => {
 // ── Server start ──────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
-const SIMULATION_ENABLED = false;
 
 httpServer.listen(PORT, async () => {
   console.log(`[FanVibe] HTTP server on port ${PORT}`);
@@ -2602,12 +2369,6 @@ httpServer.listen(PORT, async () => {
     appData = await readAppData();
     ensureFvbTradeIndex();
     await engine.start();
-    if (SIMULATION_ENABLED) {
-      await seasonController.start();
-      engine.syncChampionSeason(seasonController.getState().seasonNumber);
-    } else {
-      console.log('[FanVibe] Simulation retired - season controller disabled');
-    }
     await retryPendingStakeReports();
     const tradeIndex = ensureFvbTradeIndex();
     if (FVB_TRADE_AUTO_BACKFILL_ON_BOOT && tradeIndex.backfill?.status !== 'complete') {
@@ -2648,6 +2409,5 @@ httpServer.listen(PORT, async () => {
 
 process.on('SIGTERM', () => {
   console.log('[FanVibe] SIGTERM — shutting down');
-  seasonController.stop();
   httpServer.close(() => process.exit(0));
 });

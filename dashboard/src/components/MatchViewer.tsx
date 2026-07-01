@@ -4,7 +4,6 @@ import { useWallets } from '@privy-io/react-auth';
 import type { Fixture, MatchState, MatchEvent } from '../types';
 import { getSquad } from '../lib/squadData';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
-import { baseFixtureId } from '../lib/seasonTournament';
 import { preferredFanVibeWallet } from '../lib/privyWallets';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
@@ -33,6 +32,10 @@ function formatChatTimestamp(ts?: string): string {
 
 const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w160/${iso.toLowerCase()}.png`;
+
+function baseFixtureId(fixtureId: string): string {
+  return fixtureId.replace(/^s\d+-/, '');
+}
 
 function TeamFlag({ iso, fallback, className = '' }: { iso: string; fallback: string; className?: string }) {
   const src = flagUrl(iso);
@@ -158,7 +161,7 @@ function getActionLabel(ev: MatchEvent | undefined, home: string, away: string):
   return { text: `${team} - Attacking`, isHome };
 }
 
-// ── Pitch simulation engine ───────────────────────────────────────────────────
+// ── Pitch animation engine ────────────────────────────────────────────────────
 // Logical coordinate space: X ∈ [-100, 100] (left goal = -100, right = 100)
 //                           Y ∈ [-50, 50]
 // SVG viewport: 0 0 400 200 - mapping: svgX = (lx+100)*2, svgY = (ly+50)*2

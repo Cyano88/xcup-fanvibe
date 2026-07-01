@@ -399,7 +399,6 @@ function buildMatchState(fixture: Fixture, source: SportmonksFixture | null, sta
     homeScore,
     awayScore,
     events,
-    simulatedKickoff: kickoff,
     possession: 50,
     finishedAt: stateStatus === 'finished' && Number.isFinite(kickoffMs) ? kickoffMs + MATCH_SETTLED_FALLBACK_MS : undefined,
   };
@@ -477,7 +476,6 @@ function scheduledMatchState(fixture: Fixture): MatchState {
     homeScore: 0,
     awayScore: 0,
     events: [],
-    simulatedKickoff: fixture.kickoff,
     possession: 50,
   };
 }

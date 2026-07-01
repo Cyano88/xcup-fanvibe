@@ -1,10 +1,11 @@
 # FanVibe Integration Proof
 
-FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with wallet or email smart wallet, stake OKB on real World Cup outcomes, hold FVB for Matchday Cup eligibility, follow live World Cup coverage and news, and review every position, payout, refund, and transaction from one portfolio.
+FanVibe is a consumer prediction market built on OKX X Layer. Fans sign in with wallet or email smart wallet, stake OKB on real World Cup outcomes, trade FVB through OKX Wallet, connect X for Distribution Cup scoring, follow live World Cup coverage and news, and review every position, payout, refund, and transaction from one portfolio.
 
 ## X Layer Consumer App
 
 - Users stake OKB on match and champion markets.
+- Distribution Cup scores qualified wallets through verified FVB trading volume, connected X activity, referrals, FanVibe stakes, and wins.
 - Portfolio history stays tied to the connected account.
 - Completed fixture and champion markets are processed by the autonomous referee service.
 - Payouts and refunds are explorer-linked for public review.

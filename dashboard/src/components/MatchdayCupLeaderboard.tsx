@@ -442,7 +442,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] dark:text-zinc-500 text-zinc-500">My Rank</div>
                     <div className="mt-1 text-sm font-semibold dark:text-zinc-300 text-zinc-700">
-                      {myRankLoaded ? 'Rank unavailable right now.' : 'Loading your Matchday Cup rank...'}
+                      {myRankLoaded ? 'Rank unavailable right now.' : 'Loading your Distribution Cup rank...'}
                     </div>
                   </div>
                 </div>
@@ -472,8 +472,8 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
             {activeBoard === 'matchday'
               ? scoreRulesLabel(scoreRules)
               : activeBoard === 'traders'
-                ? 'FVB traders are ranked by verified OKX/X Layer volume. To enter Matchday Cup prizes, hit $250+ volume and place one FanVibe stake.'
-              : 'Country backing counts wallets qualified for the Matchday Cup prize board. Draw stakes are excluded.'}
+                ? 'FVB traders are ranked by verified OKX/X Layer volume. To enter Distribution Cup prizes, hit $250+ volume and place one FanVibe stake.'
+              : 'Country backing counts wallets qualified for the Distribution Cup prize board. Draw stakes are excluded.'}
           </div>
 
           <div className="mt-3 overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200">

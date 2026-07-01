@@ -1,6 +1,6 @@
 # FanVibe
 
-FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on real World Cup match markets, hold FVB for Matchday Cup eligibility, follow live World Cup coverage, read football and OKX/X Layer news, and review every position, payout, refund, and proof link from one account.
+FanVibe is a consumer prediction market on OKX X Layer. Fans sign in with a wallet or email smart wallet, stake OKB on real World Cup match markets, trade FVB through OKX Wallet, connect X for Distribution Cup scoring, follow live World Cup coverage, read football and OKX/X Layer news, and review every position, payout, refund, and proof link from one account.
 
 This repository is a monorepo. It contains the production app, backend referee service, dashboard, public documentation, and an experimental Uniswap v4 hook module that connects FanVibe consumer activity on X Layer to DeFi liquidity behavior.
 
@@ -19,9 +19,9 @@ This repository is a monorepo. It contains the production app, backend referee s
 - Wallet and email sign-in through Privy smart wallets.
 - OKB staking on match markets and champion markets.
 - Sportmonks-backed World Cup fixtures with live, upcoming, and finished match states.
-- Matchday Cup campaign flow that connects OKB stakes, FVB holding, and country support.
+- Distribution Cup campaign flow that connects verified FVB trading, connected X activity, referrals, OKB stakes, wins, and country support.
 - World Cup news and OKX/X Layer news in the News tab.
-- Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, and total account value.
+- Portfolio tracking for active positions, settled results, payouts, refunds, wallet balance, FVB balance, and total account value.
 - Invite rewards with backend qualification, daily caps, claimable balances, and separate reward-wallet payouts.
 - Autonomous settlement for completed fixture and champion markets.
 - O2-style gas insurance for the referee wallet, with reserve rebalancing when gas capacity drops below threshold.
@@ -48,6 +48,7 @@ This repository is a monorepo. It contains the production app, backend referee s
 5. Completed markets are processed by the autonomous referee service.
 6. The portfolio keeps a permanent account-level history with explorer links.
 7. The News tab keeps users current with World Cup, OKX, X Layer, and FVB campaign updates.
+8. Distribution Cup ranks qualified wallets using verified FVB trading volume, connected X activity, referrals, FanVibe stakes, and wins.
 
 ## Autonomous Settlement And Gas Insurance
 
@@ -132,7 +133,7 @@ Backend:
 
 | Variable | Purpose |
 | --- | --- |
-| `X_LAYER_MAINNET_RPC` | X Layer RPC URL |
+| `X_LAYER_MAINNET_RPC` | Primary X Layer RPC URL; backend clients fall back to public X Layer RPCs when this endpoint is unavailable |
 | `REFEREE_PRIVATE_KEY` | Referee wallet signer for payouts and refunds |
 | `REWARD_WALLET_PRIVATE_KEY` | Separate reward wallet signer for invite reward claims |
 | `REWARD_MAX_CLAIM_OKB` | Optional per-claim reward payout cap, defaults to `0.01` |
@@ -146,6 +147,18 @@ Backend:
 | `NEWS_QUERY` | Optional provider query, defaults to `World Cup 2026 OR FIFA World Cup` |
 | `NEWS_CACHE_MS` | Optional provider cache time, defaults to `900000` |
 | `PORT` | Backend port, defaults to `3001` |
+| `DATABASE_URL` | Optional Postgres storage URL; primary durable state driver when set |
+| `FANVIBE_POSTGRES_TABLE` | Optional Postgres table name, defaults to `fanvibe_state` |
+| `FANVIBE_TOKEN_ADDRESS` | FVB token contract used for holder checks and transfer indexing |
+| `FVB_TRADE_INDEX_ENABLED` | Set to `0` to disable FVB transfer indexing |
+| `FVB_TRADE_PRIZE_MIN_USD` | Minimum verified FVB trading volume for Distribution Cup prize qualification, defaults to `250` |
+| `FVB_V4_MIGRATION_TX` | FVB migration transaction used to anchor trade-index start block when no override is set |
+| `FVB_TRADE_COUNTERPARTY_ADDRESSES` | Optional comma-separated transfer counterparties to include with the v4 pool manager |
+| `X_CLIENT_ID` / `X_CLIENT_SECRET` | X OAuth application credentials for social scoring |
+| `X_CALLBACK_URL` | Backend X OAuth callback URL, for example `/auth/x/callback` |
+| `X_FRONTEND_REDIRECT_URL` | Allowed frontend redirect after X OAuth, defaults to `https://www.fanvibe.xyz` |
+| `X_TOKEN_ENCRYPTION_KEY` | Secret used to encrypt X access and refresh tokens |
+| `X_SCORE_TERMS` | Comma-separated terms used to score relevant daily X posts |
 
 Dashboard:
 
@@ -172,7 +185,7 @@ cd dashboard
 npm run build
 ```
 
-Recent audit status is tracked in [`docs/audit.md`](docs/audit.md). Backend audit is clean. Dashboard has moderate transitive wallet-stack advisories where the available npm fix is a breaking forced dependency change; this is documented and intentionally not applied without a full wallet regression pass.
+Recent audit status is tracked in [`docs/audit.md`](docs/audit.md). Non-forced audit fixes have been applied. Remaining backend and dashboard findings are transitive wallet-stack advisories where npm's forced fix would downgrade or break the current viem/Privy stack, so they are documented rather than force-applied without a full wallet regression pass.
 
 ## Safety Notes
 

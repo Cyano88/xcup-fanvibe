@@ -31,7 +31,7 @@ const FALLBACK_NEWS: NewsItem[] = [
     tag: 'Markets',
   },
   {
-    title: 'FVB Matchday Cup ties real World Cup stakes, FVB holding and country backing into one leaderboard',
+    title: 'Distribution Cup ties FVB trading, X activity, World Cup stakes and country backing into one leaderboard',
     source: 'FanVibe Desk',
     image: '/assets/fvb-token-logo.png',
     url: '#',

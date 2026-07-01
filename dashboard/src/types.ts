@@ -32,8 +32,7 @@ export interface Fixture {
   status: FixtureStatus;
   result?: Outcome;
   baseOdds: { home: number; draw: number; away: number };
-  simulatedKickoff?: string;
-  mode: 'realtime' | 'simulated';
+  mode: 'realtime';
   provider?: 'sportmonks' | 'wc2026api' | 'balldontlie' | 'zafronix' | 'static';
   providerId?: string;
 }
@@ -64,7 +63,6 @@ export interface MatchState {
   homeScore: number;
   awayScore: number;
   events: MatchEvent[];
-  simulatedKickoff: string;
   possession: number;
   finishedAt?: number;
   penaltyShootout?: {
@@ -197,14 +195,5 @@ export interface DaemonState {
   settlements: SettlementResult[];
   rejectedStakeRefunds?: RejectedStakeRefund[];
   matchStates: Record<string, MatchState>;
-  simulationMode: boolean;
   championPool?: ChampionPool;
 }
-
-// ── Retired local fixture exports ────────────────────────────────────────────
-
-export const STATIC_FIXTURES: Fixture[] = [];
-
-// Realtime World Cup fixtures are supplied at runtime.
-
-export const REALTIME_FIXTURES: Fixture[] = [];

@@ -7,7 +7,6 @@ import { explorerTx, xLayerMainnet } from '../lib/chain';
 import { FANVIBE_OKX_WALLET_URL, FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_URL } from '../lib/fanvibeToken';
 import { fetchFvbMarketPriceWei } from '../lib/fvbPrice';
 import { isEmbeddedPrivyWallet, preferredFanVibeWallet } from '../lib/privyWallets';
-import { baseFixtureId, seasonFixtureStartAtMs } from '../lib/seasonTournament';
 import { FAN_PROFILE_EVENT, fanDisplayName, getStoredProfileName, setStoredProfileName, shortWallet } from '../lib/fanProfile';
 import { lowBalanceMessage, walletErrorMessage } from '../lib/walletErrors';
 import { formatOkbUsdFromWei, formatStakeUsd, useOkbUsdPrice } from '../lib/useOkbUsdPrice';
@@ -76,6 +75,10 @@ function formatTime(ts?: number | string): string {
 
 function stripUsdPrefix(value: string | null): string | null {
   return value?.replace(/^US/, '') ?? null;
+}
+
+function baseFixtureId(fixtureId: string): string {
+  return fixtureId.replace(/^s\d+-/, '');
 }
 
 function friendlyFixtureId(fixtureId: string): string {
@@ -297,7 +300,6 @@ function fvbAmountValueWei(amount: string, marketValueWei: bigint | null, balanc
 interface Props {
   fixtures?: Fixture[];
   matchStates?: Record<string, MatchState>;
-  seasonStartedAt?: number;
   onWatch?: (fixtureId: string) => void;
 }
 
@@ -905,7 +907,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <div>
               <div className="text-xs font-semibold dark:text-zinc-200 text-zinc-800">Trade FVB with OKX Wallet</div>
               <div className="mt-0.5 max-w-xl text-[11px] leading-4 dark:text-zinc-500 text-zinc-500">
-                $FVB has graduated. Trade with OKX Wallet on X Layer, then place one FanVibe stake to enter the Matchday Cup prize board.
+                $FVB has graduated. Trade with OKX Wallet on X Layer, then place one FanVibe stake to enter the Distribution Cup prize board.
               </div>
             </div>
             <button
@@ -1023,7 +1025,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
 
           <div className="mt-2 min-h-[18px] text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
             {hasFvbEntryMinimum ? (
-              <span className="text-emerald-600 dark:text-emerald-300">This wallet holds FVB. Trade volume plus FanVibe activity enters and ranks the Matchday Cup.</span>
+              <span className="text-emerald-600 dark:text-emerald-300">This wallet holds FVB. Trade volume plus FanVibe activity enters and ranks the Distribution Cup.</span>
             ) : (
               <span>Use the same wallet for OKX trades and FanVibe stakes. Prize ranking needs $250+ verified $FVB volume and one FanVibe stake.</span>
             )}
@@ -1042,7 +1044,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
   );
 }
 
-export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, onWatch }: Props) {
+export function MyPositions({ fixtures = [], matchStates = {}, onWatch }: Props) {
   const [address, setAddress] = useState<string | null>(() => getRememberedWallet());
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const positionsAddressRef = useRef<string | null>(null);
@@ -1347,11 +1349,7 @@ export function MyPositions({ fixtures = [], matchStates = {}, seasonStartedAt, 
               && !!liveFixture
               && !!liveState
               && ['live', 'half_time', 'finished'].includes(liveState.status);
-            const startsAt = position.type === 'match' && liveFixture && seasonStartedAt
-              ? seasonFixtureStartAtMs(fixtures, liveFixture, seasonStartedAt, matchStates)
-              : liveFixture?.simulatedKickoff
-                ? Date.parse(liveFixture.simulatedKickoff)
-                : undefined;
+            const startsAt = liveFixture ? Date.parse(liveFixture.kickoff) : undefined;
             const matchBadge = liveState?.status === 'finished'
               ? `FT ${liveState.homeScore}-${liveState.awayScore}`
               : liveState?.status === 'half_time'
