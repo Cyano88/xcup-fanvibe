@@ -660,12 +660,12 @@ export default function App() {
                   <span className="rounded-full border border-emerald-300/40 bg-emerald-400/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-emerald-100">Graduated to v4</span>
                 </div>
                 <p className="mt-2 max-w-2xl text-sm leading-5 text-zinc-200/90">
-                  Trade $FVB with OKX Wallet, connect X, stake once on FanVibe, then climb Distribution Cup as World Cup fixtures unfold.
+                  Trade $FVB with OKX Wallet, connect X, then climb Distribution Cup as World Cup fixtures unfold.
                 </p>
                 <FvbTradeSafety compact showTradeLink className="mt-2 max-w-2xl" />
                 <div className="mt-2 inline-flex items-baseline gap-1.5 text-white">
-                  <span className="text-2xl font-semibold leading-none">$500</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-300">Prize Pool</span>
+                  <span className="text-2xl font-semibold leading-none">$40</span>
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-zinc-300">Each for Top 5</span>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
                   <div className="matchday-prize-orb" aria-hidden="true">
@@ -675,10 +675,9 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-300">
-                    <div><span>1st</span><span className="ml-1 text-xs font-bold text-white">$250</span></div>
-                    <div><span>2nd</span><span className="ml-1 text-xs font-bold text-white">$150</span></div>
-                    <div><span>3rd</span><span className="ml-1 text-xs font-bold text-white">$75</span></div>
-                    <div><span>Wildcard</span><span className="ml-1 text-xs font-bold text-white">$25</span></div>
+                    <div><span>Top 1-5</span><span className="ml-1 text-xs font-bold text-white">$40 each</span></div>
+                    <div><span>Top 1-3</span><span className="ml-1 text-xs font-bold text-white">+ 0.5% FVB supply share</span></div>
+                    <div><span>Entry</span><span className="ml-1 text-xs font-bold text-white">$250+ FVB volume + X</span></div>
                   </div>
                 </div>
               </div>

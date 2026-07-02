@@ -907,7 +907,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <div>
               <div className="text-xs font-semibold dark:text-zinc-200 text-zinc-800">Trade FVB with OKX Wallet</div>
               <div className="mt-0.5 max-w-xl text-[11px] leading-4 dark:text-zinc-500 text-zinc-500">
-                $FVB has graduated. Trade with OKX Wallet on X Layer, then place one FanVibe stake to enter the Distribution Cup prize board.
+                $FVB has graduated. Trade with OKX Wallet on X Layer and connect X to enter the Distribution Cup reward board.
               </div>
             </div>
             <button
@@ -927,7 +927,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <div className="grid gap-2 text-[11px] sm:grid-cols-3">
               <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
                 <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Trading entry</div>
-                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">$250+ volume + 1 stake</div>
+                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">$250+ volume + X connected</div>
               </div>
               <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
                 <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Holding status</div>

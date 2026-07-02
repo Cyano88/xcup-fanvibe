@@ -1736,7 +1736,7 @@ app.get('/matchday-cup/fvb-traders', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      fanvibeAction: 'Trade board tracks verified FVB volume. Matchday prize ranking additionally requires one FanVibe market stake.',
+      fanvibeAction: 'Trade board tracks verified FVB volume. Distribution Cup rewards require connected X plus verified FVB trading volume.',
     },
     source: 'indexed_fvb_trade_wallets',
   });

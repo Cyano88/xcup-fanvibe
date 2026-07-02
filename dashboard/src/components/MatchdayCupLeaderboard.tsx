@@ -8,6 +8,8 @@ import { FvbTradeSafety } from './FvbTradeSafety';
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const LEADERBOARD_BATCH_SIZE = 20;
+const USDT_REWARD_PER_TOP_FIVE = 40;
+const FVB_SUPPLY_SHARE_PERCENT = '0.5%';
 
 interface MatchdayEntry {
   rank: number | null;
@@ -142,9 +144,15 @@ function scoreBreakdown(entry: MatchdayEntry): string {
   ].join(' / ');
 }
 
+function rewardLabel(rank: number | null | undefined): string {
+  if (!rank || rank > 5) return 'Chasing rewards';
+  if (rank <= 3) return `$${USDT_REWARD_PER_TOP_FIVE} + ${FVB_SUPPLY_SHARE_PERCENT} pool`;
+  return `$${USDT_REWARD_PER_TOP_FIVE} USDT`;
+}
+
 function scoreRulesLabel(rules: ScoreRules | null): string {
-  if (!rules) return 'Distribution Cup needs connected X plus verified FVB trading volume. Daily volume, X impressions, referrals, stakes, and wins earn points.';
-  return `Distribution Cup needs connected X plus $${rules.fvbTradePrizeMinimumUsd ?? 250}+ verified FVB volume. Uncapped daily volume, X impressions, and qualified referrals carry the score.`;
+  if (!rules) return `Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USDT. Top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by final campaign score.`;
+  return `Entry needs connected X plus $${rules.fvbTradePrizeMinimumUsd ?? 250}+ verified FVB volume. Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USDT; top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by score.`;
 }
 
 function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
@@ -317,10 +325,10 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 Distribution Cup
               </div>
               <h3 className="mt-2 text-2xl font-semibold leading-tight tracking-tight text-white">
-                Top distributors working for the FVB allocation.
+                Top 5 earn $40 each. Top 3 unlock the FVB allocation.
               </h3>
               <p className="mt-1 max-w-2xl text-sm leading-5 text-zinc-200/90">
-                Connect X and trade $250+ FVB to qualify. Daily volume, X impressions, referrals, match stakes, and wins move the ranking.
+                Connect X and trade $250+ FVB to qualify. Final campaign score decides the top-3 share of 0.5% FVB supply.
               </p>
               <FvbTradeSafety compact showTradeLink className="mt-3 max-w-2xl" />
             </div>
@@ -363,8 +371,9 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 const tradeStatus = myRank.matchdayQualified
                   ? 'Distribution qualified'
                   : myRank.eligibilityReason ?? `Connect X and trade $${myRank.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
+                const myReward = rewardLabel(myRank.rank);
                 const rankStatus = myRank.rank
-                  ? `${tradeStatus}. ${xStatus}. ${fvbStatus}.`
+                  ? `${tradeStatus}. ${myReward}. ${xStatus}. ${fvbStatus}.`
                   : `${tradeStatus}. ${xStatus}.`;
                 return (
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
@@ -380,6 +389,11 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         {myRank.matchdayQualified && (
                           <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                             Qualified
+                          </span>
+                        )}
+                        {myRank.rank && myRank.rank <= 5 && (
+                          <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                            {myReward}
                           </span>
                         )}
                         <span className="truncate text-xs font-semibold dark:text-zinc-500 text-zinc-500">
@@ -472,8 +486,8 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
             {activeBoard === 'matchday'
               ? scoreRulesLabel(scoreRules)
               : activeBoard === 'traders'
-                ? 'FVB traders are ranked by verified OKX/X Layer volume. To enter Distribution Cup prizes, hit $250+ volume and place one FanVibe stake.'
-              : 'Country backing counts wallets qualified for the Distribution Cup prize board. Draw stakes are excluded.'}
+                ? 'FVB traders are ranked by verified OKX/X Layer volume. Connect X and hit $250+ FVB volume to enter Distribution Cup rewards.'
+              : 'Country backing counts wallets qualified for the Distribution Cup reward board. Draw stakes are excluded.'}
           </div>
 
           <div className="mt-3 overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200">
@@ -493,6 +507,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 const fvbStatus = entry.matchdayQualified
                   ? 'Distribution qualified'
                   : entry.eligibilityReason ?? `Connect X and trade $${entry.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
+                const reward = rewardLabel(entry.rank);
                 return (
                   <a
                     key={entry.address}
@@ -507,7 +522,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                         {fanDisplayName(entry.address, profileName)}
                       </div>
                       <div className="mt-0.5 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
-                        {shortWallet(entry.address)} - {fvbStatus}
+                        {shortWallet(entry.address)} - {fvbStatus} - {reward}
                       </div>
                       <div className="mt-1 truncate text-[10px] font-medium dark:text-zinc-500 text-zinc-500">
                         {scoreBreakdown(entry)}
@@ -536,9 +551,9 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 const profileName = entry.displayName ?? '';
                 const tradeUsd = compactUsd(formatOkbUsdFromWei(entry.fvbTradeVolumeOkbWei ?? '0', okbUsd));
                 const status = entry.matchdayQualified
-                  ? 'On prize board'
+                  ? 'On reward board'
                   : entry.fvbPrizeEligible
-                    ? 'Needs one FanVibe stake'
+                    ? 'Connect X to rank'
                     : `Needs $${entry.fvbTradePrizeMinimumUsd ?? 250}+ volume`;
                 return (
                   <a
