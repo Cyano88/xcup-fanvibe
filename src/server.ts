@@ -79,6 +79,7 @@ const REFERRAL_CLAIMS_ENABLED = process.env.REFERRAL_CLAIMS_ENABLED !== '0';
 const REWARD_MAX_CLAIM_WEI = parseEther(process.env.REWARD_MAX_CLAIM_OKB ?? '0.01');
 const REWARD_DAILY_PAYOUT_CAP_WEI = parseEther(process.env.REWARD_DAILY_PAYOUT_CAP_OKB ?? '0.05');
 const REWARD_RPC_URL = process.env.REWARD_RPC_URL
+  ?? process.env.X_LAYER_MAINNET_RPC
   ?? process.env.X_LAYER_HTTP_RPC
   ?? process.env.X_LAYER_RPC_URL
   ?? xLayerMainnet.rpcUrls.default.http[0];
@@ -91,6 +92,7 @@ const FVB_TRADE_PRIZE_MIN_USD = Number(process.env.FVB_TRADE_PRIZE_MIN_USD ?? '2
 const OKB_USD_FALLBACK = Number(process.env.OKB_USD_PRICE ?? '88');
 const OKB_USD_CACHE_TTL_MS = Number(process.env.OKB_USD_CACHE_TTL_MS ?? '1800000');
 const PRIVATE_X_LAYER_RPC_URL = process.env.FVB_RPC_URL
+  ?? process.env.X_LAYER_MAINNET_RPC
   ?? process.env.X_LAYER_HTTP_RPC
   ?? process.env.X_LAYER_RPC_URL
   ?? process.env.REWARD_RPC_URL;
