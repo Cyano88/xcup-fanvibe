@@ -105,10 +105,13 @@ const FVB_V4_MIGRATION_TX = (process.env.FVB_V4_MIGRATION_TX ?? '0x446fa4a18c6e8
 const FVB_TRADE_INDEX_ENABLED = process.env.FVB_TRADE_INDEX_ENABLED === '1';
 const FVB_TRADE_SCAN_INTERVAL_MS = Number(process.env.FVB_TRADE_SCAN_INTERVAL_MS ?? '300000');
 const FVB_TRADE_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_TRADE_SCAN_CHUNK_BLOCKS ?? '50')));
+const FVB_TRADE_BACKFILL_CHUNK_BLOCKS = BigInt(Math.max(100, Number(process.env.FVB_TRADE_BACKFILL_CHUNK_BLOCKS ?? '10000')));
 const FVB_TRADE_SCAN_LOOKBACK_BLOCKS = BigInt(Math.max(1000, Number(process.env.FVB_TRADE_SCAN_LOOKBACK_BLOCKS ?? '10000')));
 const FVB_TRADE_MAX_CHUNKS_PER_SCAN = Math.max(1, Number(process.env.FVB_TRADE_MAX_CHUNKS_PER_SCAN ?? '4'));
-const FVB_TRADE_BACKFILL_MAX_CHUNKS = Math.max(1, Number(process.env.FVB_TRADE_BACKFILL_MAX_CHUNKS ?? '50'));
+const FVB_TRADE_BACKFILL_MAX_CHUNKS = Math.max(1, Number(process.env.FVB_TRADE_BACKFILL_MAX_CHUNKS ?? '150'));
 const FVB_TRADE_AUTO_BACKFILL_ON_BOOT = process.env.FVB_TRADE_AUTO_BACKFILL_ON_BOOT === '1';
+const FVB_TRADE_REPAIR_BACKFILL_ON_BOOT = process.env.FVB_TRADE_REPAIR_BACKFILL_ON_BOOT !== '0';
+const FVB_TRADE_RESET_TO_START_BLOCK = process.env.FVB_TRADE_RESET_TO_START_BLOCK === '1';
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN ?? process.env.FANVIBE_ADMIN_TOKEN ?? '';
 const FVB_HOLDER_START_BLOCK = BigInt(Math.max(0, Number(process.env.FVB_HOLDER_START_BLOCK ?? '62489676')));
 const FVB_HOLDER_SCAN_CHUNK_BLOCKS = BigInt(Math.max(25, Number(process.env.FVB_HOLDER_SCAN_CHUNK_BLOCKS ?? '100')));
@@ -522,7 +525,8 @@ async function processFvbTradeLogs(
 }
 
 async function fvbTradeStartBlock(client = fvbPublicClient): Promise<bigint> {
-  const envBlock = process.env.FVB_TRADE_START_BLOCK;
+  const envBlock = process.env.FVB_TRADE_QUALIFICATION_START_BLOCK
+    ?? (FVB_TRADE_RESET_TO_START_BLOCK ? process.env.FVB_TRADE_START_BLOCK : undefined);
   if (envBlock && /^\d+$/.test(envBlock)) return BigInt(envBlock);
 
   try {
@@ -534,6 +538,15 @@ async function fvbTradeStartBlock(client = fvbPublicClient): Promise<bigint> {
   }
 }
 
+async function fvbTradeIndexNeedsRepair(client = fvbPublicClient): Promise<boolean> {
+  if (!FVB_TRADE_INDEX_ENABLED || !FVB_TRADE_REPAIR_BACKFILL_ON_BOOT) return false;
+  const index = ensureFvbTradeIndex();
+  const desiredStart = await fvbTradeStartBlock(client);
+  const indexedStart = BigInt(index.backfill?.fromBlock ?? index.lastScannedBlock ?? 0);
+  if (desiredStart > 0n && indexedStart > desiredStart) return true;
+  return index.backfill?.status === 'failed' && desiredStart > 0n && BigInt(index.lastScannedBlock ?? 0) < await client.getBlockNumber();
+}
+
 async function rebuildFvbTradeIndex(): Promise<void> {
   if (!FVB_TRADE_INDEX_ENABLED || fvbTradeBackfillRunning) return;
   const client = fvbPublicClient;
@@ -543,32 +556,37 @@ async function rebuildFvbTradeIndex(): Promise<void> {
   try {
     const fromStart = await fvbTradeStartBlock(client);
     const latest = await client.getBlockNumber();
-    index.wallets = {};
-    index.daily = {};
-    index.holderCandidates = {};
-    index.processedLogs = {};
-    index.lastScannedBlock = 0;
+    const existingFrom = BigInt(index.backfill?.fromBlock ?? 0);
+    const existingLast = BigInt(index.backfill?.lastScannedBlock ?? index.lastScannedBlock ?? 0);
+    const canResume = existingFrom === fromStart && existingLast >= fromStart && existingLast < latest;
+    if (!canResume) {
+      index.wallets = {};
+      index.daily = {};
+      index.holderCandidates = {};
+      index.processedLogs = {};
+      index.lastScannedBlock = 0;
+    }
     index.backfill = {
       status: 'running',
       startedAt,
       fromBlock: Number(fromStart),
       toBlock: Number(latest),
-      lastScannedBlock: Number(fromStart),
-      logsIndexed: 0,
+      lastScannedBlock: canResume ? Number(existingLast) : Number(fromStart),
+      logsIndexed: canResume ? Number(index.backfill?.logsIndexed ?? 0) : 0,
     };
     await persistAppData();
 
     const price = await getFvbMarketPrice();
     const priceWei = price.priceOkbWei ? BigInt(price.priceOkbWei) : 0n;
-    let fromBlock = fromStart;
-    let scannedTo = fromStart;
+    let fromBlock = canResume ? existingLast + 1n : fromStart;
+    let scannedTo = canResume ? existingLast : fromStart;
     let chunks = 0;
-    let logsIndexed = 0;
+    let logsIndexed = Number(index.backfill.logsIndexed ?? 0);
 
     while (fromBlock <= latest && chunks < FVB_TRADE_BACKFILL_MAX_CHUNKS) {
-      const toBlock = fromBlock + FVB_TRADE_SCAN_CHUNK_BLOCKS > latest
+      const toBlock = fromBlock + FVB_TRADE_BACKFILL_CHUNK_BLOCKS > latest
         ? latest
-        : fromBlock + FVB_TRADE_SCAN_CHUNK_BLOCKS;
+        : fromBlock + FVB_TRADE_BACKFILL_CHUNK_BLOCKS;
       const logs = await client.getLogs({
         address: FANVIBE_TOKEN_ADDRESS,
         event: FVB_TRANSFER_EVENT,
@@ -625,7 +643,7 @@ async function scanFvbTradeVolume(): Promise<void> {
     const index = ensureFvbTradeIndex();
     const latest = await client.getBlockNumber();
     const initialStart = await fvbTradeStartBlock(client);
-    if (initialStart > 0n && BigInt(index.lastScannedBlock ?? 0) < initialStart - 1n) {
+    if (FVB_TRADE_RESET_TO_START_BLOCK && initialStart > 0n && BigInt(index.lastScannedBlock ?? 0) < initialStart - 1n) {
       resetFvbTradeIndexToStart(index, initialStart);
       await persistAppData();
     }
@@ -2395,7 +2413,8 @@ httpServer.listen(PORT, async () => {
     await engine.start();
     await retryPendingStakeReports();
     const tradeIndex = ensureFvbTradeIndex();
-    if (FVB_TRADE_AUTO_BACKFILL_ON_BOOT && tradeIndex.backfill?.status !== 'complete') {
+    const repairFvbTrades = await fvbTradeIndexNeedsRepair();
+    if ((FVB_TRADE_AUTO_BACKFILL_ON_BOOT && tradeIndex.backfill?.status !== 'complete') || repairFvbTrades) {
       rebuildFvbTradeIndex().catch(err => {
         console.error(`[FanVibe] FVB trade auto-backfill failed: ${err instanceof Error ? err.message : String(err)}`);
       });
