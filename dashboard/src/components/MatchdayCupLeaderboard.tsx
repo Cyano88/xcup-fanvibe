@@ -152,7 +152,7 @@ function rewardLabel(rank: number | null | undefined): string {
 
 function scoreRulesLabel(rules: ScoreRules | null): string {
   if (!rules) return `Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USDT. Top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by final campaign score.`;
-  return `Entry needs connected X plus $${rules.fvbTradePrizeMinimumUsd ?? 250}+ verified FVB volume. Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USDT; top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by score.`;
+  return `Entry needs $${rules.fvbTradePrizeMinimumUsd ?? 250}+ verified FVB volume. Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USDT; top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by score. X, referrals, stakes, and wins boost score.`;
 }
 
 function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
@@ -328,7 +328,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 Top 5 earn $40 each. Top 3 unlock the FVB allocation.
               </h3>
               <p className="mt-1 max-w-2xl text-sm leading-5 text-zinc-200/90">
-                Connect X and trade $250+ FVB to qualify. Final campaign score decides the top-3 share of 0.5% FVB supply.
+                Trade $250+ FVB to qualify. X, referrals, stakes, and wins boost the final score for the top-3 FVB allocation.
               </p>
               <FvbTradeSafety compact showTradeLink className="mt-3 max-w-2xl" />
             </div>
@@ -367,10 +367,10 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                   : 'Hold FVB for status';
                 const xStatus = myRank.xConnected
                   ? `X @${myRank.xHandle ?? 'connected'}`
-                  : 'Connect X';
+                  : `Trade $${myRank.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
                 const tradeStatus = myRank.matchdayQualified
                   ? 'Distribution qualified'
-                  : myRank.eligibilityReason ?? `Connect X and trade $${myRank.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
+                  : myRank.eligibilityReason ?? `Trade $${myRank.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
                 const myReward = rewardLabel(myRank.rank);
                 const rankStatus = myRank.rank
                   ? `${tradeStatus}. ${myReward}. ${xStatus}. ${fvbStatus}.`
@@ -486,7 +486,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
             {activeBoard === 'matchday'
               ? scoreRulesLabel(scoreRules)
               : activeBoard === 'traders'
-                ? 'FVB traders are ranked by verified OKX/X Layer volume. Connect X and hit $250+ FVB volume to enter Distribution Cup rewards.'
+                ? 'FVB traders are ranked by verified OKX/X Layer volume. Hit $250+ FVB volume to enter; X, referrals, stakes, and wins boost score.'
               : 'Country backing counts wallets qualified for the Distribution Cup reward board. Draw stakes are excluded.'}
           </div>
 
@@ -496,8 +496,8 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
                   {activeRowsLoaded
                     ? matchdayActivity && matchdayActivity.totalFans > 0
-                      ? `${plural(matchdayActivity.totalFans, 'wallet')} have activity. Ranking needs connected X and $250+ FVB volume.`
-                      : 'The first wallet with connected X and $250+ FVB volume starts the Distribution Cup.'
+                      ? `${plural(matchdayActivity.totalFans, 'wallet')} have activity. Ranking needs $250+ FVB volume.`
+                      : 'The first wallet with $250+ FVB volume starts the Distribution Cup.'
                     : 'Loading Distribution Cup rankings...'}
                 </div>
               ) : visibleMatchdayRows.map(entry => {
@@ -506,7 +506,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 const tradeUsd = compactUsd(formatOkbUsdFromWei(entry.fvbDailyTradeVolumeOkbWei ?? '0', okbUsd));
                 const fvbStatus = entry.matchdayQualified
                   ? 'Distribution qualified'
-                  : entry.eligibilityReason ?? `Connect X and trade $${entry.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
+                  : entry.eligibilityReason ?? `Trade $${entry.fvbTradePrizeMinimumUsd ?? 250}+ FVB`;
                 const reward = rewardLabel(entry.rank);
                 return (
                   <a
@@ -553,7 +553,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 const status = entry.matchdayQualified
                   ? 'On reward board'
                   : entry.fvbPrizeEligible
-                    ? 'Connect X to rank'
+                    ? 'Connect X to boost'
                     : `Needs $${entry.fvbTradePrizeMinimumUsd ?? 250}+ volume`;
                 return (
                   <a

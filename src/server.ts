@@ -753,7 +753,7 @@ function scoreRulesWithTrading() {
     stakeDailyCap: DISTRIBUTION_STAKE_DAILY_CAP,
     fvbTradeEntryMinimumUsd: FVB_TRADE_ENTRY_MIN_USD,
     fvbTradePrizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
-    xRequired: true,
+    xRequired: false,
     matchdayRequiresFanVibeStake: false,
     fvbTradeSource: 'verified_onchain_fvb_transfer_logs',
     fvbTradeScope: fvbTradeSourceScope(),
@@ -1037,7 +1037,7 @@ async function attachFvbTrading<T extends { address: string; positions?: number;
       const xStats = xStatsFor(entry.address);
       const fvbPrizeEligible = tradeOkbWei >= prizeMinWei;
       const xConnected = !!xProfile;
-      const distributionQualified = fvbPrizeEligible && xConnected;
+      const distributionQualified = fvbPrizeEligible;
       const score = distributionQualified
         ? dailyVolumePoints + socialPoints + referralPoints + stakePoints + winPoints
         : 0;
@@ -1062,9 +1062,7 @@ async function attachFvbTrading<T extends { address: string; positions?: number;
         distributionQualified,
         eligibilityReason: !fvbPrizeEligible
           ? `Trade $${FVB_TRADE_PRIZE_MIN_USD}+ FVB`
-          : !xConnected
-            ? 'Connect X'
-            : 'Qualified',
+          : 'Qualified',
         score,
         scoreComponents: {
           dailyVolume: dailyVolumePoints,
@@ -1589,8 +1587,8 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      fanvibeAction: 'Distribution Cup ranking requires connected X plus verified FVB trading volume.',
-      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity, connected X, and review before payout.',
+      fanvibeAction: 'Distribution Cup ranking requires $250+ verified FVB trading volume. Connected X, referrals, stakes, and wins boost score.',
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity and review before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,
@@ -1694,7 +1692,7 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
     fanvibeActive: false,
     matchdayQualified: false,
     distributionQualified: false,
-    eligibilityReason: 'Connect X',
+    eligibilityReason: `Trade $${FVB_TRADE_PRIZE_MIN_USD}+ FVB`,
     scoreRules: scoreRulesWithTrading(),
   };
   const entry = ranked ?? (unqualifiedStats ? { ...unqualifiedStats, rank: null } : emptyEntry);
@@ -1718,8 +1716,8 @@ app.get('/matchday-cup/rank/:address', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      fanvibeAction: 'Distribution Cup ranking requires connected X plus verified FVB trading volume.',
-      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity, connected X, and review before payout.',
+      fanvibeAction: 'Distribution Cup ranking requires $250+ verified FVB trading volume. Connected X, referrals, stakes, and wins boost score.',
+      prizeReview: 'Prize-qualified wallets require clean verified FVB trading activity and review before payout.',
     },
     tradeIndex: {
       enabled: FVB_TRADE_INDEX_ENABLED,
@@ -1772,7 +1770,7 @@ app.get('/matchday-cup/fvb-traders', async (req, res) => {
       entryMinimumOkbWei: tradeEntryMinimumOkbWei.toString(),
       prizeMinimumUsd: FVB_TRADE_PRIZE_MIN_USD,
       prizeMinimumOkbWei: tradePrizeMinimumOkbWei.toString(),
-      fanvibeAction: 'Trade board tracks verified FVB volume. Distribution Cup rewards require connected X plus verified FVB trading volume.',
+      fanvibeAction: 'Trade board tracks verified FVB volume. Distribution Cup rewards require $250+ verified FVB trading volume; connected X boosts score.',
     },
     source: 'indexed_fvb_trade_wallets',
   });
