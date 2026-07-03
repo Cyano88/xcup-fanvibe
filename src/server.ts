@@ -340,6 +340,20 @@ function ensureFvbTradeIndex() {
   return appData.fvbTradeIndex;
 }
 
+function resetFvbTradeIndexToStart(index: NonNullable<PersistedAppData['fvbTradeIndex']>, startBlock: bigint): void {
+  index.wallets = {};
+  index.daily = {};
+  index.holderCandidates = {};
+  index.processedLogs = {};
+  index.lastScannedBlock = Number(startBlock > 0n ? startBlock - 1n : 0n);
+  index.updatedAt = Date.now();
+  index.backfill = {
+    status: 'idle',
+    fromBlock: Number(startBlock),
+    lastScannedBlock: index.lastScannedBlock,
+  };
+}
+
 function fvbTradeDay(timestampMs: number): string {
   return new Date(timestampMs).toISOString().slice(0, 10);
 }
@@ -611,6 +625,10 @@ async function scanFvbTradeVolume(): Promise<void> {
     const index = ensureFvbTradeIndex();
     const latest = await client.getBlockNumber();
     const initialStart = await fvbTradeStartBlock(client);
+    if (initialStart > 0n && BigInt(index.lastScannedBlock ?? 0) < initialStart - 1n) {
+      resetFvbTradeIndexToStart(index, initialStart);
+      await persistAppData();
+    }
     let fromBlock = index.lastScannedBlock > 0 ? BigInt(index.lastScannedBlock) + 1n : initialStart;
     if (fromBlock > latest) return;
 
