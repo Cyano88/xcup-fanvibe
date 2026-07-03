@@ -2141,12 +2141,16 @@ app.get('/worldcup/feed', async (req, res) => {
   }
   engine.syncFixtures(feed.fixtures);
   engine.syncMatchStates(feed.matchStates);
-  for (const matchState of Object.values(feed.matchStates)) {
-    if (matchState.status !== 'finished') continue;
-    const result = await engine.settleSyncedFixture(matchState.fixtureId, outcomeFromMatchState(matchState));
-    if (result) broadcast('settlement', result);
-  }
   res.json(feed);
+  void (async () => {
+    for (const matchState of Object.values(feed.matchStates)) {
+      if (matchState.status !== 'finished') continue;
+      const result = await engine.settleSyncedFixture(matchState.fixtureId, outcomeFromMatchState(matchState));
+      if (result) broadcast('settlement', result);
+    }
+  })().catch(err => {
+    console.warn(`[FanVibe] Async World Cup settlement failed: ${err instanceof Error ? err.message : String(err)}`);
+  });
 });
 
 app.get('/worldcup/match/:fixtureId', async (req, res) => {
