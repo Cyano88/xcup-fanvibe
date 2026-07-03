@@ -98,6 +98,8 @@ const SPORTMONKS_BASE_URL = process.env.SPORTMONKS_API_URL ?? 'https://api.sport
 const SPORTMONKS_WORLD_CUP_LEAGUE_ID = process.env.SPORTMONKS_WORLD_CUP_LEAGUE_ID ?? '732';
 const SPORTMONKS_WORLD_CUP_START_DATE = process.env.SPORTMONKS_WORLD_CUP_START_DATE ?? '2026-06-11';
 const SPORTMONKS_WORLD_CUP_END_DATE = process.env.SPORTMONKS_WORLD_CUP_END_DATE ?? '2026-07-20';
+const SPORTMONKS_MAX_PAGES = Math.max(1, Number(process.env.SPORTMONKS_MAX_PAGES ?? '2'));
+const SPORTMONKS_REQUEST_TIMEOUT_MS = Number(process.env.SPORTMONKS_REQUEST_TIMEOUT_MS ?? '5000');
 const MATCH_SETTLED_FALLBACK_MS = Number(process.env.WORLD_CUP_MATCH_SETTLED_FALLBACK_MS ?? `${135 * 60 * 1000}`);
 
 let cache: WorldCupFeed | null = null;
@@ -603,7 +605,7 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
         const fixtures: SportmonksFixture[] = [];
         let page = 1;
         for (;;) {
-          const res = await fetch(buildSportmonksUrl(path, token, 'scores;participants;periods;events;state;venue;round;stage', page), { signal: AbortSignal.timeout(10000) });
+          const res = await fetch(buildSportmonksUrl(path, token, 'scores;participants;periods;events;state;venue;round;stage', page), { signal: AbortSignal.timeout(SPORTMONKS_REQUEST_TIMEOUT_MS) });
           if (!res.ok) throw new Error(`Sportmonks API ${res.status}`);
           const json = await res.json() as SportmonksResponse;
           if (Array.isArray(json.data)) fixtures.push(...json.data);
@@ -611,7 +613,7 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
           const hasMore = json.pagination?.has_more === true || !!json.pagination?.next_page;
           if (!hasMore) break;
           page += 1;
-          if (page > 10) break;
+          if (page > SPORTMONKS_MAX_PAGES) break;
         }
         return fixtures;
       };
@@ -620,7 +622,7 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
       try {
         matches = await fetchAllSportmonksPages(`/fixtures/between/${SPORTMONKS_WORLD_CUP_START_DATE}/${SPORTMONKS_WORLD_CUP_END_DATE}`);
       } catch {
-        const res = await fetch(buildSportmonksUrl('/livescores/inplay', token, 'participants;scores;periods;events;league.country;round'), { signal: AbortSignal.timeout(10000) });
+        const res = await fetch(buildSportmonksUrl('/livescores/inplay', token, 'participants;scores;periods;events;league.country;round'), { signal: AbortSignal.timeout(SPORTMONKS_REQUEST_TIMEOUT_MS) });
         if (!res.ok) throw new Error(`Sportmonks API ${res.status}`);
         const json = await res.json() as SportmonksResponse;
         matches = Array.isArray(json.data) ? json.data : json.data ? [json.data] : [];
