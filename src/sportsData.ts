@@ -98,6 +98,8 @@ const SPORTMONKS_BASE_URL = process.env.SPORTMONKS_API_URL ?? 'https://api.sport
 const SPORTMONKS_WORLD_CUP_LEAGUE_ID = process.env.SPORTMONKS_WORLD_CUP_LEAGUE_ID ?? '732';
 const SPORTMONKS_WORLD_CUP_START_DATE = process.env.SPORTMONKS_WORLD_CUP_START_DATE ?? '2026-06-11';
 const SPORTMONKS_WORLD_CUP_END_DATE = process.env.SPORTMONKS_WORLD_CUP_END_DATE ?? '2026-07-20';
+const SPORTMONKS_FEED_DAYS_BEFORE = Math.max(0, Number(process.env.SPORTMONKS_FEED_DAYS_BEFORE ?? '2'));
+const SPORTMONKS_FEED_DAYS_AFTER = Math.max(1, Number(process.env.SPORTMONKS_FEED_DAYS_AFTER ?? '14'));
 const SPORTMONKS_MAX_PAGES = Math.max(1, Number(process.env.SPORTMONKS_MAX_PAGES ?? '2'));
 const SPORTMONKS_REQUEST_TIMEOUT_MS = Number(process.env.SPORTMONKS_REQUEST_TIMEOUT_MS ?? '5000');
 const MATCH_SETTLED_FALLBACK_MS = Number(process.env.WORLD_CUP_MATCH_SETTLED_FALLBACK_MS ?? `${135 * 60 * 1000}`);
@@ -470,6 +472,28 @@ function buildSportmonksUrl(path: string, token: string, include: string, page =
   return url;
 }
 
+function formatSportmonksDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function uniqueSportmonksFixtures(matches: SportmonksFixture[]): SportmonksFixture[] {
+  const seen = new Set<string>();
+  const unique: SportmonksFixture[] = [];
+  for (const match of matches) {
+    const key = String(match.id ?? `${match.name ?? ''}:${match.starting_at ?? ''}`);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(match);
+  }
+  return unique;
+}
+
 function scheduledMatchState(fixture: Fixture): MatchState {
   return {
     fixtureId: fixture.id,
@@ -618,14 +642,28 @@ export async function getWorldCupFeed(force = false): Promise<WorldCupFeed> {
         return fixtures;
       };
 
-      let matches: SportmonksFixture[] = [];
-      try {
-        matches = await fetchAllSportmonksPages(`/fixtures/between/${SPORTMONKS_WORLD_CUP_START_DATE}/${SPORTMONKS_WORLD_CUP_END_DATE}`);
-      } catch {
+      const fetchSportmonksInplay = async (): Promise<SportmonksFixture[]> => {
         const res = await fetch(buildSportmonksUrl('/livescores/inplay', token, 'participants;scores;periods;events;league.country;round'), { signal: AbortSignal.timeout(SPORTMONKS_REQUEST_TIMEOUT_MS) });
         if (!res.ok) throw new Error(`Sportmonks API ${res.status}`);
         const json = await res.json() as SportmonksResponse;
-        matches = Array.isArray(json.data) ? json.data : json.data ? [json.data] : [];
+        return Array.isArray(json.data) ? json.data : json.data ? [json.data] : [];
+      };
+
+      let matches: SportmonksFixture[] = [];
+      try {
+        const today = new Date();
+        const from = formatSportmonksDate(addUtcDays(today, -SPORTMONKS_FEED_DAYS_BEFORE));
+        const to = formatSportmonksDate(addUtcDays(today, SPORTMONKS_FEED_DAYS_AFTER));
+        const [inplay, rolling] = await Promise.all([
+          fetchSportmonksInplay().catch(() => []),
+          fetchAllSportmonksPages(`/fixtures/between/${from}/${to}`),
+        ]);
+        matches = uniqueSportmonksFixtures([...inplay, ...rolling]);
+        if (matches.length === 0) {
+          matches = await fetchAllSportmonksPages(`/fixtures/between/${SPORTMONKS_WORLD_CUP_START_DATE}/${SPORTMONKS_WORLD_CUP_END_DATE}`);
+        }
+      } catch {
+        matches = await fetchSportmonksInplay();
       }
       cache = overlaySportmonks(matches);
       return cache;
