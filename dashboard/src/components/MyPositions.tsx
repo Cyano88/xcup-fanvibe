@@ -927,7 +927,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             <div className="grid gap-2 text-[11px] sm:grid-cols-3">
               <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
                 <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Trading entry</div>
-                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">$250+ FVB volume</div>
+                <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">$250+ FVB volume + X connected</div>
               </div>
               <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
                 <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Holding status</div>
@@ -1027,7 +1027,7 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             {hasFvbEntryMinimum ? (
               <span className="text-emerald-600 dark:text-emerald-300">This wallet holds FVB. Trade volume plus FanVibe activity enters and ranks the Distribution Cup.</span>
             ) : (
-              <span>Use the same wallet for OKX trades and FanVibe stakes. Prize ranking needs $250+ verified $FVB volume; X, referrals, stakes, and wins boost score.</span>
+              <span>Use the same wallet for OKX trades and FanVibe stakes. Prize ranking needs $250+ verified $FVB volume and connected X.</span>
             )}
           </div>
         </div>

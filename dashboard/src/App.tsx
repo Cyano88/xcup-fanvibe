@@ -684,7 +684,7 @@ export default function App() {
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-300">
                     <div><span>Top 1-5</span><span className="ml-1 text-xs font-bold text-white">$40 each</span></div>
                     <div><span>Top 1-3</span><span className="ml-1 text-xs font-bold text-white">+ 0.5% FVB supply share</span></div>
-                    <div><span>Entry</span><span className="ml-1 text-xs font-bold text-white">$250+ FVB volume</span></div>
+                    <div><span>Entry</span><span className="ml-1 text-xs font-bold text-white">$250+ FVB volume + X</span></div>
                   </div>
                 </div>
               </div>
