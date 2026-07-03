@@ -25,6 +25,7 @@ const BACKEND_WS = import.meta.env.VITE_BACKEND_WS ?? 'ws://localhost:3001';
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
+const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
 const LAST_WALLET_KEY = 'fanvibe.lastWalletAddress';
 const ACTIVE_TAB_KEY = 'fanvibe.activeTab';
@@ -570,19 +571,25 @@ export default function App() {
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'news', label: 'News', icon: Newspaper },
-    { id: 'portfolio', label: 'Portfolio', icon: BriefcaseBusiness },
+    { id: 'portfolio', label: accountValueLabel || '$0.00', icon: BriefcaseBusiness },
   ];
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-white text-zinc-900">
       <header className="sticky top-0 z-40 border-b dark:border-zinc-900 border-zinc-200 dark:bg-black/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:pl-28">
-          <button type="button" onClick={() => { setActiveTab('home'); setHomeCupView('matches'); }} className="flex min-w-0 items-center gap-2 text-left">
-            <img src={BRAND_E_IMAGE} alt="" className="h-8 w-8 rounded-lg object-cover" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-black tracking-tight">FanVibe</div>
-              <div className="truncate text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">{accountValueLabel} account view</div>
-            </div>
+          <button type="button" onClick={() => { setActiveTab('home'); setHomeCupView('matches'); }} className="flex min-w-0 items-center gap-3 text-left">
+            <img src={FANVIBE_HERO_LOGO} alt="FanVibe" className="h-8 w-8 rounded-md object-cover ring-1 ring-black/10 dark:ring-white/10" />
+            <span className="truncate text-sm font-extrabold tracking-tight sm:text-base">
+              <span className="dark:text-zinc-100 text-black">Fan</span>
+              <span className="text-blue-600 dark:text-blue-400">
+                Vib
+                <span className="brand-e-cycle" aria-label="e">
+                  <span className="brand-e-letter">e</span>
+                  <img src={BRAND_E_IMAGE} alt="" aria-hidden="true" />
+                </span>
+              </span>
+            </span>
           </button>
           <div className="flex items-center gap-2">
             <div className={`hidden rounded-full px-2.5 py-1 text-[11px] font-bold sm:block ${wsConnected || engineOnline ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'bg-zinc-500/10 text-zinc-500'}`}>
@@ -875,7 +882,11 @@ export default function App() {
             <div className="flex w-full items-center justify-between gap-4 bg-white px-4 py-3 text-xs dark:bg-transparent dark:text-zinc-600 text-zinc-500">
               <span className="flex min-w-0 items-center gap-2">
                 <span className="font-semibold dark:text-zinc-400 text-zinc-600">Platform Steps</span>
-                <span className="hidden text-[11px] font-semibold dark:text-zinc-500 text-zinc-400 sm:inline-flex">Pick a live World Cup market, stake OKB, and track verified results.</span>
+                <span className="how-it-works-rotate hidden text-[11px] font-semibold dark:text-zinc-500 text-zinc-400 sm:inline-flex">
+                  <span><strong>Step 1</strong> Pick a live World Cup market</span>
+                  <span><strong>Step 2</strong> Stake OKB and hold FVB with the same wallet</span>
+                  <span><strong>Step 3</strong> Track verified results in Portfolio</span>
+                </span>
               </span>
             </div>
           </div>
