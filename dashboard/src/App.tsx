@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { formatEther } from 'viem';
 import { BookOpen, BriefcaseBusiness, ChevronDown, ChevronUp, ExternalLink, Globe, Home, Link2, Newspaper, Radio, Search, Trophy, X } from 'lucide-react';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
@@ -20,10 +21,12 @@ import { flushPendingStakeReports } from './lib/stakeReport';
 import { FANVIBE_TOKEN_ADDRESS, FANVIBE_TOKEN_LOGO } from './lib/fanvibeToken';
 import { fetchFvbMarketPriceWei } from './lib/fvbPrice';
 import { formatOkbUsdFromWei, useOkbUsdPrice } from './lib/useOkbUsdPrice';
+import { preferredFanVibeWallet } from './lib/privyWallets';
 
 const BACKEND_WS = import.meta.env.VITE_BACKEND_WS ?? 'ws://localhost:3001';
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
 const REFEREE_ADDR = (import.meta.env.VITE_REFEREE_ADDRESS ?? '') as string;
+const PRIVY_ENABLED = Boolean(import.meta.env.VITE_PRIVY_APP_ID);
 const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const FANVIBE_HERO_LOGO = '/assets/fanvibe-hero-logo.jpeg';
 const BRAND_E_IMAGE = '/assets/brand-e.png';
@@ -78,6 +81,15 @@ function getRememberedWalletAddress(): string | null {
     return window.localStorage.getItem(LAST_WALLET_KEY);
   } catch {
     return null;
+  }
+}
+
+function setRememberedWalletAddress(address: string | null): void {
+  try {
+    if (address) window.localStorage.setItem(LAST_WALLET_KEY, address);
+    else window.localStorage.removeItem(LAST_WALLET_KEY);
+  } catch {
+    /* ignore storage restrictions */
   }
 }
 
@@ -165,6 +177,21 @@ function fixtureTime(fixture: Fixture, matchStates: Record<string, MatchState>):
   const state = matchStates[fixture.id];
   const raw = state?.status === 'finished' && state.finishedAt ? state.finishedAt : parseProviderTime(fixture.kickoff);
   return Number.isFinite(raw) ? raw : 0;
+}
+
+function WalletAddressBridge({ onAddress }: { onAddress: (address: string | null) => void }) {
+  const { ready: privyReady, authenticated } = usePrivy();
+  const { wallets, ready: walletsReady } = useWallets();
+
+  useEffect(() => {
+    const activeWallet = authenticated ? preferredFanVibeWallet(wallets) : null;
+    const nextAddress = activeWallet?.address ?? getRememberedWalletAddress();
+    onAddress(nextAddress);
+    if (activeWallet?.address) setRememberedWalletAddress(activeWallet.address);
+    if (privyReady && walletsReady && !authenticated) setRememberedWalletAddress(null);
+  }, [authenticated, onAddress, privyReady, wallets, walletsReady]);
+
+  return null;
 }
 
 export default function App() {
@@ -576,6 +603,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen dark:bg-black bg-zinc-50 dark:text-white text-zinc-900">
+      {PRIVY_ENABLED && <WalletAddressBridge onAddress={setSettlementWalletAddress} />}
       <header className="sticky top-0 z-40 border-b dark:border-zinc-900 border-zinc-200 dark:bg-black/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:pl-28">
           <button type="button" onClick={() => { setActiveTab('home'); setHomeCupView('matches'); }} className="flex min-w-0 items-center gap-3 text-left">
