@@ -259,20 +259,39 @@ function sportmonksTeam(match: SportmonksFixture, location: 'home' | 'away'): Te
   return teamFromSportmonksParticipant(participant);
 }
 
+function sportmonksStateKey(match: SportmonksFixture): string {
+  return normalize([match.state?.developer_name, match.state?.short_name, match.state?.name].filter(Boolean).join(' '));
+}
+
+function sportmonksStateIsFinished(state: string): boolean {
+  return [
+    'finished',
+    'fulltime',
+    'ft',
+    'completed',
+    'aet',
+    'ftaet',
+    'ftpen',
+    'afterextratime',
+    'afterpenalties',
+    'ended',
+  ].some(value => state.includes(value));
+}
+
 function sportmonksStatus(match: SportmonksFixture): FixtureStatus {
-  const state = normalize(match.state?.developer_name ?? match.state?.short_name ?? match.state?.name);
+  const state = sportmonksStateKey(match);
+  if (sportmonksStateIsFinished(state)) return 'settled';
   if (['inplay', 'live', '1sthalf', '2ndhalf', 'halftime', 'ht', 'break', 'extratime', 'et', 'penalties'].includes(state)) return 'locked';
-  if (['finished', 'fulltime', 'ft', 'completed', 'aet', 'ftaet', 'ftpen', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'settled';
   if (['postponed', 'cancelled', 'suspended', 'interrupted'].includes(state)) return 'locked';
   return 'open';
 }
 
 function sportmonksMatchStateStatus(match: SportmonksFixture): MatchState['status'] | null {
+  const state = sportmonksStateKey(match);
+  if (sportmonksStateIsFinished(state)) return 'finished';
   if (match.periods?.some(period => period.ticking)) return 'live';
-  const state = normalize(match.state?.developer_name ?? match.state?.short_name ?? match.state?.name);
   if (['halftime', 'ht', 'break'].includes(state)) return 'half_time';
   if (['inplay', 'live', '1sthalf', '2ndhalf', 'extratime', 'et', 'penalties'].includes(state)) return 'live';
-  if (['finished', 'fulltime', 'ft', 'completed', 'aet', 'ftaet', 'ftpen', 'afterextratime', 'afterpenalties', 'ended'].includes(state)) return 'finished';
   return null;
 }
 
@@ -280,8 +299,29 @@ function sportmonksScore(match: SportmonksFixture, location: 'home' | 'away'): n
   const participant = match.participants?.find(item => item.meta?.location === location);
   if (!participant?.id) return 0;
   const scores = match.scores?.filter(item => item.participant_id === participant.id) ?? [];
-  const score = scores.find(item => normalize(item.description) === 'current') ?? scores[0];
+  const score = scores.find(item => normalize(item.description) === 'current')
+    ?? scores.find(item => !normalize(item.description).includes('penalt'))
+    ?? scores[0];
   return Number(score?.score?.goals ?? 0);
+}
+
+function sportmonksPenaltyShootout(match: SportmonksFixture, location: 'home' | 'away'): number | null {
+  const participant = match.participants?.find(item => item.meta?.location === location);
+  if (!participant?.id) return null;
+  const scores = match.scores?.filter(item => item.participant_id === participant.id) ?? [];
+  const shootout = scores.find(item => {
+    const description = normalize(item.description);
+    return description.includes('penalt') || description === 'shootout';
+  });
+  const goals = shootout?.score?.goals;
+  return typeof goals === 'number' && Number.isFinite(goals) ? goals : null;
+}
+
+function sportmonksPenaltyWinner(match: SportmonksFixture): MatchState['penaltyWinner'] {
+  const homePens = sportmonksPenaltyShootout(match, 'home');
+  const awayPens = sportmonksPenaltyShootout(match, 'away');
+  if (homePens === null || awayPens === null || homePens === awayPens) return undefined;
+  return homePens > awayPens ? 'home' : 'away';
 }
 
 function sportmonksMinute(match: SportmonksFixture, fallbackMinute: number): number {
@@ -396,6 +436,9 @@ function buildMatchState(fixture: Fixture, source: SportmonksFixture | null, sta
   const elapsedMinute = Number.isFinite(kickoffMs) ? Math.floor((Date.now() - kickoffMs) / 60_000) + 1 : 1;
   const latestMinute = events.length ? Math.max(...events.map(event => event.minute ?? 0)) : elapsedMinute;
   const providerMinute = source ? sportmonksMinute(source, latestMinute) : latestMinute;
+  const homePenaltyScore = source ? sportmonksPenaltyShootout(source, 'home') : null;
+  const awayPenaltyScore = source ? sportmonksPenaltyShootout(source, 'away') : null;
+  const penaltyWinner = source ? sportmonksPenaltyWinner(source) : undefined;
   return {
     fixtureId: fixture.id,
     status: stateStatus,
@@ -405,6 +448,10 @@ function buildMatchState(fixture: Fixture, source: SportmonksFixture | null, sta
     events,
     possession: 50,
     finishedAt: stateStatus === 'finished' && Number.isFinite(kickoffMs) ? kickoffMs + MATCH_SETTLED_FALLBACK_MS : undefined,
+    penaltyShootout: homePenaltyScore !== null && awayPenaltyScore !== null
+      ? { homeScore: homePenaltyScore, awayScore: awayPenaltyScore, kicks: [] }
+      : undefined,
+    penaltyWinner,
   };
 }
 
@@ -423,6 +470,7 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
     const homeScore = sportmonksScore(api, 'home');
     const awayScore = sportmonksScore(api, 'away');
     const status = sportmonksStatus(api);
+    const penaltyWinner = sportmonksPenaltyWinner(api);
     const kickoff = api.starting_at ?? new Date().toISOString();
     const fixture: Fixture = {
       id: fixtureId,
@@ -440,7 +488,7 @@ function overlaySportmonks(matches: SportmonksFixture[]): WorldCupFeed {
       provider: 'sportmonks',
       providerId: api.id ? String(api.id) : undefined,
       result: status === 'settled'
-        ? homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw'
+        ? penaltyWinner ?? (homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw')
         : undefined,
     };
     const events = sportmonksEvents(api, fixture);
