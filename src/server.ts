@@ -1572,7 +1572,7 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       syncingFvbFans: allEntries.filter(entry => entry.fvbEligible === null || entry.fvbEligible === undefined).length,
       prizeEligibleFans: allEntries.filter(entry => entry.fvbPrizeEligible === true).length,
       activeFanVibeFans: allEntries.filter(entry => entry.fanvibeActive === true).length,
-      totalStakePositions: allEntries.reduce((sum, entry) => sum + (entry.positions ?? 0), 0),
+      totalStakePositions: engine.getTotalStakePositions(),
       xConnectedFans: allEntries.filter(entry => entry.xConnected === true).length,
       pendingXFans: allEntries.filter(entry => entry.fvbPrizeEligible === true && entry.xConnected !== true).length,
       pendingFanVibeActionFans: allEntries.filter(entry => entry.fvbPrizeEligible === true && entry.fanvibeActive !== true).length,

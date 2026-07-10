@@ -251,6 +251,10 @@ export class RefereeEngine {
       || Array.from(this.settlementJobs.values()).some(job => job.fixtureId === fixtureId && this.realtimeFixtureFor(job.fixtureId, job.fixture));
   }
 
+  getTotalStakePositions(): number {
+    return this.stakes.size + this.champStakes.length + this.champHistory.length;
+  }
+
   getPositions(address: string) {
     const wallet = address.toLowerCase();
     const stakePositions = Array.from(this.stakes.values())
