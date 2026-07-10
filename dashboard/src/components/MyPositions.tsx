@@ -707,23 +707,23 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
     }
   }, [address, amount, fvbBalanceWei, onError, pending, recipient, refreshBalance, refreshFvbBalance, sendTransaction, wallet, withdrawAsset]);
 
+  const embeddedWallet = wallets.find(item => isEmbeddedPrivyWallet(item.walletClientType));
+
   const openSecureExport = useCallback(async () => {
-    if (!wallet || !isEmbeddedWallet) {
-      onError('This wallet is already external. Open it directly in OKX Wallet.');
+    if (!embeddedWallet) {
+      onError('No FanVibe email wallet to export. Sign in with email to create one.');
       return;
     }
     setExportPending(true);
     onError(null);
     try {
-      await exportWallet({ address });
-      setMigrationOpen(false);
-      setMigrationAcknowledged(false);
+      await exportWallet({ address: embeddedWallet.address });
     } catch (err) {
       onError(walletErrorMessage(err, 'Wallet export was not completed.'));
     } finally {
       setExportPending(false);
     }
-  }, [address, exportWallet, isEmbeddedWallet, onError, wallet]);
+  }, [embeddedWallet, exportWallet, onError]);
 
   return (
     <div className="mt-4 border-t dark:border-zinc-900 border-zinc-100 pt-4">
@@ -964,65 +964,6 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
             </div>
           </div>
 
-          <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
-            <button
-              type="button"
-              onClick={() => setMigrationOpen(open => !open)}
-              className="inline-flex items-center gap-2 text-[11px] font-semibold dark:text-zinc-400 text-zinc-500 transition-colors hover:text-blue-500"
-            >
-              <KeyRound size={13} />
-              Using email wallet? Move it to OKX Wallet
-            </button>
-
-            {migrationOpen && (
-              <div className="mt-3 space-y-3">
-                <div className="flex items-start gap-2 text-[11px] leading-5 dark:text-zinc-500 text-zinc-500">
-                  <ShieldCheck size={15} className="mt-0.5 shrink-0 text-blue-500" />
-                  <p>
-                    Export opens Privy's secure screen. FanVibe never sees your private key. Import it into OKX Wallet, switch to X Layer, then trade $FVB from OKX Wallet.
-                  </p>
-                </div>
-                <div className="grid gap-2 text-[11px] sm:grid-cols-3">
-                  <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
-                    <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 1</div>
-                    <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Export FanVibe wallet</div>
-                  </div>
-                  <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
-                    <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 2</div>
-                    <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Import private key in OKX</div>
-                  </div>
-                  <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
-                    <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 3</div>
-                    <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Trade on X Layer</div>
-                  </div>
-                </div>
-                <label className="flex items-start gap-2 text-[11px] leading-5 dark:text-zinc-500 text-zinc-500">
-                  <input
-                    type="checkbox"
-                    checked={migrationAcknowledged}
-                    onChange={event => setMigrationAcknowledged(event.target.checked)}
-                    className="mt-1 h-3.5 w-3.5 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950"
-                  />
-                  <span>I understand FanVibe will never ask me to paste this key back into FanVibe, and anyone with the key can control this wallet.</span>
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={openSecureExport}
-                    disabled={!isEmbeddedWallet || !migrationAcknowledged || exportPending}
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-                  >
-                    <KeyRound size={13} />
-                    {exportPending ? 'Opening secure export' : 'Open secure export'}
-                  </button>
-                  {!isEmbeddedWallet && (
-                    <span className="inline-flex items-center text-[11px] font-medium dark:text-zinc-500 text-zinc-500">This wallet is already external.</span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
           <div className="mt-2 min-h-[18px] text-[11px] font-medium dark:text-zinc-500 text-zinc-500">
             {hasFvbEntryMinimum ? (
               <span className="text-emerald-600 dark:text-emerald-300">This wallet holds FVB. Trade volume plus FanVibe activity enters and ranks the Distribution Cup.</span>
@@ -1030,6 +971,64 @@ function PrivyWalletPanel({ address, okbUsd, onError }: { address: string; okbUs
               <span>Use the same wallet for OKX trades and FanVibe stakes. Prize ranking needs $250+ verified $FVB volume and connected X.</span>
             )}
           </div>
+        </div>
+      )}
+
+      {embeddedWallet && (
+        <div className="mt-3 border-t dark:border-zinc-900 border-zinc-100 pt-3">
+          <button
+            type="button"
+            onClick={() => setMigrationOpen(open => !open)}
+            className="inline-flex items-center gap-2 text-[11px] font-semibold dark:text-zinc-400 text-zinc-500 transition-colors hover:text-blue-500"
+          >
+            <KeyRound size={13} />
+            Using email wallet? Move it to OKX Wallet
+          </button>
+
+          {migrationOpen && (
+            <div className="mt-3 space-y-3">
+              <div className="flex items-start gap-2 text-[11px] leading-5 dark:text-zinc-500 text-zinc-500">
+                <ShieldCheck size={15} className="mt-0.5 shrink-0 text-blue-500" />
+                <p>
+                  Export opens Privy's secure screen. FanVibe never sees your private key. Import it into OKX Wallet, switch to X Layer, then trade $FVB from OKX Wallet.
+                </p>
+              </div>
+              <div className="grid gap-2 text-[11px] sm:grid-cols-3">
+                <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                  <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 1</div>
+                  <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Export FanVibe wallet</div>
+                </div>
+                <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                  <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 2</div>
+                  <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Import private key in OKX</div>
+                </div>
+                <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
+                  <div className="font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Step 3</div>
+                  <div className="mt-1 font-semibold dark:text-zinc-200 text-zinc-800">Trade on X Layer</div>
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-[11px] leading-5 dark:text-zinc-500 text-zinc-500">
+                <input
+                  type="checkbox"
+                  checked={migrationAcknowledged}
+                  onChange={event => setMigrationAcknowledged(event.target.checked)}
+                  className="mt-1 h-3.5 w-3.5 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950"
+                />
+                <span>I understand FanVibe will never ask me to paste this key back into FanVibe, and anyone with the key can control this wallet.</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={openSecureExport}
+                  disabled={!migrationAcknowledged || exportPending}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                >
+                  <KeyRound size={13} />
+                  {exportPending ? 'Opening secure export' : 'Open secure export'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
