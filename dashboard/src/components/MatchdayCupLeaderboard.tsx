@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link2, Trophy } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ExternalLink, Link2, Trophy } from 'lucide-react';
 import { formatOkbUsdFromWei } from '../lib/useOkbUsdPrice';
 import { fanDisplayName, shortWallet } from '../lib/fanProfile';
 import { explorerAddr } from '../lib/chain';
@@ -10,6 +10,7 @@ const FANVIBE_SEASON_BG = '/assets/fanvibe-season-bg.jpeg';
 const LEADERBOARD_BATCH_SIZE = 20;
 const USDT_REWARD_PER_TOP_FIVE = 40;
 const FVB_SUPPLY_SHARE_PERCENT = '0.5%';
+const DEFILLAMA_URL = 'https://defillama.com/protocol/fanvibe';
 
 interface MatchdayEntry {
   rank: number | null;
@@ -89,6 +90,8 @@ interface MatchdayActivityMeta {
   pendingFanVibeActionFans?: number;
   xConnectedFans?: number;
   pendingXFans?: number;
+  tradedFans?: number;
+  totalTradeVolumeOkbWei?: string;
 }
 
 interface ScoreRules {
@@ -132,6 +135,13 @@ function formatScore(value: number | undefined): string {
   return Math.round(value ?? 0).toLocaleString();
 }
 
+function formatCompactNumber(value: number | undefined | null): string {
+  if (value == null || !Number.isFinite(value)) return '-';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}K`;
+  return value.toLocaleString();
+}
+
 function scoreBreakdown(entry: MatchdayEntry): string {
   const parts = entry.scoreComponents;
   if (!parts) return `${entry.positions} stake${entry.positions === 1 ? '' : 's'}`;
@@ -163,7 +173,7 @@ const flagUrl = (iso: string) =>
   iso === 'un' || iso === 'tbd' ? '' : `https://flagcdn.com/w640/${iso.toLowerCase()}.png`;
 
 export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Props) {
-  const [activeBoard, setActiveBoard] = useState<'matchday' | 'traders' | 'countries'>('matchday');
+  const [activeBoard, setActiveBoard] = useState<'matchday' | 'unqualified' | 'traders' | 'countries'>('matchday');
   const [matchdayEntries, setMatchdayEntries] = useState<MatchdayEntry[]>([]);
   const [fvbTraders, setFvbTraders] = useState<MatchdayEntry[]>([]);
   const [countrySupport, setCountrySupport] = useState<CountrySupportEntry[]>([]);
@@ -177,6 +187,14 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   const [visibleMatchday, setVisibleMatchday] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleTraders, setVisibleTraders] = useState(LEADERBOARD_BATCH_SIZE);
   const [visibleCountries, setVisibleCountries] = useState(LEADERBOARD_BATCH_SIZE);
+  const [visibleUnqualified, setVisibleUnqualified] = useState(LEADERBOARD_BATCH_SIZE);
+
+  const unqualifiedEntries = useMemo(
+    () => fvbTraders
+      .filter(entry => entry.matchdayQualified !== true)
+      .map((entry, index) => ({ ...entry, rank: index + 1 })),
+    [fvbTraders],
+  );
   const connectX = () => {
     if (!address) return;
     const returnTo = window.location.href;
@@ -291,25 +309,39 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   const visibleMatchdayRows = matchdayEntries.slice(0, visibleMatchday);
   const visibleTraderRows = fvbTraders.slice(0, visibleTraders);
   const visibleCountryRows = countrySupport.slice(0, visibleCountries);
+  const visibleUnqualifiedRows = unqualifiedEntries.slice(0, visibleUnqualified);
   const activeRowsLoaded = activeBoard === 'matchday'
     ? matchdayLoaded
-    : activeBoard === 'traders'
+    : activeBoard === 'unqualified'
       ? tradersLoaded
-      : supportLoaded;
+      : activeBoard === 'traders'
+        ? tradersLoaded
+        : supportLoaded;
   const hasMoreRows = activeBoard === 'matchday'
     ? visibleMatchday < matchdayEntries.length
-    : activeBoard === 'traders'
-      ? visibleTraders < fvbTraders.length
-      : visibleCountries < countrySupport.length;
+    : activeBoard === 'unqualified'
+      ? visibleUnqualified < unqualifiedEntries.length
+      : activeBoard === 'traders'
+        ? visibleTraders < fvbTraders.length
+        : visibleCountries < countrySupport.length;
   const showMoreRows = () => {
     if (activeBoard === 'matchday') {
       setVisibleMatchday(count => Math.min(count + LEADERBOARD_BATCH_SIZE, matchdayEntries.length));
+    } else if (activeBoard === 'unqualified') {
+      setVisibleUnqualified(count => Math.min(count + LEADERBOARD_BATCH_SIZE, unqualifiedEntries.length));
     } else if (activeBoard === 'traders') {
       setVisibleTraders(count => Math.min(count + LEADERBOARD_BATCH_SIZE, fvbTraders.length));
     } else {
       setVisibleCountries(count => Math.min(count + LEADERBOARD_BATCH_SIZE, countrySupport.length));
     }
   };
+
+  const analyticsStats = [
+    { label: 'Onboarded', value: formatCompactNumber(matchdayActivity?.totalFans) },
+    { label: 'Traders', value: formatCompactNumber(matchdayActivity?.tradedFans) },
+    { label: 'Stakers', value: formatCompactNumber(matchdayActivity?.activeFanVibeFans) },
+    { label: 'Verified vol', value: `${formatOkbVolume(matchdayActivity?.totalTradeVolumeOkbWei ?? '0')} OKB` },
+  ];
 
   return (
     <>
@@ -318,7 +350,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
         style={{ '--fanvibe-bg': `url(${FANVIBE_SEASON_BG})` } as Record<string, string>}
       >
         <div className="relative z-10">
-          <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.14em] text-blue-100/95">
                 <Trophy size={13} />
@@ -332,24 +364,46 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
               </p>
               <FvbTradeSafety compact showTradeLink className="mt-3 max-w-2xl" />
             </div>
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              {address && (
+            <div className="flex flex-col items-stretch gap-2 lg:items-end">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[420px]">
+                {analyticsStats.map(stat => (
+                  <div
+                    key={stat.label}
+                    className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 backdrop-blur-sm"
+                  >
+                    <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-blue-100/70">{stat.label}</div>
+                    <div className="mt-0.5 text-sm font-black tabular-nums text-white">{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <a
+                  href={DEFILLAMA_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-bold text-white transition-colors hover:bg-white/10"
+                >
+                  DefiLlama
+                  <ExternalLink size={12} />
+                </a>
+                {address && (
+                  <button
+                    type="button"
+                    onClick={connectX}
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-blue-500 px-3 text-xs font-bold text-white transition-colors hover:bg-blue-400"
+                  >
+                    <Link2 size={14} />
+                    Connect X
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={connectX}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-blue-500 px-3 text-xs font-bold text-white transition-colors hover:bg-blue-400"
+                  onClick={onOpenWorldCup}
+                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
                 >
-                  <Link2 size={14} />
-                  Connect X
+                  Open matches
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={onOpenWorldCup}
-                className="inline-flex h-9 shrink-0 items-center rounded-lg bg-white px-3 text-xs font-bold text-zinc-950 transition-colors hover:bg-zinc-200"
-              >
-                Open matches
-              </button>
+              </div>
             </div>
           </div>
         </div>
@@ -471,27 +525,79 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
                 onClick={() => setActiveBoard('matchday')}
                 className={`rounded px-3 py-1.5 text-xs font-bold transition-colors ${activeBoard === 'matchday' ? 'dark:bg-white bg-zinc-950 dark:text-zinc-950 text-white' : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-white hover:text-zinc-950'}`}
               >
-                Overall
+                Qualified
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveBoard('unqualified')}
+                className={`rounded px-3 py-1.5 text-xs font-bold transition-colors ${activeBoard === 'unqualified' ? 'dark:bg-white bg-zinc-950 dark:text-zinc-950 text-white' : 'dark:text-zinc-400 text-zinc-500 dark:hover:text-white hover:text-zinc-950'}`}
+              >
+                Not qualified
               </button>
             </div>
             <div className="text-[11px] font-semibold dark:text-zinc-500 text-zinc-500">
               {activeBoard === 'matchday'
                 ? `${plural(matchdayActivity?.eligibleFans ?? matchdayEntries.length, 'fan')} ranked${matchdayActivity?.pendingXFans ? ` - ${matchdayActivity.pendingXFans} need X` : ''}`
-                : activeBoard === 'traders'
-                  ? `${plural(fvbTraders.length, 'trader')} indexed${matchdayActivity?.prizeEligibleFans ? ` - ${matchdayActivity.prizeEligibleFans} at $250+ volume` : ''}`
+                : activeBoard === 'unqualified'
+                  ? `${plural(unqualifiedEntries.length, 'trader')} pending${matchdayActivity?.prizeEligibleFans ? ` - ${matchdayActivity.prizeEligibleFans} at $250+ volume` : ''}`
+                  : activeBoard === 'traders'
+                    ? `${plural(fvbTraders.length, 'trader')} indexed${matchdayActivity?.prizeEligibleFans ? ` - ${matchdayActivity.prizeEligibleFans} at $250+ volume` : ''}`
                 : `${plural(countrySupport.length, 'country', 'countries')} ranked`}
             </div>
           </div>
           <div className="mt-2 text-[11px] font-medium leading-4 dark:text-zinc-500 text-zinc-500">
             {activeBoard === 'matchday'
               ? scoreRulesLabel(scoreRules)
-              : activeBoard === 'traders'
-                ? 'FVB traders are ranked by verified OKX/X Layer volume. Connect X and hit $250+ FVB volume to enter Distribution Cup rewards.'
-              : 'Country backing counts wallets qualified for the Distribution Cup reward board. Draw stakes are excluded.'}
+              : activeBoard === 'unqualified'
+                ? 'Traders ranked by total verified FVB volume. Connect X and reach $250+ volume to move to the qualified board.'
+                : activeBoard === 'traders'
+                  ? 'FVB traders are ranked by verified OKX/X Layer volume. Connect X and hit $250+ FVB volume to enter Distribution Cup rewards.'
+                : 'Country backing counts wallets qualified for the Distribution Cup reward board. Draw stakes are excluded.'}
           </div>
 
           <div className="mt-3 overflow-hidden rounded-lg border dark:border-zinc-900 border-zinc-200">
-            {activeBoard === 'matchday' ? (
+            {activeBoard === 'unqualified' ? (
+              visibleUnqualifiedRows.length === 0 ? (
+                <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
+                  {activeRowsLoaded
+                    ? 'No pending traders yet. Wallets appear here once verified FVB trades are indexed.'
+                    : 'Loading traders...'}
+                </div>
+              ) : visibleUnqualifiedRows.map(entry => {
+                const profileName = entry.displayName ?? '';
+                const tradeUsd = compactUsd(formatOkbUsdFromWei(entry.fvbTradeVolumeOkbWei ?? '0', okbUsd));
+                const status = entry.fvbPrizeEligible
+                  ? entry.xConnected
+                    ? 'Awaiting review'
+                    : 'Connect X to qualify'
+                  : `Needs $${entry.fvbTradePrizeMinimumUsd ?? 250}+ verified volume`;
+                return (
+                  <a
+                    key={entry.address}
+                    href={explorerAddr(entry.address)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="grid min-w-0 grid-cols-[auto_1fr_auto] items-center gap-3 border-b dark:border-zinc-900 border-zinc-200 px-3 py-3 text-sm last:border-b-0 transition-colors dark:hover:bg-white/[0.04] hover:bg-zinc-50"
+                  >
+                    <div className="grid h-7 w-7 place-items-center rounded dark:bg-zinc-800 bg-zinc-200 text-xs font-black dark:text-zinc-100 text-zinc-700">{entry.rank}</div>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold dark:text-white text-zinc-950">
+                        {fanDisplayName(entry.address, profileName)}
+                      </div>
+                      <div className="mt-0.5 text-[11px] font-medium dark:text-zinc-400 text-zinc-500">
+                        {shortWallet(entry.address)} - {status}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold tabular-nums dark:text-white text-zinc-950">
+                        {formatOkbVolume(entry.fvbTradeVolumeOkbWei ?? '0')} OKB
+                      </div>
+                      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{tradeUsd} total</div>
+                    </div>
+                  </a>
+                );
+              })
+            ) : activeBoard === 'matchday' ? (
               visibleMatchdayRows.length === 0 ? (
                 <div className="px-3 py-8 text-center text-sm dark:text-zinc-400 text-zinc-500">
                   {activeRowsLoaded

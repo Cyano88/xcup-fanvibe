@@ -1575,6 +1575,10 @@ app.get('/matchday-cup/leaderboard', async (req, res) => {
       xConnectedFans: allEntries.filter(entry => entry.xConnected === true).length,
       pendingXFans: allEntries.filter(entry => entry.fvbPrizeEligible === true && entry.xConnected !== true).length,
       pendingFanVibeActionFans: allEntries.filter(entry => entry.fvbPrizeEligible === true && entry.fanvibeActive !== true).length,
+      tradedFans: allEntries.filter(entry => BigInt(entry.fvbTradeVolumeOkbWei ?? '0') > 0n).length,
+      totalTradeVolumeOkbWei: allEntries
+        .reduce((sum, entry) => sum + BigInt(entry.fvbTradeVolumeOkbWei ?? '0'), 0n)
+        .toString(),
     },
     fvbEligibility: {
       tokenAddress: FANVIBE_TOKEN_ADDRESS,
