@@ -87,6 +87,7 @@ interface MatchdayActivityMeta {
   pendingFvbFans: number;
   syncingFvbFans: number;
   activeFanVibeFans?: number;
+  totalStakePositions?: number;
   pendingFanVibeActionFans?: number;
   xConnectedFans?: number;
   pendingXFans?: number;
@@ -339,7 +340,7 @@ export function MatchdayCupLeaderboard({ okbUsd, address, onOpenWorldCup }: Prop
   const analyticsStats = [
     { label: 'Onboarded', value: formatCompactNumber(matchdayActivity?.totalFans) },
     { label: 'Traders', value: formatCompactNumber(matchdayActivity?.tradedFans) },
-    { label: 'Stakers', value: formatCompactNumber(matchdayActivity?.activeFanVibeFans) },
+    { label: 'Stakes', value: formatCompactNumber(matchdayActivity?.totalStakePositions) },
     { label: 'Verified vol', value: `${formatOkbVolume(matchdayActivity?.totalTradeVolumeOkbWei ?? '0')} OKB` },
   ];
 
