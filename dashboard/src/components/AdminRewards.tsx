@@ -121,14 +121,24 @@ export function AdminRewards() {
   }, [refresh]);
 
   const signWithAdmin = useCallback(async (message: string): Promise<`0x${string}`> => {
-    const wallet = wallets.find(w => w.address.toLowerCase() === ADMIN_ADDRESS);
-    if (!wallet) throw new Error(`Connect the admin wallet ${shortAddr(ADMIN_ADDRESS)}`);
+    // Prefer an exact ADMIN_ADDRESS match; fall back to the connected primary wallet;
+    // last resort, use the sole wallet in the list. All paths still route through the
+    // wallet extension's personal_sign — the key never touches this app.
+    const wallet = wallets.find(w => w.address.toLowerCase() === ADMIN_ADDRESS)
+      ?? wallets.find(w => w.address.toLowerCase() === (user?.wallet?.address ?? '').toLowerCase())
+      ?? (wallets.length === 1 ? wallets[0] : undefined);
+    if (!wallet) {
+      throw new Error(
+        `Wallet ${shortAddr(ADMIN_ADDRESS)} was authorized but the wallet extension did not surface it. `
+        + `Reload the page, or use the CLI: node scripts/snapshot-rewards.mjs 0xADMIN_KEY`,
+      );
+    }
     const provider = await wallet.getEthereumProvider();
     return await provider.request({
       method: 'personal_sign',
       params: [message, wallet.address],
     }) as `0x${string}`;
-  }, [wallets]);
+  }, [user?.wallet?.address, wallets]);
 
   const runOp = useCallback(async (id: string, label: string, run: () => Promise<void>) => {
     setConfirmOp({
