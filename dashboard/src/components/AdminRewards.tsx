@@ -5,7 +5,7 @@ import { AlertTriangle, KeyRound, RefreshCw, ShieldCheck, Wallet, ExternalLink }
 import { shortAddr } from '../lib/encode';
 
 const BACKEND_HTTP = import.meta.env.VITE_BACKEND_HTTP ?? 'http://localhost:3001';
-const ADMIN_ADDRESS = (import.meta.env.VITE_ADMIN_ADDRESS ?? '').toLowerCase();
+const ADMIN_ADDRESS = (import.meta.env.VITE_ADMIN_ADDRESS ?? '').trim().toLowerCase();
 
 type PayoutStatus = 'pending' | 'sent' | 'failed';
 
