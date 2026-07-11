@@ -22,6 +22,8 @@ import {
   registrationMessage,
   releaseMessage,
   releaseTranche,
+  forfeitMessage,
+  forfeitToBuyback,
   type RewardToken,
   type TrancheKind,
 } from './rewards.js';
@@ -2451,6 +2453,44 @@ app.post('/rewards/admin/release', async (req, res) => {
     used.add(nonce);
     usedReleaseNonces.set(nonceKey, used);
     res.json({ success: true, txHash: result.txHash, entry: publicViewOfEntry(result.entry) });
+  } catch (err: unknown) {
+    const messageText = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ success: false, error: messageText });
+  }
+});
+
+const RewardsForfeitSchema = z.object({
+  seasonId: z.string().default(SEASON_1_ID),
+  address: addressSchema,
+  signature: z.string().regex(/^0x[0-9a-fA-F]+$/),
+  nonce: z.number().int().min(0),
+});
+
+const usedForfeitNonces = new Map<string, Set<number>>();
+
+app.post('/rewards/admin/forfeit', async (req, res) => {
+  const parsed = RewardsForfeitSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { seasonId, address, signature, nonce } = parsed.data;
+
+  const adminAddr = (process.env.ADMIN_ADDRESS ?? '').toLowerCase();
+  if (!adminAddr) return res.status(500).json({ error: 'ADMIN_ADDRESS not configured' });
+
+  const message = forfeitMessage(seasonId, address, nonce);
+  const recovered = await recoverMessageAddress({ message, signature: signature as `0x${string}` });
+  if (recovered.toLowerCase() !== adminAddr) {
+    return res.status(401).json({ error: `invalid admin signature — recovered ${recovered}, expected ${adminAddr}` });
+  }
+
+  const nonceKey = `${seasonId}:${address.toLowerCase()}`;
+  const used = usedForfeitNonces.get(nonceKey) ?? new Set<number>();
+  if (used.has(nonce)) return res.status(409).json({ error: 'nonce already used' });
+
+  try {
+    const snapshot = await forfeitToBuyback(seasonId, address);
+    used.add(nonce);
+    usedForfeitNonces.set(nonceKey, used);
+    res.json({ success: true, snapshot: publicViewOfSnapshot(snapshot) });
   } catch (err: unknown) {
     const messageText = err instanceof Error ? err.message : String(err);
     res.status(400).json({ success: false, error: messageText });

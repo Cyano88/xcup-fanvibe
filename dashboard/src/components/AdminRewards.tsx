@@ -170,6 +170,29 @@ export function AdminRewards() {
     });
   }, [runOp, signWithAdmin]);
 
+  const forfeit = useCallback((entry: EntryView) => {
+    if (!snapshot) return;
+    const nonce = Date.now();
+    const message = `X-Cup-Rewards-Forfeit:${snapshot.seasonId}:${entry.address.toLowerCase()}:${nonce}`;
+    const opId = `forfeit-${entry.address}`;
+    const label = `Sweep rank #${entry.rank} · ${shortAddr(entry.address)} · @${entry.xHandle} → buyback pool. Adds ${fmtUsdt(entry.usdtWei)}${BigInt(entry.fvbWei) > 0n ? ` + ${fmtFvb(entry.fvbWei)}` : ''} to buyback. Not reversible.`;
+    runOp(opId, label, async () => {
+      const signature = await signWithAdmin(message);
+      const res = await fetch(`${BACKEND_HTTP}/rewards/admin/forfeit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seasonId: snapshot.seasonId,
+          address: entry.address,
+          signature,
+          nonce,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data?.error ?? `forfeit failed: ${res.status}`);
+    });
+  }, [runOp, signWithAdmin, snapshot]);
+
   const release = useCallback((entry: EntryView, token: 'usdt' | 'fvb', tranche: 'first' | 'final') => {
     if (!snapshot) return;
     const amountWei = token === 'usdt'
@@ -202,6 +225,7 @@ export function AdminRewards() {
   const trancheStatus = useMemo(() => ({
     firstUnlocked: snapshot ? Date.now() >= snapshot.firstPayoutAt : false,
     finalUnlocked: snapshot ? Date.now() >= snapshot.finalPayoutAt : false,
+    registrationClosed: snapshot ? Date.now() >= snapshot.registrationClosesAt : false,
   }), [snapshot]);
 
   return (
@@ -337,6 +361,19 @@ export function AdminRewards() {
                           : <span className="text-zinc-500">not registered</span>}
                         {entry.registeredAt && (
                           <div className="mt-0.5 dark:text-zinc-500 text-zinc-500">{fmtDate(entry.registeredAt)}</div>
+                        )}
+                        {!entry.registered
+                          && !entry.redirectedToBuyback
+                          && trancheStatus.registrationClosed
+                          && (BigInt(entry.usdtWei) > 0n || BigInt(entry.fvbWei) > 0n) && (
+                          <button
+                            type="button"
+                            onClick={() => forfeit(entry)}
+                            disabled={busyOp === `forfeit-${entry.address}`}
+                            className="mt-2 inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-500 hover:bg-amber-500/20 disabled:opacity-40"
+                          >
+                            {busyOp === `forfeit-${entry.address}` ? 'Sweeping…' : 'Sweep to buyback'}
+                          </button>
                         )}
                       </div>
                     </div>

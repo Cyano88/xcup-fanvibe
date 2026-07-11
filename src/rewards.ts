@@ -330,6 +330,67 @@ export interface ReleaseResult {
   entry: PersistedRewardsEntry;
 }
 
+export function forfeitMessage(seasonId: string, address: string, nonce: number): string {
+  return `X-Cup-Rewards-Forfeit:${seasonId}:${address.toLowerCase()}:${nonce}`;
+}
+
+export async function forfeitToBuyback(seasonId: string, address: string): Promise<PersistedRewardsSnapshot> {
+  const snapshot = await readRewardsSnapshot(seasonId);
+  if (!snapshot) throw new Error('Snapshot not found');
+
+  const idx = snapshot.entries.findIndex(e => e.address.toLowerCase() === address.toLowerCase());
+  if (idx === -1) throw new Error('Address not in reward snapshot');
+  const entry = snapshot.entries[idx];
+
+  if (entry.registeredAt !== null) throw new Error('Address is registered — cannot forfeit');
+  if (Date.now() < snapshot.registrationClosesAt) {
+    throw new Error(`Registration window still open until ${new Date(snapshot.registrationClosesAt).toISOString()}`);
+  }
+  if (entry.redirectedToBuyback) throw new Error('This slot was already routed to buyback');
+
+  const usdtWei = BigInt(entry.usdtWei);
+  const fvbWei = BigInt(entry.fvbWei);
+  if (usdtWei === 0n && fvbWei === 0n) throw new Error('No allocation left to sweep');
+
+  // Refuse if any payout was already sent — that would create a bookkeeping inconsistency.
+  const anySent = [
+    entry.firstUsdtStatus,
+    entry.firstFvbStatus,
+    entry.finalUsdtStatus,
+    entry.finalFvbStatus,
+  ].some(status => status === 'sent');
+  if (anySent) throw new Error('At least one tranche has already been paid — refusing to sweep');
+
+  const updatedEntry: PersistedRewardsEntry = {
+    ...entry,
+    usdtWei: '0',
+    fvbWei: '0',
+    tranches: {
+      firstUsdtWei: '0',
+      firstFvbWei: '0',
+      finalUsdtWei: '0',
+      finalFvbWei: '0',
+    },
+    redirectedToBuyback: true,
+  };
+  snapshot.entries[idx] = updatedEntry;
+  snapshot.buybackPool = {
+    usdtWei: (BigInt(snapshot.buybackPool.usdtWei) + usdtWei).toString(),
+    fvbWei: (BigInt(snapshot.buybackPool.fvbWei) + fvbWei).toString(),
+    sources: [
+      ...snapshot.buybackPool.sources,
+      {
+        reason: 'forfeit',
+        address: entry.address.toLowerCase(),
+        usdtWei: usdtWei.toString(),
+        fvbWei: fvbWei.toString(),
+      },
+    ],
+  };
+  await writeRewardsSnapshot(snapshot);
+  return snapshot;
+}
+
 export async function releaseTranche(input: ReleaseInput): Promise<ReleaseResult> {
   const snapshot = await readRewardsSnapshot(input.seasonId);
   if (!snapshot) throw new Error('Snapshot not found');
