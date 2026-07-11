@@ -1,9 +1,17 @@
 /**
  * Season 1 Rewards Snapshot — sign and submit
- * Usage: node scripts/snapshot-rewards.mjs <adminPrivateKey> [--overwrite] [--season=season-1]
  *
- * Example:
- *   node scripts/snapshot-rewards.mjs 0xYOUR_ADMIN_PRIVATE_KEY
+ * Recommended (key never in argv, never in shell history, never in ps aux):
+ *   ADMIN_PRIVATE_KEY=0xYOUR_KEY node scripts/snapshot-rewards.mjs
+ *
+ * Or read from a file (also safe from argv/history):
+ *   ADMIN_PRIVATE_KEY_FILE=~/.fanvibe-admin.key node scripts/snapshot-rewards.mjs
+ *
+ * Fallback (visible to ps aux briefly; leaks into shell history unless you
+ * prefix the command with a space and HISTCONTROL=ignorespace is set):
+ *   node scripts/snapshot-rewards.mjs 0xYOUR_KEY
+ *
+ * Optional flags: [--overwrite] [--season=season-1]
  *
  * The admin key never leaves your machine. This script signs
  * X-Cup-Rewards-Snapshot:<seasonId>:<nonce> and POSTs to the backend,
@@ -11,16 +19,32 @@
  * their reward allocations to storage.
  */
 
+import { readFileSync } from 'node:fs';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const args = process.argv.slice(2);
-const adminPk = args.find(a => a.startsWith('0x'));
 const overwrite = args.includes('--overwrite');
 const seasonArg = args.find(a => a.startsWith('--season='));
 const seasonId = seasonArg ? seasonArg.split('=')[1] : 'season-1';
 
+function resolveAdminKey() {
+  if (process.env.ADMIN_PRIVATE_KEY) return process.env.ADMIN_PRIVATE_KEY.trim();
+  if (process.env.ADMIN_PRIVATE_KEY_FILE) {
+    return readFileSync(process.env.ADMIN_PRIVATE_KEY_FILE, 'utf8').trim();
+  }
+  const argKey = args.find(a => a.startsWith('0x') && a.length >= 64);
+  return argKey ?? null;
+}
+
+const adminPk = resolveAdminKey();
+
 if (!adminPk) {
-  console.error('Usage: node scripts/snapshot-rewards.mjs <adminPrivateKey> [--overwrite] [--season=season-1]');
+  console.error('Missing admin key. Set ADMIN_PRIVATE_KEY env var, or ADMIN_PRIVATE_KEY_FILE, or pass the key as an argument.');
+  console.error('Example: ADMIN_PRIVATE_KEY=0xYOUR_KEY node scripts/snapshot-rewards.mjs');
+  process.exit(1);
+}
+if (!/^0x[0-9a-fA-F]{64}$/.test(adminPk)) {
+  console.error('Admin key format invalid — expected 0x-prefixed 32-byte hex (64 hex chars).');
   process.exit(1);
 }
 
