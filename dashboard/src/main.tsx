@@ -5,11 +5,13 @@ import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
 import './index.css';
 import App from './App';
 import { DocsPage } from './components/DocsPage';
+import { RewardsClaim } from './components/RewardsClaim';
 import { xLayerMainnet } from './lib/chain';
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string | undefined;
 const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
 const isDocsPage = pathname === '/docs';
+const isClaimPage = pathname === '/claim';
 
 const app = (
   <StrictMode>
@@ -23,33 +25,68 @@ const docsApp = (
   </StrictMode>
 );
 
-createRoot(document.getElementById('root')!).render(
-  isDocsPage ? docsApp : privyAppId ? (
-    <PrivyProvider
-      appId={privyAppId}
-      config={{
-        loginMethods: ['email', 'wallet'],
-        defaultChain: xLayerMainnet,
-        supportedChains: [xLayerMainnet],
-        appearance: {
-          theme: 'dark',
-          accentColor: '#2563eb',
-          logo: 'https://fanvibe.xyz/assets/fanvibe-hero-logo.jpeg',
-          landingHeader: 'FanVibe',
-          loginMessage:
-            'FanVibe staff will never ask for this code. Only enter it on fanvibe.xyz.',
-        },
-        embeddedWallets: {
-          ethereum: {
-            createOnLogin: 'users-without-wallets',
-          },
-          showWalletUIs: true,
-        },
-      }}
-    >
-      <SmartWalletsProvider>
-        {app}
-      </SmartWalletsProvider>
-    </PrivyProvider>
-  ) : app,
+const claimApp = (
+  <StrictMode>
+    <RewardsClaim />
+  </StrictMode>
 );
+
+const rootContent = isDocsPage
+  ? docsApp
+  : isClaimPage && privyAppId
+    ? (
+      <PrivyProvider
+        appId={privyAppId}
+        config={{
+          loginMethods: ['email', 'wallet'],
+          defaultChain: xLayerMainnet,
+          supportedChains: [xLayerMainnet],
+          appearance: {
+            theme: 'dark',
+            accentColor: '#2563eb',
+            logo: 'https://fanvibe.xyz/assets/fanvibe-hero-logo.jpeg',
+            landingHeader: 'FanVibe',
+            loginMessage:
+              'FanVibe staff will never ask for this code. Only enter it on fanvibe.xyz.',
+          },
+          embeddedWallets: {
+            ethereum: {
+              createOnLogin: 'users-without-wallets',
+            },
+            showWalletUIs: true,
+          },
+        }}
+      >
+        <SmartWalletsProvider>{claimApp}</SmartWalletsProvider>
+      </PrivyProvider>
+    )
+    : privyAppId
+      ? (
+        <PrivyProvider
+          appId={privyAppId}
+          config={{
+            loginMethods: ['email', 'wallet'],
+            defaultChain: xLayerMainnet,
+            supportedChains: [xLayerMainnet],
+            appearance: {
+              theme: 'dark',
+              accentColor: '#2563eb',
+              logo: 'https://fanvibe.xyz/assets/fanvibe-hero-logo.jpeg',
+              landingHeader: 'FanVibe',
+              loginMessage:
+                'FanVibe staff will never ask for this code. Only enter it on fanvibe.xyz.',
+            },
+            embeddedWallets: {
+              ethereum: {
+                createOnLogin: 'users-without-wallets',
+              },
+              showWalletUIs: true,
+            },
+          }}
+        >
+          <SmartWalletsProvider>{app}</SmartWalletsProvider>
+        </PrivyProvider>
+      )
+      : app;
+
+createRoot(document.getElementById('root')!).render(rootContent);

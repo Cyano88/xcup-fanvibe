@@ -8,9 +8,20 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { createPublicClient, createWalletClient, formatEther, http, parseAbiItem, parseEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { recoverMessageAddress } from 'viem';
 import { RefereeEngine, encodeStake, encodeChampionStake, CHAMP_TEAMS } from './engine/referee.js';
 import type { DaemonLog, SettlementResult, Outcome, MatchState } from './types.js';
 import { readAppData, seasonStorageStatus, writeAppData, type PersistedAppData, type PersistedFvbTradeDaily, type PersistedFvbTradeWallet, type PersistedReferral, type PersistedXProfile } from './seasonStore.js';
+import {
+  SEASON_1_ID,
+  computeSnapshotFromInputs,
+  loadSnapshot,
+  publicViewOfSnapshot,
+  publicViewOfEntry,
+  registerForRewards,
+  registrationMessage,
+} from './rewards.js';
+import { writeRewardsSnapshot } from './seasonStore.js';
 import { getWorldCupFeed, getWorldCupMatchDetail } from './sportsData.js';
 import { getWorldCupNews } from './newsData.js';
 import { explorerTx, xLayerHttpTransport, xLayerMainnet, xLayerRpcUrls } from './chain.js';
@@ -2291,6 +2302,131 @@ app.post('/oracle/champion', async (req, res) => {
     res.json({ success: true, winner: teamCode });
   } catch (err: unknown) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// ── Rewards (Season 1) ───────────────────────────────────────────────────────
+
+const RewardsSnapshotAdminSchema = z.object({
+  seasonId: z.string().default(SEASON_1_ID),
+  signature: z.string().regex(/^0x[0-9a-fA-F]+$/),
+  nonce: z.number().int().min(0),
+  overwrite: z.boolean().optional(),
+});
+
+const RewardsRegisterSchema = z.object({
+  seasonId: z.string().default(SEASON_1_ID),
+  address: addressSchema,
+  signature: z.string().regex(/^0x[0-9a-fA-F]+$/),
+});
+
+const ERC20_TOTAL_SUPPLY_ABI = [{
+  type: 'function',
+  name: 'totalSupply',
+  stateMutability: 'view',
+  inputs: [],
+  outputs: [{ type: 'uint256' }],
+}] as const;
+
+app.get('/rewards/snapshot', async (req, res) => {
+  const seasonId = typeof req.query.seasonId === 'string' ? req.query.seasonId : SEASON_1_ID;
+  const snapshot = await loadSnapshot(seasonId);
+  if (!snapshot) return res.status(404).json({ error: 'snapshot not created' });
+  res.json(publicViewOfSnapshot(snapshot));
+});
+
+app.get('/rewards/status/:address', async (req, res) => {
+  const parsed = addressSchema.safeParse(req.params.address);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid address' });
+  const seasonId = typeof req.query.seasonId === 'string' ? req.query.seasonId : SEASON_1_ID;
+  const snapshot = await loadSnapshot(seasonId);
+  if (!snapshot) return res.status(404).json({ error: 'snapshot not created' });
+  const target = parsed.data.toLowerCase();
+  const entry = snapshot.entries.find(e => e.address.toLowerCase() === target);
+  const now = Date.now();
+  res.json({
+    seasonId: snapshot.seasonId,
+    snapshottedAt: snapshot.snapshottedAt,
+    registrationClosesAt: snapshot.registrationClosesAt,
+    firstPayoutAt: snapshot.firstPayoutAt,
+    finalPayoutAt: snapshot.finalPayoutAt,
+    now,
+    eligible: entry !== undefined,
+    registrationOpen: now < snapshot.registrationClosesAt,
+    entry: entry ? publicViewOfEntry(entry) : null,
+    registrationMessage: entry
+      ? registrationMessage(snapshot.seasonId, entry.address, snapshot.snapshottedAt)
+      : null,
+  });
+});
+
+app.post('/rewards/register', async (req, res) => {
+  const parsed = RewardsRegisterSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  try {
+    const entry = await registerForRewards({
+      seasonId: parsed.data.seasonId,
+      address: parsed.data.address,
+      signature: parsed.data.signature as `0x${string}`,
+    });
+    res.json({ success: true, entry: publicViewOfEntry(entry) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ success: false, error: message });
+  }
+});
+
+app.post('/rewards/snapshot', async (req, res) => {
+  const parsed = RewardsSnapshotAdminSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { seasonId, signature, nonce, overwrite } = parsed.data;
+
+  const message = `X-Cup-Rewards-Snapshot:${seasonId}:${nonce}`;
+  const recovered = await recoverMessageAddress({ message, signature: signature as `0x${string}` });
+  const adminAddr = (process.env.ADMIN_ADDRESS ?? '').toLowerCase();
+  if (!adminAddr) return res.status(500).json({ error: 'ADMIN_ADDRESS not configured' });
+  if (recovered.toLowerCase() !== adminAddr) {
+    return res.status(401).json({ error: `invalid admin signature — recovered ${recovered}, expected ${adminAddr}` });
+  }
+
+  const existing = await loadSnapshot(seasonId);
+  if (existing && !overwrite) {
+    return res.status(409).json({ error: 'snapshot already exists — pass overwrite:true to replace' });
+  }
+
+  try {
+    const allEntries = await matchdayEntriesWithEligibility(10_000);
+    const qualified = qualifiedMatchdayEntries(allEntries);
+    const candidates = qualified
+      .filter(e => e.xConnected === true)
+      .map(e => ({
+        address: e.address,
+        xHandle: e.xHandle ?? '',
+        xUserId: e.xUserId ?? null,
+        score: e.score ?? 0,
+      }));
+    if (candidates.length === 0) throw new Error('no X-connected qualified candidates');
+
+    const [tipBlock, totalSupplyResult] = await Promise.all([
+      fvbPublicClient.getBlockNumber(),
+      fvbPublicClient.readContract({
+        address: FANVIBE_TOKEN_ADDRESS,
+        abi: ERC20_TOTAL_SUPPLY_ABI,
+        functionName: 'totalSupply',
+      }),
+    ]);
+
+    const snapshot = computeSnapshotFromInputs({
+      seasonId,
+      block: Number(tipBlock),
+      candidates,
+      fvbTotalSupplyWei: totalSupplyResult as bigint,
+    });
+    await writeRewardsSnapshot(snapshot);
+    res.json({ success: true, snapshot: publicViewOfSnapshot(snapshot) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ success: false, error: message });
   }
 });
 

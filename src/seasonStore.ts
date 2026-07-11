@@ -16,6 +16,8 @@ const engineKeyFor = () => 'fanvibe:referee:market';
 const engineFileFor = () => join(STORE_DIR, 'fanvibe-referee-market.json');
 const appDataKeyFor = () => 'fanvibe:app:data';
 const appDataFileFor = () => join(STORE_DIR, 'fanvibe-app-data.json');
+const rewardsKeyFor = (seasonId: string) => `fanvibe:rewards:${seasonId}`;
+const rewardsFileFor = (seasonId: string) => join(STORE_DIR, `fanvibe-rewards-${seasonId}.json`);
 
 export function seasonStorageStatus() {
   const postgresConfigured = !!POSTGRES_URL;
@@ -346,6 +348,96 @@ export async function writeAppData(state: PersistedAppData): Promise<void> {
   }
 
   const target = appDataFileFor();
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, serialized);
+}
+
+export type RewardsPayoutStatus = 'pending' | 'sent' | 'failed';
+
+export interface PersistedRewardsEntry {
+  rank: number;
+  address: string;
+  xHandle: string;
+  xUserId: string | null;
+  score: number;
+  usdtWei: string;
+  fvbWei: string;
+  tranches: {
+    firstUsdtWei: string;
+    firstFvbWei: string;
+    finalUsdtWei: string;
+    finalFvbWei: string;
+  };
+  redirectedToBuyback: boolean;
+  registeredAt: number | null;
+  registrationSignature: string | null;
+  registrationMessage: string | null;
+  firstUsdtStatus: RewardsPayoutStatus;
+  firstUsdtTxHash: string | null;
+  firstFvbStatus: RewardsPayoutStatus;
+  firstFvbTxHash: string | null;
+  finalUsdtStatus: RewardsPayoutStatus;
+  finalUsdtTxHash: string | null;
+  finalFvbStatus: RewardsPayoutStatus;
+  finalFvbTxHash: string | null;
+}
+
+export interface PersistedRewardsSnapshot {
+  version: 1;
+  seasonId: string;
+  snapshottedAt: number;
+  snapshottedAtBlock: number;
+  registrationClosesAt: number;
+  firstPayoutAt: number;
+  finalPayoutAt: number;
+  fvbTokenAddress: string;
+  fvbDecimals: number;
+  fvbTotalSupplyWei: string;
+  fvbPoolWei: string;
+  usdtTokenAddress: string;
+  usdtDecimals: number;
+  usdtPoolWei: string;
+  usdtPerRankWei: string;
+  entries: PersistedRewardsEntry[];
+  buybackPool: {
+    usdtWei: string;
+    fvbWei: string;
+    sources: Array<{ reason: 'team_wallet' | 'forfeit'; address: string; usdtWei: string; fvbWei: string }>;
+  };
+  updatedAt: number;
+}
+
+export async function readRewardsSnapshot(seasonId: string): Promise<PersistedRewardsSnapshot | null> {
+  const key = rewardsKeyFor(seasonId);
+  const pgState = await readPostgres<PersistedRewardsSnapshot>(key);
+  if (pgState) return pgState;
+
+  const fallback = await readFallbackJson<PersistedRewardsSnapshot>(key, rewardsFileFor(seasonId));
+  if (fallback && POSTGRES_URL) {
+    await writePostgres(key, fallback);
+  }
+  return fallback;
+}
+
+export async function writeRewardsSnapshot(state: PersistedRewardsSnapshot): Promise<void> {
+  const payload = { ...state, updatedAt: Date.now() };
+  const key = rewardsKeyFor(state.seasonId);
+  if (POSTGRES_URL) {
+    await writePostgres(key, payload);
+    return;
+  }
+
+  const serialized = JSON.stringify(payload);
+  if (UPSTASH_URL && UPSTASH_TOKEN) {
+    try {
+      await upstash(['SET', key, serialized]);
+      return;
+    } catch (err) {
+      console.warn(`[FanVibe] Upstash write failed for ${key}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const target = rewardsFileFor(state.seasonId);
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, serialized);
 }
