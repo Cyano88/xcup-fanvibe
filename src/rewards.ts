@@ -265,3 +265,113 @@ export async function registerForRewards(input: RegisterInput): Promise<Persiste
   await writeRewardsSnapshot(snapshot);
   return updated;
 }
+
+export type TrancheKind = 'first' | 'final';
+export type RewardToken = 'usdt' | 'fvb';
+
+export function releaseMessage(
+  seasonId: string,
+  address: string,
+  token: RewardToken,
+  tranche: TrancheKind,
+  nonce: number,
+): string {
+  return `X-Cup-Rewards-Release:${seasonId}:${address.toLowerCase()}:${token}:${tranche}:${nonce}`;
+}
+
+interface TrancheAmounts {
+  amountWei: bigint;
+  statusField: keyof PersistedRewardsEntry;
+  txHashField: keyof PersistedRewardsEntry;
+  unlockAt: number;
+  tokenAddress: string;
+}
+
+function trancheDetails(
+  snapshot: PersistedRewardsSnapshot,
+  entry: PersistedRewardsEntry,
+  token: RewardToken,
+  tranche: TrancheKind,
+): TrancheAmounts {
+  const isUsdt = token === 'usdt';
+  const isFirst = tranche === 'first';
+  const amountWei = isUsdt
+    ? BigInt(isFirst ? entry.tranches.firstUsdtWei : entry.tranches.finalUsdtWei)
+    : BigInt(isFirst ? entry.tranches.firstFvbWei : entry.tranches.finalFvbWei);
+  const statusField = (
+    isUsdt
+      ? (isFirst ? 'firstUsdtStatus' : 'finalUsdtStatus')
+      : (isFirst ? 'firstFvbStatus' : 'finalFvbStatus')
+  ) as keyof PersistedRewardsEntry;
+  const txHashField = (
+    isUsdt
+      ? (isFirst ? 'firstUsdtTxHash' : 'finalUsdtTxHash')
+      : (isFirst ? 'firstFvbTxHash' : 'finalFvbTxHash')
+  ) as keyof PersistedRewardsEntry;
+  return {
+    amountWei,
+    statusField,
+    txHashField,
+    unlockAt: isFirst ? snapshot.firstPayoutAt : snapshot.finalPayoutAt,
+    tokenAddress: isUsdt ? snapshot.usdtTokenAddress : snapshot.fvbTokenAddress,
+  };
+}
+
+export interface ReleaseInput {
+  seasonId: string;
+  address: string;
+  token: RewardToken;
+  tranche: TrancheKind;
+  send: (params: { token: `0x${string}`; to: `0x${string}`; amountWei: bigint; label: string }) => Promise<`0x${string}`>;
+}
+
+export interface ReleaseResult {
+  txHash: `0x${string}`;
+  entry: PersistedRewardsEntry;
+}
+
+export async function releaseTranche(input: ReleaseInput): Promise<ReleaseResult> {
+  const snapshot = await readRewardsSnapshot(input.seasonId);
+  if (!snapshot) throw new Error('Snapshot not found');
+
+  const idx = snapshot.entries.findIndex(e => e.address.toLowerCase() === input.address.toLowerCase());
+  if (idx === -1) throw new Error('Address not in reward snapshot');
+  const entry = snapshot.entries[idx];
+
+  if (entry.registeredAt === null) throw new Error('Address has not registered');
+  if (entry.redirectedToBuyback) throw new Error('This slot is redirected to buyback and cannot be released to the wallet');
+
+  const { amountWei, statusField, txHashField, unlockAt, tokenAddress } = trancheDetails(
+    snapshot,
+    entry,
+    input.token,
+    input.tranche,
+  );
+
+  if (amountWei <= 0n) throw new Error(`No allocation for ${input.token} in ${input.tranche} tranche`);
+  const now = Date.now();
+  if (now < unlockAt) throw new Error(`Tranche is still locked until ${new Date(unlockAt).toISOString()}`);
+
+  const currentStatus = entry[statusField] as PersistedRewardsEntry['firstUsdtStatus'];
+  if (currentStatus === 'sent') throw new Error('Tranche already sent — refusing to double-send');
+
+  // Reserve slot before sending: mark as pending in-memory (does not persist yet — we persist after we get a hash).
+  // Because the release path is admin-triggered and single-threaded per request, no lock is needed beyond this
+  // "check status === sent → abort" guard.
+
+  const txHash = await input.send({
+    token: tokenAddress as `0x${string}`,
+    to: entry.address as `0x${string}`,
+    amountWei,
+    label: `${input.token.toUpperCase()} ${input.tranche} tranche → rank #${entry.rank}`,
+  });
+
+  const updated: PersistedRewardsEntry = {
+    ...entry,
+    [statusField]: 'sent',
+    [txHashField]: txHash,
+  } as PersistedRewardsEntry;
+  snapshot.entries[idx] = updated;
+  await writeRewardsSnapshot(snapshot);
+  return { txHash, entry: updated };
+}

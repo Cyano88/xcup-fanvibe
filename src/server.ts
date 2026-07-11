@@ -20,6 +20,10 @@ import {
   publicViewOfEntry,
   registerForRewards,
   registrationMessage,
+  releaseMessage,
+  releaseTranche,
+  type RewardToken,
+  type TrancheKind,
 } from './rewards.js';
 import { writeRewardsSnapshot } from './seasonStore.js';
 import { getWorldCupFeed, getWorldCupMatchDetail } from './sportsData.js';
@@ -2373,6 +2377,83 @@ app.post('/rewards/register', async (req, res) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(400).json({ success: false, error: message });
+  }
+});
+
+const RewardsReleaseSchema = z.object({
+  seasonId: z.string().default(SEASON_1_ID),
+  address: addressSchema,
+  token: z.enum(['usdt', 'fvb']),
+  tranche: z.enum(['first', 'final']),
+  signature: z.string().regex(/^0x[0-9a-fA-F]+$/),
+  nonce: z.number().int().min(0),
+});
+
+const usedReleaseNonces = new Map<string, Set<number>>();
+
+app.get('/rewards/admin/balances', async (_req, res) => {
+  try {
+    const snapshot = await loadSnapshot(SEASON_1_ID);
+    if (!snapshot) return res.status(404).json({ error: 'snapshot not created' });
+    const refereeAddress = engine.refereeAddress;
+    const [okbBalance, usdtBalance, fvbBalance] = await Promise.all([
+      fvbPublicClient.getBalance({ address: refereeAddress }),
+      fvbPublicClient.readContract({
+        address: snapshot.usdtTokenAddress as `0x${string}`,
+        abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] }],
+        functionName: 'balanceOf',
+        args: [refereeAddress],
+      }) as Promise<bigint>,
+      fvbPublicClient.readContract({
+        address: snapshot.fvbTokenAddress as `0x${string}`,
+        abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] }],
+        functionName: 'balanceOf',
+        args: [refereeAddress],
+      }) as Promise<bigint>,
+    ]);
+    res.json({
+      refereeAddress,
+      okbWei: okbBalance.toString(),
+      usdtWei: usdtBalance.toString(),
+      fvbWei: fvbBalance.toString(),
+    });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post('/rewards/admin/release', async (req, res) => {
+  const parsed = RewardsReleaseSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { seasonId, address, token, tranche, signature, nonce } = parsed.data;
+
+  const adminAddr = (process.env.ADMIN_ADDRESS ?? '').toLowerCase();
+  if (!adminAddr) return res.status(500).json({ error: 'ADMIN_ADDRESS not configured' });
+
+  const message = releaseMessage(seasonId, address, token as RewardToken, tranche as TrancheKind, nonce);
+  const recovered = await recoverMessageAddress({ message, signature: signature as `0x${string}` });
+  if (recovered.toLowerCase() !== adminAddr) {
+    return res.status(401).json({ error: `invalid admin signature — recovered ${recovered}, expected ${adminAddr}` });
+  }
+
+  const nonceKey = `${seasonId}:${address.toLowerCase()}:${token}:${tranche}`;
+  const used = usedReleaseNonces.get(nonceKey) ?? new Set<number>();
+  if (used.has(nonce)) return res.status(409).json({ error: 'nonce already used for this operation' });
+
+  try {
+    const result = await releaseTranche({
+      seasonId,
+      address,
+      token: token as RewardToken,
+      tranche: tranche as TrancheKind,
+      send: params => engine.releaseErc20(params),
+    });
+    used.add(nonce);
+    usedReleaseNonces.set(nonceKey, used);
+    res.json({ success: true, txHash: result.txHash, entry: publicViewOfEntry(result.entry) });
+  } catch (err: unknown) {
+    const messageText = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ success: false, error: messageText });
   }
 });
 

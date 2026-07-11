@@ -255,6 +255,49 @@ export class RefereeEngine {
     return this.stakes.size + this.champStakes.length + this.champHistory.length;
   }
 
+  get refereeAddress(): `0x${string}` {
+    return this.account.address;
+  }
+
+  async releaseErc20(params: {
+    token: `0x${string}`;
+    to: `0x${string}`;
+    amountWei: bigint;
+    label: string;
+  }): Promise<`0x${string}`> {
+    if (params.amountWei <= 0n) throw new Error('Amount must be positive');
+    const balance = await this.httpClient.readContract({
+      address: params.token,
+      abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] }],
+      functionName: 'balanceOf',
+      args: [this.account.address],
+    }) as bigint;
+    if (balance < params.amountWei) {
+      throw new Error(`Referee balance insufficient (${balance} < ${params.amountWei}) for ${params.label}`);
+    }
+    const gas = await this.httpClient.getBalance({ address: this.account.address });
+    const gasFloor = BigInt(process.env.REFEREE_MIN_GAS_WEI ?? '20000000000000000'); // 0.02 OKB default
+    if (gas < gasFloor) {
+      throw new Error(`Referee gas below floor (${gas} < ${gasFloor}) — refuel before releasing ${params.label}`);
+    }
+    const txHash = await this.walletClient.writeContract({
+      account: this.account,
+      chain: xLayerMainnet,
+      address: params.token,
+      abi: [{
+        type: 'function',
+        name: 'transfer',
+        stateMutability: 'nonpayable',
+        inputs: [{ type: 'address' }, { type: 'uint256' }],
+        outputs: [{ type: 'bool' }],
+      }],
+      functionName: 'transfer',
+      args: [params.to, params.amountWei],
+    });
+    this.log('ORACLE', 'success', `${params.label} → ${params.to.slice(0, 10)}... tx ${txHash.slice(0, 10)}...`, txHash);
+    return txHash;
+  }
+
   getPositions(address: string) {
     const wallet = address.toLowerCase();
     const stakePositions = Array.from(this.stakes.values())
