@@ -80,19 +80,41 @@ function StatusPill({ status, label }: { status: PayoutStatus; label: string }) 
 }
 
 export function RewardsClaim() {
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, login, logout, linkWallet, user } = usePrivy();
   const { wallets } = useWallets();
   const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [snapshotAddresses, setSnapshotAddresses] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [now, setNow] = useState(Date.now());
 
-  const address = user?.wallet?.address ?? wallets[0]?.address ?? null;
+  // Auto-pick the wallet that matches a snapshot entry so users don't have to know
+  // which linked wallet is the eligible one. Fall back to the primary if none match.
+  const eligibleWallet = wallets.find(w => snapshotAddresses.has(w.address.toLowerCase()));
+  const address = eligibleWallet?.address
+    ?? user?.wallet?.address
+    ?? wallets[0]?.address
+    ?? null;
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Fetch the full snapshot once so we know all eligible addresses across the top 5.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${BACKEND_HTTP}/rewards/snapshot`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled) return;
+        if (data?.entries) {
+          setSnapshotAddresses(new Set(data.entries.map((e: { address: string }) => e.address.toLowerCase())));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const refreshStatus = useCallback(async () => {
@@ -236,20 +258,49 @@ export function RewardsClaim() {
           {bodyState === 'not-eligible' && (
             <div>
               <div className="text-sm font-semibold dark:text-white text-zinc-900">
-                {shortAddr(address ?? '')} is not on the Season 1 snapshot.
+                None of your connected wallets are on the Season 1 snapshot.
               </div>
               <div className="mt-2 text-xs dark:text-zinc-500 text-zinc-500">
-                The Distribution Cup snapshot froze the top 5 X-connected wallets at block{' '}
-                <span className="font-mono">{status?.snapshottedAt ? fmtDateUtc(status.snapshottedAt) : '—'}</span>.
-                Keep trading FVB and climbing the leaderboard for the next season.
+                The snapshot froze the top 5 X-connected Distribution Cup wallets at
+                block <span className="font-mono">{status?.snapshottedAt ? fmtDateUtc(status.snapshottedAt) : '—'}</span>.
+                If you were on the leaderboard but see this message, the wallet that ranked isn&apos;t connected here yet.
               </div>
-              <button
-                type="button"
-                onClick={() => logout()}
-                className="mt-3 inline-flex items-center gap-2 rounded-md border dark:border-zinc-800 border-zinc-200 px-3 py-1.5 text-xs font-semibold dark:text-zinc-300 text-zinc-700"
-              >
-                Switch wallet
-              </button>
+
+              {wallets.length > 0 && (
+                <div className="mt-3 rounded-md border dark:border-zinc-900 border-zinc-200 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Connected wallets</div>
+                  <ul className="mt-2 space-y-1 text-[11px]">
+                    {wallets.map(w => (
+                      <li key={w.address} className="flex items-center justify-between gap-2 font-mono">
+                        <span className="dark:text-zinc-300 text-zinc-700">{w.address}</span>
+                        <span className="text-zinc-500">not on snapshot</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => linkWallet()}
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
+                >
+                  <Wallet size={13} />
+                  Link the ranked wallet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => logout()}
+                  className="inline-flex items-center gap-2 rounded-md border dark:border-zinc-800 border-zinc-200 px-3 py-1.5 text-xs font-semibold dark:text-zinc-300 text-zinc-700"
+                >
+                  Sign out
+                </button>
+              </div>
+
+              <div className="mt-3 text-[11px] dark:text-zinc-500 text-zinc-500">
+                Not sure which wallet ranked? Check the Distribution Cup leaderboard on <a href="/" className="text-blue-500 hover:underline">fanvibe.xyz</a> — the wallet showing your @handle is the one to link here.
+              </div>
             </div>
           )}
 
