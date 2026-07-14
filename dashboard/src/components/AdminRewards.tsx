@@ -308,7 +308,7 @@ export function AdminRewards() {
                   <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{fmtOkb(balances.okbWei)}</div>
                 </div>
                 <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Referee USDT</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest dark:text-zinc-600 text-zinc-400">Referee USD₮0</div>
                   <div className="mt-1 text-sm font-semibold dark:text-zinc-100 text-zinc-900">{fmtUsdt(balances.usdtWei)}</div>
                 </div>
                 <div className="rounded-md border dark:border-zinc-900 border-zinc-200 px-3 py-2">
@@ -322,7 +322,7 @@ export function AdminRewards() {
               <div className="mt-6 rounded-lg border dark:border-zinc-900 border-zinc-200 p-4">
                 <div className="text-sm font-semibold dark:text-zinc-200 text-zinc-800">Snapshot not created.</div>
                 <div className="mt-1 text-[11px] dark:text-zinc-500 text-zinc-500">
-                  Freezes the current qualified top-5 X-connected leaderboard entries with USDT + FVB allocations.
+                  Freezes the current qualified top-5 X-connected leaderboard entries with USD₮0 + FVB allocations.
                 </div>
                 <button
                   type="button"
@@ -345,7 +345,7 @@ export function AdminRewards() {
                     <div>Final payout <div className="font-semibold dark:text-zinc-200 text-zinc-800">{fmtDate(snapshot.finalPayoutAt)}</div></div>
                   </div>
                   <div className="mt-3 grid gap-2 text-[11px] sm:grid-cols-3">
-                    <div>USDT pool <div className="font-semibold dark:text-zinc-200 text-zinc-800">{fmtUsdt(snapshot.usdtPoolWei)}</div></div>
+                    <div>USD₮0 pool <div className="font-semibold dark:text-zinc-200 text-zinc-800">{fmtUsdt(snapshot.usdtPoolWei)}</div></div>
                     <div>FVB pool <div className="font-semibold dark:text-zinc-200 text-zinc-800">{fmtFvb(snapshot.fvbPoolWei)}</div></div>
                     <div>Buyback pool <div className="font-semibold dark:text-zinc-200 text-zinc-800">{fmtUsdt(snapshot.buybackPool.usdtWei)} + {fmtFvb(snapshot.buybackPool.fvbWei)}</div></div>
                   </div>
@@ -509,7 +509,7 @@ function TrancheRow({
       <div className="mt-2 space-y-2 text-[12px] dark:text-zinc-200 text-zinc-800">
         {usdt > 0n && (
           <div className="flex items-center justify-between gap-2">
-            <span>USDT · {fmtUsdt(usdtWei)}</span>
+            <span>USD₮0 · {fmtUsdt(usdtWei)}</span>
             <div className="flex items-center gap-2">
               <StatusPill status={usdtStatus} unlocked={unlocked} />
               {usdtTx && (

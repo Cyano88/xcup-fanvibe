@@ -87,12 +87,12 @@ console.log(`   Snapshotted at  : ${new Date(snap.snapshottedAt).toISOString()}`
 console.log(`   Reg closes at   : ${new Date(snap.registrationClosesAt).toISOString()}`);
 console.log(`   First payout    : ${new Date(snap.firstPayoutAt).toISOString()}`);
 console.log(`   Final payout    : ${new Date(snap.finalPayoutAt).toISOString()}`);
-console.log(`   USDT pool       : ${usdt(snap.usdtPoolWei)}`);
+console.log(`   USD₮0 pool       : ${usdt(snap.usdtPoolWei)}`);
 console.log(`   FVB pool        : ${fvb(snap.fvbPoolWei)}`);
 console.log(`\n   Entries:`);
 for (const e of snap.entries) {
   console.log(`     #${e.rank}  ${e.address}  @${e.xHandle}  score ${e.score}`);
-  console.log(`         USDT: ${usdt(e.usdtWei)}  ·  FVB: ${fvb(e.fvbWei)}${e.redirectedToBuyback ? '  (team → buyback)' : ''}`);
+  console.log(`         USD₮0: ${usdt(e.usdtWei)}  ·  FVB: ${fvb(e.fvbWei)}${e.redirectedToBuyback ? '  (team → buyback)' : ''}`);
 }
 console.log(`\n   Buyback pool    : ${usdt(snap.buybackPool.usdtWei)} + ${fvb(snap.buybackPool.fvbWei)}`);
 console.log(`\n→ Users can now register at https://www.fanvibe.xyz/claim`);

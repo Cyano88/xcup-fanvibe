@@ -322,7 +322,7 @@ export function RewardsClaim() {
 
               {entry.redirectedToBuyback && (
                 <div className="rounded-md bg-amber-500/10 px-3 py-2 text-[11px] dark:text-amber-300 text-amber-700">
-                  This wallet is disclosed as team-owned. Its USDT slot is redirected to the FVB buyback pool.
+                  This wallet is disclosed as team-owned. Its USD₮0 slot is redirected to the FVB buyback pool.
                 </div>
               )}
 
@@ -434,7 +434,7 @@ function TrancheCard({
       <div className="mt-2 space-y-2 text-[12px] dark:text-zinc-200 text-zinc-800">
         {usdt > 0n && (
           <div className="flex items-center justify-between gap-2">
-            <span>USDT · {formatUsdt(usdtWei)}</span>
+            <span>USD₮0 · {formatUsdt(usdtWei)}</span>
             <div className="flex items-center gap-2">
               <StatusPill status={usdtStatus} label={unlocked ? usdtStatus : 'locked'} />
               {usdtTx && (

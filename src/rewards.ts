@@ -8,8 +8,10 @@ import {
 
 export const SEASON_1_ID = 'season-1';
 
-// USDT on X Layer (Tether USD, 6 decimals) — verified on-chain 2026-07-11
-export const USDT_TOKEN_ADDRESS = '0x1E4a5963aBFD975d8c9021ce480b42188849D41d';
+// USD₮0 on X Layer (6 decimals). The legacy bridged USDT address below is
+// retained only so already-persisted, unpaid snapshots can be migrated safely.
+export const USDT0_TOKEN_ADDRESS = '0x779Ded0c9e1022225f8E0630b35a9b54bE713736';
+export const LEGACY_USDT_TOKEN_ADDRESS = '0x1E4a5963aBFD975d8c9021ce480b42188849D41d';
 export const USDT_DECIMALS = 6;
 
 // Season 1 config — see docs/season1-rewards.md for the source of truth
@@ -24,7 +26,7 @@ export const SEASON_1_REGISTRATION_CLOSES_AT = Date.UTC(2026, 6, 13, 23, 59, 0);
 export const SEASON_1_FIRST_PAYOUT_AT = SEASON_1_REGISTRATION_CLOSES_AT;
 export const SEASON_1_FINAL_PAYOUT_AT = Date.UTC(2026, 7, 11, 23, 59, 0);
 
-// Team wallet — receives no direct reward; its USDT slot is redirected to buyback pool.
+// Team wallet — receives no direct reward; its USD₮0 slot is redirected to buyback pool.
 const TEAM_WALLET_ADDRESSES = new Set<string>([
   '0x71f38cd580f2b4e31a7e01d60bf5c48e33201b2a',
 ]);
@@ -147,7 +149,7 @@ export function computeSnapshotFromInputs(inputs: SnapshotInputs): PersistedRewa
     fvbDecimals: 18,
     fvbTotalSupplyWei: fvbTotalSupplyWei.toString(),
     fvbPoolWei: fvbPoolWei.toString(),
-    usdtTokenAddress: USDT_TOKEN_ADDRESS.toLowerCase(),
+    usdtTokenAddress: USDT0_TOKEN_ADDRESS.toLowerCase(),
     usdtDecimals: USDT_DECIMALS,
     usdtPoolWei: SEASON_1_USDT_POOL_WEI.toString(),
     usdtPerRankWei: SEASON_1_USDT_PER_RANK_WEI.toString(),
@@ -162,7 +164,7 @@ export function computeSnapshotFromInputs(inputs: SnapshotInputs): PersistedRewa
 }
 
 export async function loadOrCreateSnapshot(inputs: SnapshotInputs): Promise<PersistedRewardsSnapshot> {
-  const existing = await readRewardsSnapshot(inputs.seasonId);
+  const existing = await readCurrentSnapshot(inputs.seasonId);
   if (existing) return existing;
   const snapshot = computeSnapshotFromInputs(inputs);
   await writeRewardsSnapshot(snapshot);
@@ -170,7 +172,33 @@ export async function loadOrCreateSnapshot(inputs: SnapshotInputs): Promise<Pers
 }
 
 export async function loadSnapshot(seasonId: string): Promise<PersistedRewardsSnapshot | null> {
-  return readRewardsSnapshot(seasonId);
+  return readCurrentSnapshot(seasonId);
+}
+
+export function migrateSnapshotToUsdt0(snapshot: PersistedRewardsSnapshot): boolean {
+  if (snapshot.usdtTokenAddress.toLowerCase() !== LEGACY_USDT_TOKEN_ADDRESS.toLowerCase()) return false;
+
+  const sentLegacyUsdt = snapshot.entries.some(entry =>
+    entry.firstUsdtStatus === 'sent'
+    || entry.finalUsdtStatus === 'sent'
+    || Boolean(entry.firstUsdtTxHash)
+    || Boolean(entry.finalUsdtTxHash));
+  if (sentLegacyUsdt) {
+    throw new Error('Cannot migrate reward snapshot to USD₮0 after a legacy USDT payout was sent');
+  }
+
+  snapshot.usdtTokenAddress = USDT0_TOKEN_ADDRESS.toLowerCase();
+  return true;
+}
+
+async function readCurrentSnapshot(seasonId: string): Promise<PersistedRewardsSnapshot | null> {
+  const snapshot = await readRewardsSnapshot(seasonId);
+  if (!snapshot) return null;
+  if (migrateSnapshotToUsdt0(snapshot)) {
+    await writeRewardsSnapshot(snapshot);
+    console.info(`[FanVibe] Migrated ${seasonId} reward token from legacy USDT to USD₮0`);
+  }
+  return snapshot;
 }
 
 function findEntryIndex(snapshot: PersistedRewardsSnapshot, address: string): number {
@@ -228,7 +256,7 @@ export interface RegisterInput {
 }
 
 export async function registerForRewards(input: RegisterInput): Promise<PersistedRewardsEntry> {
-  const snapshot = await readRewardsSnapshot(input.seasonId);
+  const snapshot = await readCurrentSnapshot(input.seasonId);
   if (!snapshot) throw new Error('Snapshot not found');
 
   const now = Date.now();
@@ -335,7 +363,7 @@ export function forfeitMessage(seasonId: string, address: string, nonce: number)
 }
 
 export async function forfeitToBuyback(seasonId: string, address: string): Promise<PersistedRewardsSnapshot> {
-  const snapshot = await readRewardsSnapshot(seasonId);
+  const snapshot = await readCurrentSnapshot(seasonId);
   if (!snapshot) throw new Error('Snapshot not found');
 
   const idx = snapshot.entries.findIndex(e => e.address.toLowerCase() === address.toLowerCase());
@@ -392,7 +420,7 @@ export async function forfeitToBuyback(seasonId: string, address: string): Promi
 }
 
 export async function releaseTranche(input: ReleaseInput): Promise<ReleaseResult> {
-  const snapshot = await readRewardsSnapshot(input.seasonId);
+  const snapshot = await readCurrentSnapshot(input.seasonId);
   if (!snapshot) throw new Error('Snapshot not found');
 
   const idx = snapshot.entries.findIndex(e => e.address.toLowerCase() === input.address.toLowerCase());

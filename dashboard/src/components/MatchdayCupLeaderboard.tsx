@@ -157,13 +157,13 @@ function scoreBreakdown(entry: MatchdayEntry): string {
 
 function rewardLabel(rank: number | null | undefined): string {
   if (!rank || rank > 5) return 'Chasing rewards';
-  if (rank <= 3) return `$${USDT_REWARD_PER_TOP_FIVE} + ${FVB_SUPPLY_SHARE_PERCENT} pool`;
-  return `$${USDT_REWARD_PER_TOP_FIVE} USDT`;
+  if (rank <= 3) return `$${USDT_REWARD_PER_TOP_FIVE} USD₮0 + ${FVB_SUPPLY_SHARE_PERCENT} pool`;
+  return `$${USDT_REWARD_PER_TOP_FIVE} USD₮0`;
 }
 
 function scoreRulesLabel(rules: ScoreRules | null): string {
-  if (!rules) return `Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USDT. Top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by final campaign score.`;
-  return `Entry needs connected X plus $${rules.fvbTradePrizeMinimumUsd ?? 250}+ verified FVB volume. Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USDT; top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by score.`;
+  if (!rules) return `Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USD₮0. Top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by final campaign score.`;
+  return `Entry needs connected X plus $${rules.fvbTradePrizeMinimumUsd ?? 250}+ verified FVB volume. Top 5 each receive $${USDT_REWARD_PER_TOP_FIVE} USD₮0; top 3 also share ${FVB_SUPPLY_SHARE_PERCENT} of FVB supply by score.`;
 }
 
 function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
